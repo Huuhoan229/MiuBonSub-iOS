@@ -9,8 +9,8 @@ header p{color:var(--text-dim);margin-top:6px;font-size:.9rem}
 .glow-orb{position:fixed;width:300px;height:300px;border-radius:50%;filter:blur(80px);opacity:.15;pointer-events:none;z-index:0}
 .glow-1{top:-100px;left:-50px;background:var(--primary)}
 .glow-2{bottom:-100px;right:-50px;background:var(--accent)}
-.tabs{display:flex;gap:4px;background:var(--surface);border-radius:var(--radius);padding:4px;margin-bottom:24px;border:1px solid var(--border)}
-.tab, .sub-tab{flex:1;padding:10px 8px;border:none;background:transparent;color:var(--text-dim);font-family:inherit;font-size:.82rem;font-weight:500;cursor:pointer;border-radius:8px;transition:all .3s}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;background:var(--surface);border-radius:var(--radius);padding:4px;margin-bottom:24px;border:1px solid var(--border)}
+.tab, .sub-tab{flex:1 1 30%;min-width:80px;padding:10px 8px;border:none;background:transparent;color:var(--text-dim);font-family:inherit;font-size:.82rem;font-weight:500;cursor:pointer;border-radius:8px;transition:all .3s}
 .tab:hover, .sub-tab:hover{color:var(--text);background:var(--card)}
 .tab.active, .sub-tab.active{background:var(--primary);color:#fff;box-shadow:0 4px 15px var(--primary-glow)}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:16px;position:relative;z-index:1}

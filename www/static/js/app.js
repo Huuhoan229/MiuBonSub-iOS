@@ -1142,11 +1142,16 @@ async function loadProjects() {
         <label class="project-checkbox" onclick="event.stopPropagation()">
           <input type="checkbox" class="project-cb" data-project="${pname}" onchange="updateProjectsSelectedCount()" />
         </label>` : '';
+            const title = (p.metadata || {}).title || (p.douyin_meta || {}).douyin_title || '';
+      const titleHtml = title ? `<h3 style="margin-bottom: 4px; font-size: 1.05rem; font-weight: 600; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${title.replace(/"/g, '&quot;')}">🎬 ${title}</h3><div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 6px; font-family: monospace;">📁 ${pname}</div>` : `<h3 style="margin-bottom: 8px;">📁 ${pname}</h3>`;
+      
       return `
       <div class="project-card ${complete ? 'project-complete' : 'project-incomplete'}" onclick="openProjectDetail('${pname}')">
         <div class="project-card-header">
           ${checkboxHtml}
-          <h3>📁 ${pname}</h3>
+          <div style="display:flex; flex-direction:column; min-width:0; overflow:hidden;">
+              ${titleHtml}
+          </div>
           ${statusBadge}
         </div>
         <p>Created: ${p.created_at || 'N/A'}</p>
@@ -3781,98 +3786,6 @@ function jumpToProject(projectName) {
       openProjectDetail(projectName);
     }, 300);
   }
-}
-
-// ═══ NEW AI GROUP LOGIC ═══
-window.toggleSeriesGroupSelect = function(idx, checked) {
-    if (!scrapeSeriesSelected) scrapeSeriesSelected = new Set();
-    if (checked) scrapeSeriesSelected.add(idx);
-    else scrapeSeriesSelected.delete(idx);
-    const countEl = document.getElementById('series-selected-count');
-    if (countEl) countEl.innerText = `${scrapeSeriesSelected.size} selected`;
-};
-
-window.selectAllSeriesGroups = function(state) {
-    if (!scrapeSeriesSelected) scrapeSeriesSelected = new Set();
-    scrapeSeriesSelected.clear();
-    if (state && scrapeSeriesGroups) {
-        scrapeSeriesGroups.forEach((g, idx) => scrapeSeriesSelected.add(idx));
-    }
-    document.querySelectorAll('[id^="sg-cb-"]').forEach(cb => {
-        cb.checked = state;
-    });
-    const countEl = document.getElementById('series-selected-count');
-    if (countEl) countEl.innerText = `${scrapeSeriesSelected.size} selected`;
-};
-
-;
-
-window.addSelectedSeriesToQueue = async function(newOnly) {
-    if (!scrapeSeriesSelected || scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
-    const btns = document.querySelectorAll('button');
-    btns.forEach(b => b.disabled = true);
-    try {
-        const added = await _queueSeriesGroups(Array.from(scrapeSeriesSelected), newOnly);
-        toast(`Added ${added} videos to queue from selected series!`, 'success');
-        selectAllSeriesGroups(false);
-    } catch (e) {
-        toast('Error: ' + e.message, 'error');
-    } finally {
-        btns.forEach(b => b.disabled = false);
-    }
-};
-
-window.startSelectedSeriesQueue = async function() {
-    if (!scrapeSeriesSelected || scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
-    const btns = document.querySelectorAll('button');
-    btns.forEach(b => b.disabled = true);
-    try {
-        const added = await _queueSeriesGroups(Array.from(scrapeSeriesSelected), true);
-        await api('/api/pipeline/queue/start', { method: 'POST' });
-        toast(`Added ${added} new videos and started queue!`, 'success');
-        selectAllSeriesGroups(false);
-        loadQueue();
-    } catch (e) {
-        toast('Error: ' + e.message, 'error');
-    } finally {
-        btns.forEach(b => b.disabled = false);
-    }
-};
-
-async function _queueSeriesGroups(indices, newOnly) {
-    let completedUrls = new Set();
-    if (newOnly) {
-        try {
-            const h = await api('/api/projects/completed-urls');
-            if (h.ok && Array.isArray(h.completed)) completedUrls = new Set(h.completed);
-        } catch(e) {}
-    }
-    
-    let totalAdded = 0;
-    
-    for (const idx of indices) {
-        const g = scrapeSeriesGroups[idx];
-        if (!g) continue;
-        
-        let urlsToQueue = g.urls || [];
-        if (newOnly) {
-            urlsToQueue = urlsToQueue.filter(u => !completedUrls.has(u));
-        }
-        if (urlsToQueue.length === 0) continue; 
-        
-        const payload = {
-            urls: urlsToQueue,
-            settings: window.currentScrapeSettings || {},
-            priority: 5,
-            group_series: true,
-            series_name: g.series_name_vi || g.series_name || '',
-            folder_name: g.folder_name || '',
-            episodes_range: `${g.episode_min || ''}-${g.episode_max || ''}`
-        };
-        await api('/api/pipeline/queue', { method: 'POST', body: payload });
-        totalAdded += urlsToQueue.length;
-    }
-    return totalAdded;
 }
 
 
