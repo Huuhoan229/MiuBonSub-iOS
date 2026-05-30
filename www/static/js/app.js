@@ -432,6 +432,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('hidden', c.id !== `tab-${tab}`));
   if (tab === 'projects') loadProjects();
+    if (tab === 'series') loadSeriesLibrary();
   if (tab === 'auth') checkHealth();
   if (tab === 'ytmanager') { checkHealth(); loadYoutubeWatchdogState(); loadYoutubeVideos(); }
   if (tab === 'tiktok') { loadTikTokStatus(); loadTikTokProjects(); loadTikTokQuickConfig(); }
@@ -1091,6 +1092,17 @@ async function loadProjects() {
     } else if (filter === 'sort-pct-desc') {
       filtered.sort((a, b) => getPct(b) - getPct(a));
     } else if (filter === 'sort-pct-asc') {
+      } else if (filter.startsWith('custom_')) {
+      const q = filter.replace('custom_', '').toLowerCase();
+      filtered = allProjectsData.filter(p => {
+         const ctx = p.series_context || (p.metadata || {}).series_context || {};
+         const sf = (ctx.series_folder || '').toLowerCase();
+         const sn = (ctx.series_name || '').toLowerCase();
+         const pn = (p.project_name || '').toLowerCase();
+         const title = ((p.metadata || {}).title || '').toLowerCase();
+         return sf.includes(q) || sn.includes(q) || pn.includes(q) || title.includes(q);
+      });
+    
       filtered.sort((a, b) => getPct(a) - getPct(b));
     }
 
@@ -1712,6 +1724,47 @@ function toggleTtsOptions() {
 
 // ── WARP Proxy UI ──
 function _updateWarpUI(enabled) {
+    const badge = document.getElementById('warp-status-badge');
+    const label = document.getElementById('warp-label');
+    const fLabel = document.getElementById('floating-warp-label');
+    const fToggle = document.getElementById('floating-warp-toggle');
+    const mToggle = document.getElementById('cfg-douyin_warp_enabled');
+    
+    if (badge) {
+      badge.textContent = enabled ? 'Bật' : 'Tắt';
+      badge.style.background = enabled ? 'rgba(255,127,0,.2)' : 'rgba(136,136,168,.12)';
+      badge.style.color = enabled ? '#ff7f00' : 'var(--text-dim)';
+    }
+    if (label) {
+      label.textContent = enabled ? '⚡ WARP đang bật — Douyin traffic sẽ đi qua WARP' : 'Tắt';
+      label.style.color = enabled ? '#ff7f00' : 'var(--text-dim)';
+    }
+    if (fLabel) {
+      fLabel.textContent = enabled ? 'WARP ON' : 'OFF';
+      fLabel.style.color = enabled ? '#ff7f00' : 'var(--text-dim)';
+      const widget = document.getElementById('floating-proxy-widget');
+      if (widget) {
+          widget.style.borderColor = enabled ? 'rgba(255,127,0,0.8)' : 'rgba(255,127,0,0.4)';
+          widget.style.boxShadow = enabled ? '0 8px 24px rgba(255,127,0,0.3)' : '0 8px 24px rgba(0,0,0,0.5)';
+      }
+    }
+    if (fToggle && fToggle.checked !== enabled) fToggle.checked = enabled;
+    if (mToggle && mToggle.checked !== enabled) mToggle.checked = enabled;
+  }
+
+  // Bind the floating toggle
+  document.addEventListener('DOMContentLoaded', () => {
+      const fToggle = document.getElementById('floating-warp-toggle');
+      if (fToggle) {
+          fToggle.addEventListener('change', (e) => {
+              e.stopPropagation();
+              onWarpToggle(e.target);
+          });
+      }
+  });
+
+/*
+function _old_updateWarpUI(enabled) {
   const badge = document.getElementById('warp-status-badge');
   const label = document.getElementById('warp-label');
   if (badge) {
@@ -3741,24 +3794,24 @@ function jumpToProject(projectName) {
 
 // ═══ NEW AI GROUP LOGIC ═══
 window.toggleSeriesGroupSelect = function(idx, checked) {
-    if (!window.scrapeSeriesSelected) window.scrapeSeriesSelected = new Set();
-    if (checked) window.scrapeSeriesSelected.add(idx);
-    else window.scrapeSeriesSelected.delete(idx);
+    if (!scrapeSeriesSelected) scrapeSeriesSelected = new Set();
+    if (checked) scrapeSeriesSelected.add(idx);
+    else scrapeSeriesSelected.delete(idx);
     const countEl = document.getElementById('series-selected-count');
-    if (countEl) countEl.innerText = `${window.scrapeSeriesSelected.size} selected`;
+    if (countEl) countEl.innerText = `${scrapeSeriesSelected.size} selected`;
 };
 
 window.selectAllSeriesGroups = function(state) {
-    if (!window.scrapeSeriesSelected) window.scrapeSeriesSelected = new Set();
-    window.scrapeSeriesSelected.clear();
-    if (state && window.scrapeSeriesGroups) {
-        window.scrapeSeriesGroups.forEach((g, idx) => window.scrapeSeriesSelected.add(idx));
+    if (!scrapeSeriesSelected) scrapeSeriesSelected = new Set();
+    scrapeSeriesSelected.clear();
+    if (state && scrapeSeriesGroups) {
+        scrapeSeriesGroups.forEach((g, idx) => scrapeSeriesSelected.add(idx));
     }
     document.querySelectorAll('[id^="sg-cb-"]').forEach(cb => {
         cb.checked = state;
     });
     const countEl = document.getElementById('series-selected-count');
-    if (countEl) countEl.innerText = `${window.scrapeSeriesSelected.size} selected`;
+    if (countEl) countEl.innerText = `${scrapeSeriesSelected.size} selected`;
 };
 
 window.addSeriesToQueue = async function(idx, newOnly) {
@@ -3775,11 +3828,11 @@ window.addSeriesToQueue = async function(idx, newOnly) {
 };
 
 window.addSelectedSeriesToQueue = async function(newOnly) {
-    if (!window.scrapeSeriesSelected || window.scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
+    if (!scrapeSeriesSelected || scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
     const btns = document.querySelectorAll('button');
     btns.forEach(b => b.disabled = true);
     try {
-        const added = await _queueSeriesGroups(Array.from(window.scrapeSeriesSelected), newOnly);
+        const added = await _queueSeriesGroups(Array.from(scrapeSeriesSelected), newOnly);
         toast(`Added ${added} videos to queue from selected series!`, 'success');
         selectAllSeriesGroups(false);
     } catch (e) {
@@ -3790,11 +3843,11 @@ window.addSelectedSeriesToQueue = async function(newOnly) {
 };
 
 window.startSelectedSeriesQueue = async function() {
-    if (!window.scrapeSeriesSelected || window.scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
+    if (!scrapeSeriesSelected || scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
     const btns = document.querySelectorAll('button');
     btns.forEach(b => b.disabled = true);
     try {
-        const added = await _queueSeriesGroups(Array.from(window.scrapeSeriesSelected), true);
+        const added = await _queueSeriesGroups(Array.from(scrapeSeriesSelected), true);
         await api('/api/pipeline/queue/start', { method: 'POST' });
         toast(`Added ${added} new videos and started queue!`, 'success');
         selectAllSeriesGroups(false);
@@ -3818,7 +3871,7 @@ async function _queueSeriesGroups(indices, newOnly) {
     let totalAdded = 0;
     
     for (const idx of indices) {
-        const g = window.scrapeSeriesGroups[idx];
+        const g = scrapeSeriesGroups[idx];
         if (!g) continue;
         
         let urlsToQueue = g.urls || [];
@@ -3842,3 +3895,140 @@ async function _queueSeriesGroups(indices, newOnly) {
     return totalAdded;
 }
 
+
+
+// ═══ SERIES LIBRARY ═══
+function switchSeriesSubTab(subtab) {
+    document.querySelectorAll('.series-sub-tab').forEach(t => t.classList.toggle('active', t.dataset.subtab === subtab));
+    document.querySelectorAll('.series-sub-content').forEach(c => c.classList.toggle('hidden', c.id !== subtab));
+}
+
+async function loadSeriesLibrary() {
+    const listSeries = document.getElementById('series-list');
+    const listStandalones = document.getElementById('standalone-list');
+    if (!listSeries || !listStandalones) return;
+    
+    listSeries.innerHTML = '<div style="color:var(--text-dim)">Loading series...</div>';
+    listStandalones.innerHTML = '<div style="color:var(--text-dim)">Loading standalones...</div>';
+    
+    try {
+        const res = await api('/api/series');
+        if (!res || res.error) throw new Error(res?.error || 'Failed to load series');
+        
+        const series = res.series || [];
+        const standalones = res.standalones || [];
+        
+        const badgeSeries = document.getElementById('series-count-badge');
+        const badgeStandalone = document.getElementById('standalone-count-badge');
+        if (badgeSeries) badgeSeries.innerText = series.length;
+        if (badgeStandalone) badgeStandalone.innerText = standalones.length;
+        
+        if (series.length === 0) {
+            listSeries.innerHTML = '<div style="color:var(--text-dim)">No series found.</div>';
+        } else {
+            listSeries.innerHTML = series.map(s => renderSeriesCard(s)).join('');
+        }
+        
+        if (standalones.length === 0) {
+            listStandalones.innerHTML = '<div style="color:var(--text-dim)">No standalone movies found.</div>';
+        } else {
+            listStandalones.innerHTML = standalones.map(p => renderStandaloneCard(p)).join('');
+        }
+        
+    } catch (e) {
+        listSeries.innerHTML = `<div style="color:var(--error)">Error: ${e.message}</div>`;
+        listStandalones.innerHTML = `<div style="color:var(--error)">Error: ${e.message}</div>`;
+    }
+}
+
+function renderSeriesCard(s) {
+    const total = s.total_downloaded || 0;
+    const rendered = s.rendered_count || 0;
+    const uploaded = s.uploaded_count || 0;
+    
+    const ep_min = s.episode_min || '?';
+    const ep_max = s.episode_max || '?';
+    
+    const latest = s.latest_episode || {};
+    const thumb = latest.thumbnail ? `/api/project/${encodeURIComponent(latest.project_name)}/file/thumbnail.jpg` : '';
+    
+    const renderPct = total > 0 ? Math.round((rendered / total) * 100) : 0;
+    const uploadPct = total > 0 ? Math.round((uploaded / total) * 100) : 0;
+    
+    return `
+    <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
+      <div style="display:flex; gap:12px; margin-bottom:12px;">
+        <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
+            ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">🎬</div>`}
+        </div>
+        <div style="flex:1; overflow:hidden;">
+            <h3 style="margin:0 0 6px; font-size:1rem; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${safeStr(s.series_name)}</h3>
+            <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Folder: <code>${safeStr(s.series_folder)}</code></div>
+            <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Episodes: <span class="badge badge-default">${total} downloaded</span> (Max: ${ep_max})</div>
+            <div style="font-size:0.8rem; color:var(--text-dim);">Latest update: ${safeStr(latest.created_at || '')}</div>
+        </div>
+      </div>
+      
+      <div>
+          <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
+              <span>Rendered: ${rendered}/${total}</span>
+              <span>${renderPct}%</span>
+          </div>
+          <div class="progress-bar" style="height:6px; margin-bottom:8px;"><div class="progress-fill" style="width:${renderPct}%; background:var(--accent);"></div></div>
+          
+          <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
+              <span>Uploaded: ${uploaded}/${total}</span>
+              <span>${uploadPct}%</span>
+          </div>
+          <div class="progress-bar" style="height:6px;"><div class="progress-fill" style="width:${uploadPct}%; background:var(--primary);"></div></div>
+      </div>
+    </div>
+    `;
+}
+
+function renderStandaloneCard(p) {
+    const meta = p.metadata || {};
+    const title = meta.title || p.douyin_meta?.douyin_title || p.project_name;
+    const thumb = p.thumbnail ? `/api/project/${encodeURIComponent(p.project_name)}/file/thumbnail.jpg` : '';
+    
+    let statusText = 'Downloaded';
+    let statusColor = 'var(--text-dim)';
+    if (p.final_video) { statusText = 'Rendered'; statusColor = 'var(--accent)'; }
+    if (p.youtube?.videoId || p.facebook_reels?.results) { statusText = 'Uploaded'; statusColor = 'var(--primary)'; }
+    
+    return `
+    <div class="project-card" style="cursor:pointer; display:flex; gap:12px; align-items:center;" onclick="openSeriesInProjects('${safeStr(p.project_name)}')">
+        <div style="width:80px; height:80px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
+            ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:1.5rem">🎬</div>`}
+        </div>
+        <div style="flex:1; overflow:hidden;">
+            <h3 style="margin:0 0 6px; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${safeStr(title)}</h3>
+            <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Project: <code>${safeStr(p.project_name)}</code></div>
+            <div style="font-size:0.8rem; font-weight:600; color:${statusColor}">${statusText}</div>
+        </div>
+    </div>
+    `;
+}
+
+function openSeriesInProjects(filterText) {
+    // Switch to projects tab
+    const tabProjects = document.querySelector('[data-tab="projects"]');
+    if (tabProjects) tabProjects.click();
+    
+    // Set custom filter
+    setTimeout(() => {
+        const filterSelect = document.getElementById('project-filter');
+        if (filterSelect) {
+            // Check if there is an option for custom, if not add it
+            let opt = filterSelect.querySelector(`option[value="custom_${filterText}"]`);
+            if (!opt) {
+                opt = document.createElement('option');
+                opt.value = `custom_${filterText}`;
+                opt.innerText = `🔍 Tìm: ${filterText}`;
+                filterSelect.appendChild(opt);
+            }
+            filterSelect.value = opt.value;
+            loadProjects();
+        }
+    }, 100);
+}

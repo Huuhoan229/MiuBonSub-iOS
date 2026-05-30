@@ -13,7 +13,7 @@
 
 
 <div class="app">
-  <button onclick="changeBackendUrl()" style="position: absolute; top: 10px; right: 10px; z-index: 9999; background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">⚙️ Đổi IP Server</button>
+  <button onclick="changeBackendUrl()" style="position: fixed; bottom: 20px; left: 10px; z-index: 9999; background: rgba(0,0,0,0.7); color: #fff; backdrop-filter: blur(4px); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">⚙️ Đổi IP Server</button>
 
   <!-- Demo Sandbox Banner -->
   <div id="demo-banner" class="hidden" style="background: linear-gradient(135deg, rgba(255, 179, 0, 0.15), rgba(255, 81, 0, 0.15)); border: 1px solid rgba(255, 145, 0, 0.25); border-radius: 12px; padding: 14px 20px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #ffe3b3; font-size: 0.88rem; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
@@ -36,6 +36,8 @@
   <button class="tab active" data-tab="pipeline">🚀 Pipeline</button>
   <button class="tab" data-tab="scraper">🔍 Scraper</button>
   <button class="tab" data-tab="projects">📁 Projects</button>
+  <button class="tab" data-tab="series">📚 Thư viện Series</button>
+  
   <button class="tab" data-tab="auth">🔐 Auth</button>
   <button class="tab" data-tab="ytmanager">🎛 YT Manager</button>
   <button class="tab" data-tab="ytqueue">📤 YT Queue</button>
@@ -209,6 +211,27 @@
     </div>
     <div style="margin-top:10px;font-size:.82rem;color:var(--text-dim)">
       <span id="dywd-status-line">Watchdog: loading...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SERIES LIBRARY TAB ═══ -->
+<div id="tab-series" class="tab-content hidden">
+  <div class="card">
+    <h2><span>📚</span> Thư viện Series <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="loadSeriesLibrary()">🔄 Refresh</button></h2>
+    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">Quản lý tổng quan các Phim Bộ (Series) và Phim Lẻ (Standalone).</p>
+    
+    <div class="tabs" style="border-bottom:1px solid var(--border); margin-bottom:16px; padding-bottom:0">
+      <button class="tab series-sub-tab active" data-subtab="series-list" onclick="switchSeriesSubTab('series-list')" style="border-radius:6px 6px 0 0; border-bottom:none">📺 Phim Bộ (Series) <span id="series-count-badge" class="badge badge-info">0</span></button>
+      <button class="tab series-sub-tab" data-subtab="standalone-list" onclick="switchSeriesSubTab('standalone-list')" style="border-radius:6px 6px 0 0; border-bottom:none">🎞 Phim Lẻ (Standalone) <span id="standalone-count-badge" class="badge badge-info">0</span></button>
+    </div>
+    
+    <div id="series-list" class="series-sub-content grid-2">
+       <div style="color:var(--text-dim); font-size:0.9rem;">Đang tải Thư viện Series...</div>
+    </div>
+    
+    <div id="standalone-list" class="series-sub-content hidden grid-2">
+       <div style="color:var(--text-dim); font-size:0.9rem;">Đang tải Phim lẻ...</div>
     </div>
   </div>
 </div>
@@ -855,6 +878,7 @@
 </div>
 
 <script src="/static/js/app.js"></script>
+
 </body>
 </html>
 
