@@ -3749,3 +3749,102 @@ function jumpToProject(projectName) {
     }, 300);
   }
 }
+
+
+// ═══ AI GROUP SERIES FUNCTIONS ═══
+window.selectAllSeriesGroups = function(state) {
+    if (!window.scrapeSeriesSelected) window.scrapeSeriesSelected = new Set();
+    window.scrapeSeriesSelected.clear();
+    if (state && window.scrapeSeriesGroups) {
+        window.scrapeSeriesGroups.forEach((g, idx) => window.scrapeSeriesSelected.add(idx));
+    }
+    document.querySelectorAll('.series-checkbox').forEach(cb => {
+        cb.checked = state;
+    });
+    const countEl = document.getElementById('series-selected-count');
+    if (countEl) countEl.innerText = `${window.scrapeSeriesSelected.size} selected`;
+};
+
+window.toggleSeriesGroup = function(idx, checked) {
+    if (!window.scrapeSeriesSelected) window.scrapeSeriesSelected = new Set();
+    if (checked) window.scrapeSeriesSelected.add(idx);
+    else window.scrapeSeriesSelected.delete(idx);
+    const countEl = document.getElementById('series-selected-count');
+    if (countEl) countEl.innerText = `${window.scrapeSeriesSelected.size} selected`;
+};
+
+window.addSingleSeriesToQueue = async function(btn, idx) {
+    btn.disabled = true;
+    try {
+        const added = await _queueSeriesGroups([idx]);
+        toast(`Added ${added} new videos to queue!`, 'success');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+};
+
+window.addSelectedSeriesToQueue = async function() {
+    if (!window.scrapeSeriesSelected || window.scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
+    const btns = document.querySelectorAll('button[onclick="addSelectedSeriesToQueue()"]');
+    btns.forEach(b => b.disabled = true);
+    try {
+        const added = await _queueSeriesGroups(Array.from(window.scrapeSeriesSelected));
+        toast(`Added ${added} new videos to queue from selected series!`, 'success');
+        if (window.scrapeSeriesSelected) window.scrapeSeriesSelected.clear();
+        selectAllSeriesGroups(false);
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    } finally {
+        btns.forEach(b => b.disabled = false);
+    }
+};
+
+window.startSelectedSeriesQueue = async function() {
+    if (!window.scrapeSeriesSelected || window.scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
+    const btns = document.querySelectorAll('button[onclick="startSelectedSeriesQueue()"]');
+    btns.forEach(b => b.disabled = true);
+    try {
+        const added = await _queueSeriesGroups(Array.from(window.scrapeSeriesSelected));
+        await api('/api/pipeline/queue/start', { method: 'POST' });
+        toast(`Added ${added} new videos and started queue!`, 'success');
+        if (window.scrapeSeriesSelected) window.scrapeSeriesSelected.clear();
+        selectAllSeriesGroups(false);
+        loadQueue();
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    } finally {
+        btns.forEach(b => b.disabled = false);
+    }
+};
+
+async function _queueSeriesGroups(indices) {
+    const history = await api('/api/douyin/history');
+    const completedUrls = new Set((history || []).map(h => h.url));
+    
+    let totalAdded = 0;
+    
+    for (const idx of indices) {
+        const g = window.scrapeSeriesGroups[idx];
+        if (!g) continue;
+        
+        // ONLY GET NEW VIDEOS (SKIP DONE)
+        const newUrls = (g.urls || []).filter(u => !completedUrls.has(u));
+        if (newUrls.length === 0) continue; 
+        
+        const payload = {
+            urls: newUrls,
+            settings: window.currentScrapeSettings || {},
+            priority: 5,
+            group_series: true,
+            series_name: g.series_name_vi || g.series_name || '',
+            folder_name: g.folder_name || '',
+            episodes_range: `${g.episode_min || ''}-${g.episode_max || ''}`
+        };
+        await api('/api/pipeline/queue', { method: 'POST', body: payload });
+        totalAdded += newUrls.length;
+    }
+    return totalAdded;
+}
+
