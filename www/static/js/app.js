@@ -1092,19 +1092,18 @@ async function loadProjects() {
     } else if (filter === 'sort-pct-desc') {
       filtered.sort((a, b) => getPct(b) - getPct(a));
     } else if (filter === 'sort-pct-asc') {
+        filtered.sort((a, b) => getPct(a) - getPct(b));
       } else if (filter.startsWith('custom_')) {
-      const q = filter.replace('custom_', '').toLowerCase();
-      filtered = allProjectsData.filter(p => {
-         const ctx = p.series_context || (p.metadata || {}).series_context || {};
-         const sf = (ctx.series_folder || '').toLowerCase();
-         const sn = (ctx.series_name || '').toLowerCase();
-         const pn = (p.project_name || '').toLowerCase();
-         const title = ((p.metadata || {}).title || '').toLowerCase();
-         return sf.includes(q) || sn.includes(q) || pn.includes(q) || title.includes(q);
-      });
-    
-      filtered.sort((a, b) => getPct(a) - getPct(b));
-    }
+        const q = filter.replace('custom_', '').toLowerCase();
+        filtered = allProjectsData.filter(p => {
+           const ctx = p.series_context || (p.metadata || {}).series_context || {};
+           const sf = (ctx.series_folder || '').toLowerCase();
+           const sn = (ctx.series_name || '').toLowerCase();
+           const pn = (p.project_name || '').toLowerCase();
+           const title = ((p.metadata || {}).title || '').toLowerCase();
+           return sf.includes(q) || sn.includes(q) || pn.includes(q) || title.includes(q);
+        });
+      }
 
     const el = document.getElementById('projects-list');
     const countBadge = document.getElementById('projects-count-badge');
