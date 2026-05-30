@@ -646,6 +646,12 @@ let selectedQueueId = null;
 let lastQueueErrors = [];
 let lastQueueUrls = [];
 let pipelineUrlContexts = {};
+
+function addRawUrlsToPipeline(urls, seriesName, seriesFolder) {
+    const contextByUrl = {};
+    urls.forEach(u => contextByUrl[u] = { series_name: seriesName, series_folder: seriesFolder });
+    enqueueUrlsToPipelineInput(urls, 'raw-series-merge', contextByUrl);
+}
 let scrapeSeriesSelected = new Set();
 
 function queueStatusBadgeClass(status) {
@@ -3931,6 +3937,44 @@ function renderSeriesCard(s) {
     
     const renderPct = total > 0 ? Math.round((rendered / total) * 100) : 0;
     const uploadPct = total > 0 ? Math.round((uploaded / total) * 100) : 0;
+
+    if (s.raw_urls && s.raw_urls.length > 0) {
+        return `
+        <div class="project-card" style="display:flex; flex-direction:column; justify-content:space-between; border:1px solid var(--accent);">
+          <div style="display:flex; gap:12px; margin-bottom:12px; cursor:pointer;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
+            <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
+                ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">🎬</div>`}
+            </div>
+            <div style="flex:1; overflow:hidden;">
+                <h3 style="margin:0 0 6px; font-size:1rem; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${safeStr(s.series_name)}</h3>
+                <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Folder: <code>${safeStr(s.series_folder)}</code></div>
+                <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Episodes: <span class="badge badge-default">${total} downloaded</span> (Max: ${ep_max})</div>
+                <div style="font-size:0.8rem; color:var(--text-dim);">Latest update: ${safeStr(latest.created_at || '')}</div>
+            </div>
+          </div>
+          
+          <div style="margin-bottom:12px;">
+              <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
+                  <span>Rendered: ${rendered}/${total}</span>
+                  <span>${renderPct}%</span>
+              </div>
+              <div class="progress-bar" style="height:6px; margin-bottom:8px;"><div class="progress-fill" style="width:${renderPct}%; background:var(--accent);"></div></div>
+              
+              <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
+                  <span>Uploaded: ${uploaded}/${total}</span>
+                  <span>${uploadPct}%</span>
+              </div>
+              <div class="progress-bar" style="height:6px;"><div class="progress-fill" style="width:${uploadPct}%; background:var(--primary);"></div></div>
+          </div>
+          
+          <div style="margin-top:auto; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:space-between;">
+              <div style="font-size:0.85rem; color:var(--accent); font-weight:bold;">✨ ${s.raw_urls.length} tập mới vừa Scrape!</div>
+              <button class="btn btn-primary btn-sm" onclick="if(confirm('Tải ngay ${s.raw_urls.length} tập mới vào Pipeline?')) { enqueueUrlsToPipelineInput(${JSON.stringify(s.raw_urls).replace(/"/g, '&quot;')}, 'raw-series-merge', {'series_name': '${safeStr(s.series_name)}', 'series_folder': '${safeStr(s.series_folder)}'}); }">+ Tải ngay</button>
+          </div>
+        </div>
+        `;
+    }
+
     
     return `
     <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
