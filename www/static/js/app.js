@@ -3069,6 +3069,9 @@ async function startScrape() {
 }
 
 function renderScrapeResults(result) {
+    try {
+        localStorage.setItem('latest_scrape_result', JSON.stringify(result));
+    } catch(e) {}
   document.getElementById('scrape-results').classList.remove('hidden');
   document.getElementById('scrape-author').textContent = result.author || 'Unknown';
   const doneCount = Number(result.done_count || 0);
@@ -3722,6 +3725,16 @@ function dismissSavedState() {
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const saved = localStorage.getItem('latest_scrape_result');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed && parsed.videos && parsed.videos.length > 0) {
+                window.scrapeVideos = parsed.videos;
+                renderScrapeResults(parsed);
+            }
+        }
+    } catch(e) {}
   updateDemoBanner();
   checkHealth();
   checkSavedState();
