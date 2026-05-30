@@ -3035,6 +3035,7 @@ function formatLogLine(raw) {
 // ΓöÇΓöÇ Scraper ΓöÇΓöÇ
 let scrapeVideos = [];
 let scrapeSeriesGroups = [];
+let completedUrls = new Set();
 
 function scrapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -3281,7 +3282,7 @@ async function renderSeriesGroups(payload) {
     : 'Cover clusters: unavailable';
     
   // FETCH COMPLETED URLS
-  let completedUrls = new Set();
+    completedUrls = new Set();
   try {
     const doneRes = await api('/api/projects/completed-urls');
     if (doneRes.ok && Array.isArray(doneRes.completed)) {
