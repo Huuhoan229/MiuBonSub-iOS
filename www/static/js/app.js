@@ -4186,31 +4186,4 @@ function startSelectedSeriesQueue() {
   startBatch();
 }
 
-async function previewUrls() {
-    const el = document.getElementById('pipeline-preview');
-    const input = document.getElementById('input-url');
-    if (!el || !input) return;
-    const urls = input.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    if (!urls.length) {
-        el.innerHTML = '<div class="url-preview-empty">⚠️ No Douyin URLs detected</div>';
-        return;
-    }
-    try {
-        const res = await api('/api/douyin/preview', { method: 'POST', body: { urls } });
-        if (res.error) throw new Error(res.error);
-        const found = res.previews || [];
-        if (!found.length) {
-            el.innerHTML = '<div class="url-preview-empty">❌ No valid Douyin URLs recognized</div>';
-            return;
-        }
-        el.innerHTML = `<div class="url-preview-header">🔍 Found ${found.length} URL(s):</div>` +
-            found.map(p => `
-            <div class="url-preview-item">
-                <span class="url-text">${p.url}</span>
-                ${p.project_name ? `<span class="badge badge-success">Folder: ${p.project_name}</span>` : '<span class="badge badge-default">New</span>'}
-            </div>
-            `).join('');
-    } catch (e) {
-        el.innerHTML = `<div class="url-preview-empty" style="color:var(--error)">Error previewing: ${e.message}</div>`;
-    }
-}
+
