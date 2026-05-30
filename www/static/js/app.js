@@ -31,7 +31,7 @@ function safeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
-// ΓòÉΓòÉΓòÉ DEMO & SANDBOX STATE MANAGEMENT ΓòÉΓòÉΓòÉ
+// ═══ DEMO & SANDBOX STATE MANAGEMENT ═══
 let isDemoMode = (window.location.hostname === 'huuhoan229.github.io' || 
                   window.location.hostname.includes('github.io') ||
                   new URLSearchParams(window.location.search).get('demo') === 'true');
@@ -384,7 +384,7 @@ function mockApi(path, opts = {}) {
   return Promise.resolve({ ok: true, message: 'Simulated response' });
 }
 
-// ΓöÇΓöÇ API Helpers ΓöÇΓöÇ
+// ── API Helpers ──
 async function api(path, opts = {}) {
   if (isDemoMode) {
     return mockApi(path, opts);
@@ -417,7 +417,7 @@ async function api(path, opts = {}) {
   }
 }
 
-// ΓöÇΓöÇ Notification (Toast) ΓöÇΓöÇ
+// ── Notification (Toast) ──
 function toast(msg, type = 'success') {
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
@@ -426,7 +426,7 @@ function toast(msg, type = 'success') {
   setTimeout(() => el.remove(), 4000);
 }
 
-// ΓöÇΓöÇ Tabs ΓöÇΓöÇ
+// ── Tabs ──
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab[data-tab]').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
@@ -449,7 +449,7 @@ function switchTab(tab) {
     }
   }
 }
-// ΓöÇΓöÇ Health Check ΓöÇΓöÇ
+// ── Health Check ──
 async function checkHealth() {
   try {
     const d = await api('/api/health');
@@ -460,7 +460,7 @@ async function checkHealth() {
       <div class="status-row"><span class="status-dot green"></span>FFmpeg: ${d.ffmpeg_encoder}</div>
       <div class="status-row"><span class="status-dot ${d.douyin?.playwright_ok ? 'green' : 'red'}"></span>Playwright: ${d.douyin?.playwright_ok ? 'OK' : 'Not installed'}</div>
       <div class="status-row"><span class="status-dot ${d.douyin?.cookies_valid ? 'green' : 'yellow'}"></span>Douyin Cookies: ${d.douyin?.cookies_valid ? 'Valid' : 'Not set'}</div>
-      <div class="status-row"><span class="status-dot ${d.youtube?.ok ? 'green' : 'yellow'}"></span>YouTube: ${d.youtube?.ok ? `${d.youtube.enabled_count} k├¬nh bß║¡t` : 'Not connected'}</div>
+      <div class="status-row"><span class="status-dot ${d.youtube?.ok ? 'green' : 'yellow'}"></span>YouTube: ${d.youtube?.ok ? `${d.youtube.enabled_count} kênh bật` : 'Not connected'}</div>
       <div class="status-row"><span class="status-dot ${d.tiktok?.ok ? 'green' : 'yellow'}"></span>TikTok: ${d.tiktok?.ok ? 'Ready' : 'Not logged in'}</div>
       <div class="status-row"><span class="status-dot ${d.facebook?.ok ? 'green' : 'yellow'}"></span>Facebook Reels: ${d.facebook?.configured ? 'Configured' : 'Not configured'}</div>
     `;
@@ -500,19 +500,19 @@ async function checkHealth() {
           <span class="status-dot ${acc.ok ? (isEnabled ? 'green' : 'yellow') : 'red'}"></span>
           <strong style="min-width:60px">${acc.key}</strong>
           <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${acc.channel || acc.error || '?'}</span>
-          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:.75rem;white-space:nowrap" title="${isEnabled ? 'Bß║¡t ΓÇö video sß║╜ ─æ╞░ß╗úc up l├¬n k├¬nh n├áy' : 'Tß║»t ΓÇö bß╗Å qua k├¬nh n├áy'}">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:.75rem;white-space:nowrap" title="${isEnabled ? 'Bật — video sẽ được up lên kênh này' : 'Tắt — bỏ qua kênh này'}">
             <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleYtChannel('${acc.key}', this.checked)" />
-            ${isEnabled ? '≡ƒƒó Bß║¡t' : 'ΓÜ½ Tß║»t'}
+            ${isEnabled ? '🟢 Bật' : '⚫ Tắt'}
           </label>
-          <button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:.7rem;color:#f66" onclick="removeYtChannel('${acc.key}')" title="X├│a k├¬nh n├áy">≡ƒùæ</button>
+          <button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:.7rem;color:#f66" onclick="removeYtChannel('${acc.key}')" title="Xóa kênh này">🗑</button>
         </div>`;
       }).join('');
     } else if (list) {
-      list.innerHTML = '<p style="color:var(--text-dim);font-size:.82rem">Ch╞░a c├│ k├¬nh YouTube n├áo. Nhß║Ñn "Login Main Channel" ─æß╗â bß║»t ─æß║ºu.</p>';
+      list.innerHTML = '<p style="color:var(--text-dim);font-size:.82rem">Chưa có kênh YouTube nào. Nhấn "Login Main Channel" để bắt đầu.</p>';
     }
     const badge = document.getElementById('yt-enabled-badge');
     if (badge && d.youtube) {
-      badge.textContent = `${d.youtube.enabled_count || 0} k├¬nh bß║¡t`;
+      badge.textContent = `${d.youtube.enabled_count || 0} kênh bật`;
     }
 
     // YT Manager should use the active channel key, not hardcoded `main`.
@@ -563,7 +563,7 @@ async function checkHealth() {
           <div class="queue-item" id="qi-${i}">
             <span class="queue-idx">${i+1}</span>
             <span class="queue-url">${u.length > 50 ? u.substring(0,50)+'...' : u}</span>
-            <span class="queue-item-status badge badge-default" id="qi-status-${i}">ΓÅ│ Waiting</span>
+            <span class="queue-item-status badge badge-default" id="qi-status-${i}">⏳ Waiting</span>
           </div>
         `).join('');
         queueTimer = setInterval(() => q.urls ? pollQueue(activeQueueId, items) : pollResumeQueue(activeQueueId, items), 3000);
@@ -584,7 +584,7 @@ async function checkHealth() {
   }
 }
 
-// ΓöÇΓöÇ Pipeline ΓöÇΓöÇ
+// ── Pipeline ──
 async function startPipeline() {
   const url = document.getElementById('input-url').value.trim();
   if (!url) return toast('Please enter URL or text', 'error');
@@ -610,9 +610,9 @@ function previewUrls() {
   const found = [...new Set(text.match(urlPattern) || [])];
   const el = document.getElementById('url-preview');
   if (!found.length) {
-    el.innerHTML = '<div class="url-preview-empty">ΓÜá∩╕Å No Douyin URLs detected</div>';
+    el.innerHTML = '<div class="url-preview-empty">⚠️ No Douyin URLs detected</div>';
   } else {
-    el.innerHTML = `<div class="url-preview-header">≡ƒöì Found ${found.length} URL(s):</div>` +
+    el.innerHTML = `<div class="url-preview-header">🔍 Found ${found.length} URL(s):</div>` +
       found.map((u, i) => `<div class="url-preview-item"><span class="url-num">${i+1}</span><span class="url-text">${u}</span></div>`).join('');
   }
   el.classList.remove('hidden');
@@ -679,8 +679,8 @@ function renderActiveQueues(queues) {
       ? Object.entries(q.series_counts).slice(0, 4).map(([name, n]) => `${safeHtml(name)}:${n}`).join(' | ')
       : 'No series context';
     const action = q.status === 'paused'
-      ? `<button class="btn btn-primary btn-sm" onclick="resumePipelineQueue('${q.id}')">Γû╢ Resume</button> <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">Γ£û Hß╗ºy Queue</button>`
-      : `<button class="btn btn-outline btn-sm" onclick="pauseQueue('${q.id}')">ΓÅ╕ Pause</button> <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">Γ£û Hß╗ºy Queue</button>`;
+      ? `<button class="btn btn-primary btn-sm" onclick="resumePipelineQueue('${q.id}')">▶ Resume</button> <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">✖ Hủy Queue</button>`
+      : `<button class="btn btn-outline btn-sm" onclick="pauseQueue('${q.id}')">⏸ Pause</button> <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">✖ Hủy Queue</button>`;
     return `
       <div class="queue-item active-queue-row ${q.id === selectedQueueId ? 'active' : ''}">
         <span class="queue-idx">${safeHtml(q.id)}</span>
@@ -852,9 +852,9 @@ async function pollQueue(queueId, urls) {
       if (i < completed) {
         const wasError = errors.find(e => e.url === urls[i]);
         if (wasError) {
-          st.className = 'badge badge-error'; st.textContent = 'Γ¥î Failed';
+          st.className = 'badge badge-error'; st.textContent = '❌ Failed';
         } else {
-          st.className = 'badge badge-success'; st.textContent = 'Γ£à Done';
+          st.className = 'badge badge-success'; st.textContent = '✅ Done';
         }
       } else if (i === completed && (d.status === 'running' || d.status === 'paused')) {
         if (d.status === 'paused') {
@@ -862,7 +862,7 @@ async function pollQueue(queueId, urls) {
           st.textContent = q.current_job ? 'Finishing...' : 'Paused';
         } else {
           st.className = 'badge badge-info';
-          st.textContent = '≡ƒöä Processing...';
+          st.textContent = '🔄 Processing...';
         }
         // Show sub-job logs
         if (q.current_job && !currentJobId) {
@@ -890,9 +890,9 @@ async function pollQueue(queueId, urls) {
         if (!st) continue;
         const wasError = errors.find(e => e.url === urls[i]);
         if (wasError) {
-          st.className = 'badge badge-error'; st.textContent = 'Γ¥î Failed';
+          st.className = 'badge badge-error'; st.textContent = '❌ Failed';
         } else {
-          st.className = 'badge badge-success'; st.textContent = 'Γ£à Done';
+          st.className = 'badge badge-success'; st.textContent = '✅ Done';
         }
       }
       if (d.status === 'done') {
@@ -923,8 +923,8 @@ function showFailedSection(errors) {
         <span style="color:var(--error);font-weight:700;font-size:.85rem">${i+1}</span>
         <span class="queue-failed-url" title="${e.url || ''}">${shortUrl}</span>
         <div class="queue-failed-actions">
-          <button class="btn btn-outline btn-sm" onclick="toggleErrorDetail(${i})" title="Xem l├╜ do lß╗ùi">≡ƒæü L├╜ do</button>
-          ${hasJobId ? `<button class="btn btn-outline btn-sm" onclick="viewFailedLogs('${e.job_id}')" title="Xem logs chi tiß║┐t">≡ƒôï Logs</button>` : ''}
+          <button class="btn btn-outline btn-sm" onclick="toggleErrorDetail(${i})" title="Xem lý do lỗi">👁 Lý do</button>
+          ${hasJobId ? `<button class="btn btn-outline btn-sm" onclick="viewFailedLogs('${e.job_id}')" title="Xem logs chi tiết">📋 Logs</button>` : ''}
         </div>
       </div>
       <div class="queue-failed-error" id="qfe-${i}">${errorMsg}</div>
@@ -977,10 +977,10 @@ async function retryFailedQueue() {
   // Start a new batch with only the failed URLs
   const btn = document.getElementById('btn-retry-failed');
   btn.disabled = true;
-  btn.textContent = 'ΓÅ│ Starting...';
+  btn.textContent = '⏳ Starting...';
   try {
     const d = await api('/api/pipeline/batch', { method: 'POST', body: { urls: failedUrls.join('\n') } });
-    if (d.error) { toast(d.error, 'error'); btn.disabled = false; btn.textContent = '≡ƒöä Retry All Failed'; return; }
+    if (d.error) { toast(d.error, 'error'); btn.disabled = false; btn.textContent = '🔄 Retry All Failed'; return; }
     toast(`Retry queue started: ${d.total} URLs`);
     // Reset queue monitor
     const items = document.getElementById('queue-items');
@@ -988,7 +988,7 @@ async function retryFailedQueue() {
       <div class="queue-item" id="qi-${i}">
         <span class="queue-idx">${i+1}</span>
         <span class="queue-url">${u.length > 50 ? u.substring(0,50)+'...' : u}</span>
-        <span class="queue-item-status badge badge-default" id="qi-status-${i}">ΓÅ│ Waiting</span>
+        <span class="queue-item-status badge badge-default" id="qi-status-${i}">⏳ Waiting</span>
       </div>
     `).join('');
     document.getElementById('queue-progress-fill').style.width = '0%';
@@ -999,7 +999,7 @@ async function retryFailedQueue() {
     queueTimer = setInterval(() => pollQueue(d.queue_id, d.urls), 3000);
   } catch (e) { toast('Error: ' + e.message, 'error'); }
   btn.disabled = false;
-  btn.textContent = '≡ƒöä Retry All Failed';
+  btn.textContent = '🔄 Retry All Failed';
 }
 
 async function pollJob(jobId) {
@@ -1045,21 +1045,21 @@ function showResult(r) {
   const el = document.getElementById('pipeline-result');
   el.classList.remove('hidden');
   el.innerHTML = `
-    <h2><span>≡ƒÄë</span> Pipeline Complete</h2>
+    <h2><span>🎉</span> Pipeline Complete</h2>
     <div class="grid-2">
-      <div class="status-row">≡ƒôü Project: ${r.project_dir}</div>
-      <div class="status-row">≡ƒÄ¼ Video: ${r.final_video?.split(/[\\/]/).pop()}</div>
-      <div class="status-row">≡ƒô¥ Title: ${r.metadata?.title || 'N/A'}</div>
-      <div class="status-row">≡ƒôñ YouTube: ${r.youtube?.url || 'Not uploaded'}</div>
+      <div class="status-row">📁 Project: ${r.project_dir}</div>
+      <div class="status-row">🎬 Video: ${r.final_video?.split(/[\\/]/).pop()}</div>
+      <div class="status-row">📝 Title: ${r.metadata?.title || 'N/A'}</div>
+      <div class="status-row">📤 YouTube: ${r.youtube?.url || 'Not uploaded'}</div>
     </div>
     <div class="btn-group">
-      ${r.final_video ? `<a href="/api/project/${r.project_id}/file/final_video.mp4" class="btn btn-primary btn-sm">Γ¼ç Download Video</a>` : ''}
-      ${r.youtube?.url ? `<a href="${r.youtube.url}" target="_blank" class="btn btn-accent btn-sm">Γû╢ Watch on YouTube</a>` : ''}
+      ${r.final_video ? `<a href="/api/project/${r.project_id}/file/final_video.mp4" class="btn btn-primary btn-sm">⬇ Download Video</a>` : ''}
+      ${r.youtube?.url ? `<a href="${r.youtube.url}" target="_blank" class="btn btn-accent btn-sm">▶ Watch on YouTube</a>` : ''}
     </div>
   `;
 }
 
-// ΓöÇΓöÇ Projects ΓöÇΓöÇ
+// ── Projects ──
 let currentProjectName = null;
 let allProjectsData = [];
 const ALL_STEPS = ['download','separate','stt','translate','tts','render','metadata','upload'];
@@ -1123,10 +1123,10 @@ async function loadProjects() {
     if (!filtered.length) {
       el.innerHTML = `<p style="color:var(--text-dim)">${
         filter === 'all' ? 'No projects yet'
-        : filter === 'completed' ? 'Kh├┤ng c├│ project n├áo ─æ├ú ho├án th├ánh'
-        : filter === 'partial' ? 'Kh├┤ng c├│ project n├áo ─æang dß╗ƒ dang'
-        : filter === 'yt-uploaded' ? 'Kh├┤ng c├│ project n├áo upload YouTube th├ánh c├┤ng'
-        : 'Kh├┤ng c├│ project n├áo ch╞░a ho├án th├ánh'
+        : filter === 'completed' ? 'Không có project nào đã hoàn thành'
+        : filter === 'partial' ? 'Không có project nào đang dở dang'
+        : filter === 'yt-uploaded' ? 'Không có project nào upload YouTube thành công'
+        : 'Không có project nào chưa hoàn thành'
       }</p>`;
       return;
     }
@@ -1136,8 +1136,8 @@ async function loadProjects() {
       const pct = Math.round(stepsArr.length / ALL_STEPS.length * 100);
       const complete = isProjectComplete(p);
       const statusBadge = complete
-        ? '<span class="badge badge-success" style="margin-left:auto;font-size:.65rem">Γ£à Done</span>'
-        : '<span class="badge badge-info" style="margin-left:auto;font-size:.65rem">ΓÅ│ ' + pct + '%</span>';
+        ? '<span class="badge badge-success" style="margin-left:auto;font-size:.65rem">✅ Done</span>'
+        : '<span class="badge badge-info" style="margin-left:auto;font-size:.65rem">⏳ ' + pct + '%</span>';
       const checkboxHtml = !complete ? `
         <label class="project-checkbox" onclick="event.stopPropagation()">
           <input type="checkbox" class="project-cb" data-project="${pname}" onchange="updateProjectsSelectedCount()" />
@@ -1146,14 +1146,14 @@ async function loadProjects() {
       <div class="project-card ${complete ? 'project-complete' : 'project-incomplete'}" onclick="openProjectDetail('${pname}')">
         <div class="project-card-header">
           ${checkboxHtml}
-          <h3>≡ƒôü ${pname}</h3>
+          <h3>📁 ${pname}</h3>
           ${statusBadge}
         </div>
         <p>Created: ${p.created_at || 'N/A'}</p>
         <div class="steps-indicator">
           ${ALL_STEPS.map(s => `<div class="step-dot ${stepsArr.includes(s)?'done':''}"></div>`).join('')}
         </div>
-        <p style="margin-top:4px;font-size:.7rem;color:var(--text-dim)">${pct}% ΓÇö ${stepsArr.join(' ΓåÆ ') || 'no steps'}</p>
+        <p style="margin-top:4px;font-size:.7rem;color:var(--text-dim)">${pct}% — ${stepsArr.join(' → ') || 'no steps'}</p>
       </div>`;
     }).join('');
   } catch (e) { console.error(e); }
@@ -1175,7 +1175,7 @@ function updateProjectsSelectedCount() {
   const btnResume = document.getElementById('btn-batch-resume');
   const btnDelete = document.getElementById('btn-batch-delete');
   
-  if (infoEl) infoEl.textContent = `${count} ─æ├ú chß╗ìn`;
+  if (infoEl) infoEl.textContent = `${count} đã chọn`;
   if (countEl) countEl.textContent = count;
   if (deleteCountEl) deleteCountEl.textContent = count;
   if (btnResume) btnResume.disabled = count === 0;
@@ -1194,10 +1194,10 @@ async function batchResumeProjects() {
   document.querySelectorAll('.project-cb:checked').forEach(cb => {
     selected.push(cb.dataset.project);
   });
-  if (!selected.length) return toast('Chß╗ìn ├¡t nhß║Ñt 1 project', 'error');
+  if (!selected.length) return toast('Chọn ít nhất 1 project', 'error');
   if (!confirm(`Resume pipeline cho ${selected.length} project?\n\n${selected.join('\n')}`)) return;
 
-  toast(`─Éang resume ${selected.length} projects...`);
+  toast(`Đang resume ${selected.length} projects...`);
   try {
     const d = await api('/api/pipeline/resume-batch', {
       method: 'POST',
@@ -1212,8 +1212,8 @@ async function batchResumeProjects() {
     items.innerHTML = d.projects.map((name, i) => `
       <div class="queue-item" id="qi-${i}">
         <span class="queue-idx">${i+1}</span>
-        <span class="queue-url" style="font-family:inherit;font-size:.85rem">≡ƒôü ${name}</span>
-        <span class="queue-item-status badge badge-default" id="qi-status-${i}">ΓÅ│ Waiting</span>
+        <span class="queue-url" style="font-family:inherit;font-size:.85rem">📁 ${name}</span>
+        <span class="queue-item-status badge badge-default" id="qi-status-${i}">⏳ Waiting</span>
       </div>
     `).join('');
 
@@ -1231,10 +1231,10 @@ async function batchDeleteProjects() {
   document.querySelectorAll('.project-cb:checked').forEach(cb => {
     selected.push(cb.dataset.project);
   });
-  if (!selected.length) return toast('Chß╗ìn ├¡t nhß║Ñt 1 project', 'error');
-  if (!confirm(`ΓÜá∩╕Å XO├ü V─¿NH VIß╗äN ${selected.length} project ─æ├ú chß╗ìn?\n\nH├ánh ─æß╗Öng n├áy kh├┤ng thß╗â ho├án t├íc!`)) return;
+  if (!selected.length) return toast('Chọn ít nhất 1 project', 'error');
+  if (!confirm(`⚠️ XOÁ VĨNH VIỄN ${selected.length} project đã chọn?\n\nHành động này không thể hoàn tác!`)) return;
 
-  toast(`─Éang xo├í ${selected.length} projects...`);
+  toast(`Đang xoá ${selected.length} projects...`);
   try {
     const d = await api('/api/projects/bulk-delete', {
       method: 'POST',
@@ -1242,9 +1242,9 @@ async function batchDeleteProjects() {
     });
     if (d.error) { toast(d.error, 'error'); return; }
     
-    toast(`─É├ú xo├í ${d.deleted.length} project th├ánh c├┤ng.`);
+    toast(`Đã xoá ${d.deleted.length} project thành công.`);
     if (d.errors?.length) {
-      toast(`C├│ ${d.errors.length} lß╗ùi khi xo├í.`, 'error');
+      toast(`Có ${d.errors.length} lỗi khi xoá.`, 'error');
     }
     
     // Clear selection and refresh
@@ -1257,13 +1257,13 @@ async function batchDeleteProjects() {
 async function scanDuplicates() {
   const btn = document.getElementById('btn-scan-duplicates');
   btn.disabled = true;
-  btn.textContent = 'ΓÅ│ ─Éang qu├⌐t...';
+  btn.textContent = '⏳ Đang quét...';
   try {
     const d = await api('/api/projects/duplicates');
     if (d.error) { toast(d.error, 'error'); return; }
     
     if (!d.duplicates || !d.duplicates.length) {
-      toast('Kh├┤ng t├¼m thß║Ñy project n├áo bß╗ï tr├╣ng URL.');
+      toast('Không tìm thấy project nào bị trùng URL.');
       return;
     }
     
@@ -1273,8 +1273,8 @@ async function scanDuplicates() {
       return `
       <div class="duplicate-group">
         <div class="duplicate-group-header">
-          <strong>≡ƒöù URL:</strong> <a href="${group.url}" target="_blank">${group.url.substring(0, 60)}...</a>
-          <span class="badge badge-info">${group.projects.length} bß║ún tr├╣ng</span>
+          <strong>🔗 URL:</strong> <a href="${group.url}" target="_blank">${group.url.substring(0, 60)}...</a>
+          <span class="badge badge-info">${group.projects.length} bản trùng</span>
         </div>
         <div class="duplicate-items">
           ${group.projects.map((p, pIdx) => {
@@ -1284,9 +1284,9 @@ async function scanDuplicates() {
             <label class="duplicate-item ${isFirst ? 'suggest-keep' : ''}">
               <input type="checkbox" class="dup-cb" data-project="${p.project_name}" ${!isFirst ? 'checked' : ''}>
               <div class="dup-info">
-                <span class="dup-name">≡ƒôü ${p.project_name}</span>
-                <span class="dup-meta">${p.created_at || 'N/A'} ΓÇö ${pct}% ho├án th├ánh</span>
-                ${isFirst ? '<span class="badge badge-success" style="font-size:.6rem">Giß╗» lß║íi (Mß╗¢i nhß║Ñt)</span>' : ''}
+                <span class="dup-name">📁 ${p.project_name}</span>
+                <span class="dup-meta">${p.created_at || 'N/A'} — ${pct}% hoàn thành</span>
+                ${isFirst ? '<span class="badge badge-success" style="font-size:.6rem">Giữ lại (Mới nhất)</span>' : ''}
               </div>
             </label>`;
           }).join('')}
@@ -1297,7 +1297,7 @@ async function scanDuplicates() {
     document.getElementById('duplicates-modal').classList.remove('hidden');
   } catch (e) { toast('Error: ' + e.message, 'error'); }
   btn.disabled = false;
-  btn.textContent = '≡ƒöì Qu├⌐t tr├╣ng';
+  btn.textContent = '🔍 Quét trùng';
 }
 
 function closeDuplicatesModal() {
@@ -1310,12 +1310,12 @@ async function deleteSelectedDuplicates() {
     selected.push(cb.dataset.project);
   });
   
-  if (!selected.length) return toast('Chß╗ìn ├¡t nhß║Ñt 1 project ─æß╗â xo├í', 'error');
-  if (!confirm(`Xo├í v─⌐nh viß╗àn ${selected.length} project ─æ├ú chß╗ìn?`)) return;
+  if (!selected.length) return toast('Chọn ít nhất 1 project để xoá', 'error');
+  if (!confirm(`Xoá vĩnh viễn ${selected.length} project đã chọn?`)) return;
   
   const btn = document.getElementById('btn-delete-duplicates');
   btn.disabled = true;
-  btn.textContent = 'ΓÅ│ ─Éang xo├í...';
+  btn.textContent = '⏳ Đang xoá...';
   
   try {
     const d = await api('/api/projects/bulk-delete', {
@@ -1325,14 +1325,14 @@ async function deleteSelectedDuplicates() {
     
     if (d.error) { toast(d.error, 'error'); }
     else {
-      toast(`─É├ú xo├í ${d.deleted.length} project.`);
+      toast(`Đã xoá ${d.deleted.length} project.`);
       closeDuplicatesModal();
       loadProjects();
     }
   } catch (e) { toast('Error: ' + e.message, 'error'); }
   
   btn.disabled = false;
-  btn.textContent = '≡ƒùæ Xo├í c├íc mß╗Ñc ─æ├ú chß╗ìn';
+  btn.textContent = '🗑 Xoá các mục đã chọn';
 }
 
 
@@ -1363,16 +1363,16 @@ async function openProjectDetail(projectName) {
     ).join('');
 
     // File type icons
-    const icons = {video:'≡ƒÄ¼', audio:'≡ƒÄ╡', subtitle:'≡ƒô¥', image:'≡ƒû╝∩╕Å', data:'≡ƒôï', other:'≡ƒôä'};
+    const icons = {video:'🎬', audio:'🎵', subtitle:'📝', image:'🖼️', data:'📋', other:'📄'};
 
     // File list
     const pid = info.project_id || projectName;
     document.getElementById('modal-project-files').innerHTML = d.files.map(f => `
       <div class="file-item">
-        <div class="file-icon">${icons[f.type] || '≡ƒôä'}</div>
+        <div class="file-icon">${icons[f.type] || '📄'}</div>
         <div class="file-name" title="${f.name}">${f.name}</div>
         <div class="file-size">${f.size_human}</div>
-        <a class="file-dl" href="/api/project/${pid}/file/${f.name}" download>Γ¼ç</a>
+        <a class="file-dl" href="/api/project/${pid}/file/${f.name}" download>⬇</a>
       </div>
     `).join('') || '<p style="color:var(--text-dim);padding:12px">No files</p>';
 
@@ -1386,7 +1386,7 @@ async function openProjectDetail(projectName) {
       btnQueue.style.display = '';
       const inQueue = resumeQueue.includes(projectName);
       btnQueue.disabled = inQueue;
-      btnQueue.textContent = inQueue ? 'Γ£à In Queue' : 'Γ₧ò Add to Queue';
+      btnQueue.textContent = inQueue ? '✅ In Queue' : '➕ Add to Queue';
     }
 
     // Show modal
@@ -1422,7 +1422,7 @@ async function resumeProject() {
 
 async function deleteProject() {
   if (!currentProjectName) return;
-  if (!confirm(`ΓÜá∩╕Å DELETE "${currentProjectName}" and ALL its files?\n\nThis cannot be undone!`)) return;
+  if (!confirm(`⚠️ DELETE "${currentProjectName}" and ALL its files?\n\nThis cannot be undone!`)) return;
 
   try {
     const d = await api(`/api/project/${currentProjectName}`, { method: 'DELETE' });
@@ -1439,7 +1439,7 @@ async function deleteProject() {
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
-// ΓöÇΓöÇ Resume Queue ΓöÇΓöÇ
+// ── Resume Queue ──
 let resumeQueue = [];
 
 function addToResumeQueue() {
@@ -1450,7 +1450,7 @@ function addToResumeQueue() {
   }
   resumeQueue.push(currentProjectName);
   renderResumeQueue();
-  toast(`Γ₧ò ${currentProjectName} added to resume queue`);
+  toast(`➕ ${currentProjectName} added to resume queue`);
   closeProjectModal();
 }
 
@@ -1478,8 +1478,8 @@ function renderResumeQueue() {
   list.innerHTML = resumeQueue.map((name, i) => `
     <div class="queue-item">
       <span class="queue-idx">${i+1}</span>
-      <span class="queue-url" style="font-family:inherit;font-size:.85rem">≡ƒôü ${name}</span>
-      <button class="btn btn-outline btn-sm" onclick="removeFromResumeQueue('${name}')" style="padding:3px 8px;font-size:.7rem">Γ£ò</button>
+      <span class="queue-url" style="font-family:inherit;font-size:.85rem">📁 ${name}</span>
+      <button class="btn btn-outline btn-sm" onclick="removeFromResumeQueue('${name}')" style="padding:3px 8px;font-size:.7rem">✕</button>
     </div>
   `).join('');
 }
@@ -1490,14 +1490,14 @@ async function startResumeQueue() {
 
   const btn = document.getElementById('btn-start-resume-queue');
   btn.disabled = true;
-  btn.textContent = 'ΓÅ│ Starting...';
+  btn.textContent = '⏳ Starting...';
 
   try {
     const d = await api('/api/pipeline/resume-batch', {
       method: 'POST',
       body: { projects: resumeQueue }
     });
-    if (d.error) { toast(d.error, 'error'); btn.disabled = false; btn.textContent = 'Γû╢ Start Resume Queue'; return; }
+    if (d.error) { toast(d.error, 'error'); btn.disabled = false; btn.textContent = '▶ Start Resume Queue'; return; }
 
     toast(`Resume queue started: ${d.total} projects`);
 
@@ -1508,8 +1508,8 @@ async function startResumeQueue() {
     items.innerHTML = d.projects.map((name, i) => `
       <div class="queue-item" id="qi-${i}">
         <span class="queue-idx">${i+1}</span>
-        <span class="queue-url" style="font-family:inherit;font-size:.85rem">≡ƒôü ${name}</span>
-        <span class="queue-item-status badge badge-default" id="qi-status-${i}">ΓÅ│ Waiting</span>
+        <span class="queue-url" style="font-family:inherit;font-size:.85rem">📁 ${name}</span>
+        <span class="queue-item-status badge badge-default" id="qi-status-${i}">⏳ Waiting</span>
       </div>
     `).join('');
 
@@ -1528,7 +1528,7 @@ async function startResumeQueue() {
     renderResumeQueue();
   } catch (e) { toast('Error: ' + e.message, 'error'); }
   btn.disabled = false;
-  btn.textContent = 'Γû╢ Start Resume Queue';
+  btn.textContent = '▶ Start Resume Queue';
 }
 
 async function pollResumeQueue(queueId, projects) {
@@ -1554,9 +1554,9 @@ async function pollResumeQueue(queueId, projects) {
       if (i < completed) {
         const wasError = errors.find(e => e.project === projects[i]);
         if (wasError) {
-          st.className = 'badge badge-error'; st.textContent = 'Γ¥î Failed';
+          st.className = 'badge badge-error'; st.textContent = '❌ Failed';
         } else {
-          st.className = 'badge badge-success'; st.textContent = 'Γ£à Done';
+          st.className = 'badge badge-success'; st.textContent = '✅ Done';
         }
       } else if (i === completed && (d.status === 'running' || d.status === 'paused')) {
         if (d.status === 'paused') {
@@ -1564,7 +1564,7 @@ async function pollResumeQueue(queueId, projects) {
           st.textContent = q.current_job ? 'Finishing...' : 'Paused';
         } else {
           st.className = 'badge badge-info';
-          st.textContent = '≡ƒöä Resuming...';
+          st.textContent = '🔄 Resuming...';
         }
         if (q.current_job && !currentJobId) {
           currentJobId = q.current_job;
@@ -1590,9 +1590,9 @@ async function pollResumeQueue(queueId, projects) {
         if (!st) continue;
         const wasError = errors.find(e => e.project === projects[i]);
         if (wasError) {
-          st.className = 'badge badge-error'; st.textContent = 'Γ¥î Failed';
+          st.className = 'badge badge-error'; st.textContent = '❌ Failed';
         } else {
-          st.className = 'badge badge-success'; st.textContent = 'Γ£à Done';
+          st.className = 'badge badge-success'; st.textContent = '✅ Done';
         }
       }
       if (d.status === 'done') {
@@ -1607,7 +1607,7 @@ async function pollResumeQueue(queueId, projects) {
   } catch (e) { console.error(e); }
 }
 
-// ΓöÇΓöÇ Settings ΓöÇΓöÇ
+// ── Settings ──
 async function loadConfig() {
   try {
     const d = await api('/api/config');
@@ -1727,7 +1727,7 @@ function toggleTtsOptions() {
   if (capcutGroup) capcutGroup.style.display = engine === 'capcut' ? '' : 'none';
 }
 
-// ΓöÇΓöÇ WARP Proxy UI ΓöÇΓöÇ
+// ── WARP Proxy UI ──
 function _updateWarpUI(enabled) {
     const badge = document.getElementById('warp-status-badge');
     const label = document.getElementById('warp-label');
@@ -1736,12 +1736,12 @@ function _updateWarpUI(enabled) {
     const mToggle = document.getElementById('cfg-douyin_warp_enabled');
     
     if (badge) {
-      badge.textContent = enabled ? 'Bß║¡t' : 'Tß║»t';
+      badge.textContent = enabled ? 'Bật' : 'Tắt';
       badge.style.background = enabled ? 'rgba(255,127,0,.2)' : 'rgba(136,136,168,.12)';
       badge.style.color = enabled ? '#ff7f00' : 'var(--text-dim)';
     }
     if (label) {
-      label.textContent = enabled ? 'ΓÜí WARP ─æang bß║¡t ΓÇö Douyin traffic sß║╜ ─æi qua WARP' : 'Tß║»t';
+      label.textContent = enabled ? '⚡ WARP đang bật — Douyin traffic sẽ đi qua WARP' : 'Tắt';
       label.style.color = enabled ? '#ff7f00' : 'var(--text-dim)';
     }
     if (fLabel) {
@@ -1772,9 +1772,9 @@ function onWarpToggle(cb) {
   _updateWarpUI(cb.checked);
   if (cb.checked) {
     const proxy = document.getElementById('cfg-douyin_warp_proxy')?.value?.trim() || 'socks5://127.0.0.1:40000';
-    toast(`≡ƒ¢í WARP bß║¡t! Douyin sß║╜ ─æi qua ${proxy}`, 'success');
+    toast(`🛡 WARP bật! Douyin sẽ đi qua ${proxy}`, 'success');
   } else {
-    toast('WARP tß║»t ΓÇö Douyin d├╣ng kß║┐t nß╗æi trß╗▒c tiß║┐p');
+    toast('WARP tắt — Douyin dùng kết nối trực tiếp');
   }
 }
 
@@ -1783,22 +1783,22 @@ async function testWarpProxy() {
   const resultEl = document.getElementById('warp-test-result');
   const proxy = document.getElementById('cfg-douyin_warp_proxy')?.value?.trim() || 'socks5://127.0.0.1:40000';
   btn.disabled = true;
-  btn.textContent = 'ΓÅ│ Testing...';
+  btn.textContent = '⏳ Testing...';
   resultEl.innerHTML = '<span style="color:var(--text-dim)">Connecting...</span>';
   try {
     const d = await api('/api/warp/test', { method: 'POST', body: { proxy } });
     if (d.ok) {
-      resultEl.innerHTML = `<span style="color:#4ade80">Γ£à OK ΓÇö IP: ${d.ip || '?'} (${d.latency_ms || '?'}ms)</span>`;
-      toast('≡ƒ¢í WARP proxy hoß║ít ─æß╗Öng!', 'success');
+      resultEl.innerHTML = `<span style="color:#4ade80">✅ OK — IP: ${d.ip || '?'} (${d.latency_ms || '?'}ms)</span>`;
+      toast('🛡 WARP proxy hoạt động!', 'success');
     } else {
-      resultEl.innerHTML = `<span style="color:#f87171">Γ¥î ${d.error || 'Kh├┤ng kß║┐t nß╗æi ─æ╞░ß╗úc'}</span><br><span style="font-size:.72rem;color:var(--text-dim)">Setup: WARP app ΓåÆ Settings ΓåÆ Advanced ΓåÆ bß║¡t "WARP as local proxy"</span>`;
-      toast('WARP test thß║Ñt bß║íi: ' + (d.error || ''), 'error');
+      resultEl.innerHTML = `<span style="color:#f87171">❌ ${d.error || 'Không kết nối được'}</span><br><span style="font-size:.72rem;color:var(--text-dim)">Setup: WARP app → Settings → Advanced → bật "WARP as local proxy"</span>`;
+      toast('WARP test thất bại: ' + (d.error || ''), 'error');
     }
   } catch (e) {
-    resultEl.innerHTML = `<span style="color:#f87171">Γ¥î Lß╗ùi: ${e.message}</span>`;
+    resultEl.innerHTML = `<span style="color:#f87171">❌ Lỗi: ${e.message}</span>`;
   }
   btn.disabled = false;
-  btn.textContent = '≡ƒöî Test';
+  btn.textContent = '🔌 Test';
 }
 
 async function checkApiKey() {
@@ -1808,7 +1808,7 @@ async function checkApiKey() {
   const statusEl = document.getElementById('api-key-status');
   if (!key) { toast('Enter an API key first', 'error'); return; }
   btn.disabled = true;
-  btn.textContent = 'ΓÅ│ Checking...';
+  btn.textContent = '⏳ Checking...';
   statusEl.innerHTML = '<span style="color:var(--text-dim)">Testing API key...</span>';
   try {
     const d = await api('/api/check-api-key', { method: 'POST', body: { api_key: key } });
@@ -1820,18 +1820,18 @@ async function checkApiKey() {
       toast(d.error, 'error');
     }
   } catch (e) {
-    statusEl.innerHTML = `<span style="color:#f87171">Γ¥î Connection error: ${e.message}</span>`;
+    statusEl.innerHTML = `<span style="color:#f87171">❌ Connection error: ${e.message}</span>`;
     toast('Check failed: ' + e.message, 'error');
   }
   btn.disabled = false;
-  btn.textContent = '≡ƒöæ Check';
+  btn.textContent = '🔑 Check';
 }
 
 async function checkADC() {
   const btn = document.getElementById('btn-check-adc');
   const statusEl = document.getElementById('api-key-status');
   btn.disabled = true;
-  btn.textContent = 'ΓÅ│ Checking...';
+  btn.textContent = '⏳ Checking...';
   statusEl.innerHTML = '<span style="color:var(--text-dim)">Testing Vertex AI (ADC)...</span>';
   try {
     const d = await api('/api/check-api-key', { method: 'POST', body: { use_adc: true } });
@@ -1843,14 +1843,14 @@ async function checkADC() {
       toast(d.error, 'error');
     }
   } catch (e) {
-    statusEl.innerHTML = `<span style="color:#f87171">Γ¥î Connection error: ${e.message}</span>`;
+    statusEl.innerHTML = `<span style="color:#f87171">❌ Connection error: ${e.message}</span>`;
     toast('ADC check failed: ' + e.message, 'error');
   }
   btn.disabled = false;
-  btn.textContent = 'Γÿü∩╕Å Check ADC';
+  btn.textContent = '☁️ Check ADC';
 }
 
-// ΓöÇΓöÇ Douyin Login ΓöÇΓöÇ
+// ── Douyin Login ──
 
 async function testTranslationApi() {
   const btn = document.getElementById('btn-test-translation');
@@ -1906,7 +1906,7 @@ async function testTranslationApi() {
 async function douyinLogin() {
   const d = await api('/api/douyin/login', { method: 'POST' });
   if (d.login_id) {
-    toast('Chromium opened ΓÇö login to Douyin');
+    toast('Chromium opened — login to Douyin');
     const poll = setInterval(async () => {
       const s = await api(`/api/douyin/login/${d.login_id}`);
       if (s.status === 'done') { clearInterval(poll); toast('Douyin cookies saved!'); checkHealth(); }
@@ -1915,7 +1915,7 @@ async function douyinLogin() {
   }
 }
 
-// ΓöÇΓöÇ YouTube Auth ΓöÇΓöÇ
+// ── YouTube Auth ──
 async function youtubeLogin() {
   const d = await api('/api/youtube/login', { method: 'POST' });
   if (d.ok) { toast('YouTube connected!'); checkHealth(); }
@@ -1924,16 +1924,16 @@ async function youtubeLogin() {
 
 async function addYoutubeChannel() {
   const name = document.getElementById('yt-new-name').value.trim();
-  if (!name) return toast('Nhß║¡p t├¬n gß╗úi nhß╗¢ (vd: Kenh2)', 'error');
-  if (!/^[a-zA-Z0-9_-]+$/.test(name)) return toast('T├¬n chß╗ë chß╗⌐a chß╗», sß╗æ, dß║Ñu gß║ích', 'error');
-  toast(`─Éang mß╗ƒ tr├¼nh duyß╗çt cho k├¬nh "${name}"...`);
+  if (!name) return toast('Nhập tên gợi nhớ (vd: Kenh2)', 'error');
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) return toast('Tên chỉ chứa chữ, số, dấu gạch', 'error');
+  toast(`Đang mở trình duyệt cho kênh "${name}"...`);
   try {
     const d = await api('/api/youtube/login', { method: 'POST', body: { name } });
     if (d.ok) {
-      toast('─É├ú th├¬m k├¬nh mß╗¢i!');
+      toast('Đã thêm kênh mới!');
       document.getElementById('yt-new-name').value = '';
       checkHealth();
-    } else toast(d.error || 'Lß╗ùi', 'error');
+    } else toast(d.error || 'Lỗi', 'error');
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -1941,18 +1941,18 @@ async function toggleYtChannel(key, enabled) {
   try {
     const d = await api('/api/youtube/toggle', { method: 'POST', body: { key, enabled } });
     if (d.ok) {
-      toast(`K├¬nh [${key}]: ${enabled ? 'Bß║¼T Γ£à' : 'Tß║«T ΓÜ½'}`);
+      toast(`Kênh [${key}]: ${enabled ? 'BẬT ✅' : 'TẮT ⚫'}`);
       checkHealth();
-    } else toast(d.error || 'Lß╗ùi', 'error');
+    } else toast(d.error || 'Lỗi', 'error');
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
 async function removeYtChannel(key) {
-  if (!confirm(`ΓÜá∩╕Å X├│a k├¬nh "${key}"? Token sß║╜ bß╗ï x├│a v├á cß║ºn login lß║íi nß║┐u muß╗æn d├╣ng.`)) return;
+  if (!confirm(`⚠️ Xóa kênh "${key}"? Token sẽ bị xóa và cần login lại nếu muốn dùng.`)) return;
   try {
     const d = await api('/api/youtube/logout', { method: 'POST', body: { key } });
     if (d.ok) { toast(d.message); checkHealth(); }
-    else toast(d.error || 'Lß╗ùi', 'error');
+    else toast(d.error || 'Lỗi', 'error');
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -2009,9 +2009,9 @@ async function saveYoutubeWatchdogConfig() {
 function _ytStatusText(v) {
   const up = (v.upload_status || '').toLowerCase();
   const ps = (v.processing_status || '').toLowerCase();
-  if (up === 'failed' || up === 'rejected' || ps === 'failed' || ps === 'terminated') return `Γ¥î ${up || ps}`;
-  if (ps === 'processing' || up === 'uploaded') return `ΓÅ│ ${ps || up}`;
-  return `Γ£à ${ps || up || 'ok'}`;
+  if (up === 'failed' || up === 'rejected' || ps === 'failed' || ps === 'terminated') return `❌ ${up || ps}`;
+  if (ps === 'processing' || up === 'uploaded') return `⏳ ${ps || up}`;
+  return `✅ ${ps || up || 'ok'}`;
 }
 
 let ytmgrRows = [];
@@ -2030,12 +2030,12 @@ function _ytMatchCell(row) {
   if (!m) return '<span style="color:var(--text-dim)">-</span>';
   const source = row.match_source === 'video_id' ? 'ID map' : 'Fuzzy';
   const scorePct = typeof m.score === 'number' ? Math.round(m.score * 100) : 0;
-  const finalTag = m.has_final_video ? '≡ƒÄ¼ final' : 'ΓÜá no-final';
+  const finalTag = m.has_final_video ? '🎬 final' : '⚠ no-final';
   const score = row.match_source === 'video_id' ? '' : ` (${scorePct}%)`;
   return `
     <div style="line-height:1.35">
       <div style="font-weight:600">${_ytmgrEsc(m.project_name || '-')}</div>
-      <div style="font-size:.75rem;color:var(--text-dim)">${source}${score} ΓÇó ${finalTag}</div>
+      <div style="font-size:.75rem;color:var(--text-dim)">${source}${score} • ${finalTag}</div>
     </div>
   `;
 }
@@ -2135,23 +2135,23 @@ async function scanYoutubeVideoMatch() {
   const body = document.getElementById('ytmgr-table-body');
   const matchStatus = document.getElementById('ytmgr-match-status');
   if (body) body.innerHTML = '<tr><td colspan="6" style="padding:10px;color:var(--text-dim)">Scanning match...</td></tr>';
-  if (matchStatus) matchStatus.textContent = '─Éang qu├⌐t ─æß╗æi chiß║┐u YouTube Γåö local project...';
+  if (matchStatus) matchStatus.textContent = 'Đang quét đối chiếu YouTube ↔ local project...';
   try {
     const d = await api(`/api/youtube/videos/scan-match?key=${encodeURIComponent(key)}&max_results=${max}`);
     if (!d.ok) {
       if (body) body.innerHTML = `<tr><td colspan="6" style="padding:10px;color:var(--text-dim)">${_ytmgrEsc(d.error || 'Scan failed')}</td></tr>`;
-      if (matchStatus) matchStatus.textContent = 'Qu├⌐t ─æß╗æi chiß║┐u thß║Ñt bß║íi.';
+      if (matchStatus) matchStatus.textContent = 'Quét đối chiếu thất bại.';
       return;
     }
     const rows = d.rows || [];
     renderYoutubeVideos(rows, 'match');
     if (matchStatus) {
-      matchStatus.textContent = `Matched ${d.matched || 0}/${d.total_videos || rows.length} video(s) vß╗¢i project local (pages=${d.pages || 1}).`;
+      matchStatus.textContent = `Matched ${d.matched || 0}/${d.total_videos || rows.length} video(s) với project local (pages=${d.pages || 1}).`;
     }
     toast(`Scan done: matched ${d.matched || 0}/${d.total_videos || rows.length}`);
   } catch (e) {
     if (body) body.innerHTML = `<tr><td colspan="6" style="padding:10px;color:var(--text-dim)">Error: ${_ytmgrEsc(e.message)}</td></tr>`;
-    if (matchStatus) matchStatus.textContent = 'Qu├⌐t ─æß╗æi chiß║┐u lß╗ùi.';
+    if (matchStatus) matchStatus.textContent = 'Quét đối chiếu lỗi.';
   }
 }
 
@@ -2225,7 +2225,7 @@ async function runYoutubeWatchdogOnce() {
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
-// ΓöÇΓöÇ TikTok ΓöÇΓöÇ
+// ── TikTok ──
 let tiktokLoginTimer = null;
 let tiktokUploadPollTimer = null;
 
@@ -2276,8 +2276,8 @@ async function saveTikTokTabConfig() {
   
   try {
     const d = await api('/api/config', { method: 'POST', body: payload });
-    if (d.ok) toast('Γ£à ─É├ú l╞░u cß║Ñu h├¼nh mß║╖c ─æß╗ïnh (Max ph├║t, Auto split, Headless) !');
-    else toast(d.error || 'Lß╗ùi khi l╞░u', 'error');
+    if (d.ok) toast('✅ Đã lưu cấu hình mặc định (Max phút, Auto split, Headless) !');
+    else toast(d.error || 'Lỗi khi lưu', 'error');
   } catch (e) {
     toast('Error: ' + e.message, 'error');
   }
@@ -2304,11 +2304,11 @@ async function checkTikTokApiStatus() {
       return;
     }
     if (!d.configured) {
-      el.textContent = 'TikTok API: ch╞░a cß║Ñu h├¼nh client key/secret/redirect.';
+      el.textContent = 'TikTok API: chưa cấu hình client key/secret/redirect.';
       return;
     }
     if (!d.has_token) {
-      el.textContent = 'TikTok API: ch╞░a connect OAuth token.';
+      el.textContent = 'TikTok API: chưa connect OAuth token.';
       return;
     }
     const exp = (typeof d.access_expires_in_sec === 'number') ? `${Math.max(0, d.access_expires_in_sec)}s` : 'n/a';
@@ -2361,7 +2361,7 @@ async function importTikTokFromBrowser() {
       if (out) out.innerHTML = `<div class="log-line log-error"><span class="log-msg">${String(d.error || 'Import failed').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span></div>`;
       return toast(d.error || 'Import browser session failed', 'error');
     }
-    if (out) out.innerHTML = `<div class="log-line log-success"><span class="log-msg">Γ£à Imported ${d.cookie_count || 0} TikTok cookies from ${d.browser || browser}.</span></div>`;
+    if (out) out.innerHTML = `<div class="log-line log-success"><span class="log-msg">✅ Imported ${d.cookie_count || 0} TikTok cookies from ${d.browser || browser}.</span></div>`;
     await loadTikTokStatus();
     toast(`Imported browser session (${d.cookie_count || 0} cookies)`);
   } catch (e) {
@@ -2385,7 +2385,7 @@ async function importTikTokCookiesTextFile(input) {
       if (out) out.innerHTML = `<div class="log-line log-error"><span class="log-msg">${String(d.error || 'Import cookies.txt failed').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span></div>`;
       return toast(d.error || 'Import cookies.txt failed', 'error');
     }
-    if (out) out.innerHTML = `<div class="log-line log-success"><span class="log-msg">Γ£à Imported ${d.cookie_count || 0} TikTok cookies from cookies.txt.</span></div>`;
+    if (out) out.innerHTML = `<div class="log-line log-success"><span class="log-msg">✅ Imported ${d.cookie_count || 0} TikTok cookies from cookies.txt.</span></div>`;
     await loadTikTokStatus();
     toast(`Imported cookies.txt (${d.cookie_count || 0} cookies)`);
   } catch (e) {
@@ -2488,10 +2488,10 @@ function _renderTikTokResult(d, title = 'TikTok Result') {
     return;
   }
   if (Array.isArray(d.parts)) {
-    html += d.parts.map(p => `<div class="log-line log-info"><span class="log-msg">Part ${p.part_index}/${p.total_parts} ΓÇó ${Math.round(Number(p.duration_sec || 0))}s ΓÇó ${safe(p.path)}<br><span style="opacity:.8">${safe(p.caption_preview || '')}</span></span></div>`).join('');
+    html += d.parts.map(p => `<div class="log-line log-info"><span class="log-msg">Part ${p.part_index}/${p.total_parts} • ${Math.round(Number(p.duration_sec || 0))}s • ${safe(p.path)}<br><span style="opacity:.8">${safe(p.caption_preview || '')}</span></span></div>`).join('');
   }
   if (Array.isArray(d.results)) {
-    html += d.results.map(r => `<div class="log-line ${r.ok ? 'log-success' : 'log-error'}"><span class="log-msg">${r.ok ? 'Γ£à' : 'Γ¥î'} Part ${safe(r.part)}${r.status ? ' ΓÇó '+safe(r.status) : ''}${r.publish_id ? ' ΓÇó '+safe(r.publish_id) : ''}${r.error ? ' ΓÇó '+safe(r.error) : ''}</span></div>`).join('');
+    html += d.results.map(r => `<div class="log-line ${r.ok ? 'log-success' : 'log-error'}"><span class="log-msg">${r.ok ? '✅' : '❌'} Part ${safe(r.part)}${r.status ? ' • '+safe(r.status) : ''}${r.publish_id ? ' • '+safe(r.publish_id) : ''}${r.error ? ' • '+safe(r.error) : ''}</span></div>`).join('');
   }
   out.innerHTML = html;
   out.scrollTop = out.scrollHeight;
@@ -2499,7 +2499,7 @@ function _renderTikTokResult(d, title = 'TikTok Result') {
 
 async function tiktokDryRun() {
   const payload = _tkPayload(true);
-  if (!payload.project_name) return toast('Chß╗ìn project ─æ├ú render', 'error');
+  if (!payload.project_name) return toast('Chọn project đã render', 'error');
   try {
     const d = await api('/api/tiktok/upload', { method: 'POST', body: payload });
     if (!d.ok) return toast(d.error || 'Dry run failed', 'error');
@@ -2512,7 +2512,7 @@ async function tiktokDryRun() {
 
 async function tiktokUploadNow() {
   const payload = _tkPayload(false);
-  if (!payload.project_name) return toast('Chß╗ìn project ─æ├ú render', 'error');
+  if (!payload.project_name) return toast('Chọn project đã render', 'error');
   if (!confirm(`Upload TikTok project "${payload.project_name}"?`)) return;
   try {
     _setTikTokProgress(0, 'Queued...');
@@ -2566,8 +2566,8 @@ async function tiktokUploadNow() {
   }
 }
 
-// ΓöÇΓöÇ Upload ΓöÇΓöÇ
-// ΓöÇΓöÇ Facebook Reels ΓöÇΓöÇ
+// ── Upload ──
+// ── Facebook Reels ──
 let fbUploadPollTimer = null;
 let fbFetchedPages = [];
 
@@ -2798,10 +2798,10 @@ function _renderFbResult(d, title = 'Facebook Reels Result') {
     return;
   }
   if (Array.isArray(d.parts)) {
-    html += d.parts.map(p => `<div class="log-line log-info"><span class="log-msg">Part ${p.part_index}/${p.total_parts} ΓÇó ${Math.round(Number(p.duration_sec || 0))}s ΓÇó ${safe(p.path)}<br><span style="opacity:.8">${safe(p.caption_preview || '')}</span></span></div>`).join('');
+    html += d.parts.map(p => `<div class="log-line log-info"><span class="log-msg">Part ${p.part_index}/${p.total_parts} • ${Math.round(Number(p.duration_sec || 0))}s • ${safe(p.path)}<br><span style="opacity:.8">${safe(p.caption_preview || '')}</span></span></div>`).join('');
   }
   if (Array.isArray(d.results)) {
-    html += d.results.map(r => `<div class="log-line ${r.ok ? 'log-success' : 'log-error'}"><span class="log-msg">${r.ok ? 'Γ£à' : 'Γ¥î'} Part ${safe(r.part)}${r.video_id ? ' ΓÇó '+safe(r.video_id) : ''}${r.status ? ' ΓÇó '+safe(r.status) : ''}${r.error ? ' ΓÇó '+safe(r.error) : ''}</span></div>`).join('');
+    html += d.results.map(r => `<div class="log-line ${r.ok ? 'log-success' : 'log-error'}"><span class="log-msg">${r.ok ? '✅' : '❌'} Part ${safe(r.part)}${r.video_id ? ' • '+safe(r.video_id) : ''}${r.status ? ' • '+safe(r.status) : ''}${r.error ? ' • '+safe(r.error) : ''}</span></div>`).join('');
   }
   out.innerHTML = html;
   out.scrollTop = out.scrollHeight;
@@ -2899,7 +2899,7 @@ async function uploadFont() {
 }
 
 
-// ΓöÇΓöÇ YouTube Queue ΓöÇΓöÇ
+// ── YouTube Queue ──
 let ytQueuePollTimer = null;
 
 async function loadYTQueue() {
@@ -2914,7 +2914,7 @@ async function loadYTQueue() {
     }
     
     if (!d.items || d.items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="padding:10px; text-align:center; color:var(--text-dim);">Kh├┤ng c├│ video n├áo trong h├áng chß╗¥</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:10px; text-align:center; color:var(--text-dim);">Không có video nào trong hàng chờ</td></tr>';
       return;
     }
     
@@ -2926,9 +2926,9 @@ async function loadYTQueue() {
       const error = item.last_error || '';
       
       let statusHtml = status;
-      if (status === 'uploading') statusHtml = '<span class="badge badge-info">─Éang tß║úi l├¬n</span>';
-      else if (status === 'pending') statusHtml = '<span class="badge badge-default">─Éang chß╗¥</span>';
-      else if (status === 'failed') statusHtml = '<span class="badge badge-error">Lß╗ùi</span>';
+      if (status === 'uploading') statusHtml = '<span class="badge badge-info">Đang tải lên</span>';
+      else if (status === 'pending') statusHtml = '<span class="badge badge-default">Đang chờ</span>';
+      else if (status === 'failed') statusHtml = '<span class="badge badge-error">Lỗi</span>';
       
       
       
@@ -2940,14 +2940,14 @@ async function loadYTQueue() {
           <td style="padding:10px; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${safeStr(error)}">${safeStr(error)}</td>
           <td style="padding:10px;">${attempts}</td>
           <td style="padding:10px;">
-            <button class="btn btn-outline btn-sm" onclick="reuploadYTItem('${encodeURIComponent(item.project_dir)}')">≡ƒöä Re-upload</button> <button class=\"btn btn-error btn-sm\" onclick=\"cancelYTItem('${encodeURIComponent(item.project_dir)}')\">Γ£û Hß╗ºy</button>
+            <button class="btn btn-outline btn-sm" onclick="reuploadYTItem('${encodeURIComponent(item.project_dir)}')">🔄 Re-upload</button> <button class=\"btn btn-error btn-sm\" onclick=\"cancelYTItem('${encodeURIComponent(item.project_dir)}')\">✖ Hủy</button>
           </td>
         </tr>
       `;
     }).join('');
     
   } catch (e) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:10px; text-align:center; color:red;">Lß╗ùi tß║úi dß╗» liß╗çu: ${e.message}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:10px; text-align:center; color:red;">Lỗi tải dữ liệu: ${e.message}</td></tr>`;
   }
 }
 
@@ -2963,7 +2963,7 @@ async function cancelYTItem(projDirEncoded) {
     if (d.error) {
       toast(d.error, 'error');
     } else {
-      toast('─É├ú hß╗ºy tß║úi l├¬n th├ánh c├┤ng!');
+      toast('Đã hủy tải lên thành công!');
       loadYTQueue();
     }
   } catch (e) {
@@ -2981,7 +2981,7 @@ async function reuploadYTItem(projDirEncoded) {
     if (d.error) {
       toast(d.error, 'error');
     } else {
-      toast('─É├ú ─æß║╖t lß║íi trß║íng th├íi re-upload th├ánh c├┤ng!');
+      toast('Đã đặt lại trạng thái re-upload thành công!');
       loadYTQueue();
     }
   } catch (e) {
@@ -2990,7 +2990,7 @@ async function reuploadYTItem(projDirEncoded) {
 }
 
 
-// ΓöÇΓöÇ Log Formatting ΓöÇΓöÇ
+// ── Log Formatting ──
 function formatLogLine(raw) {
   const line = document.createElement('div');
   line.className = 'log-line';
@@ -3008,15 +3008,15 @@ function formatLogLine(raw) {
 
   // Detect log type from emoji/keyword patterns
   let type = 'default';
-  if (/^(≡ƒôÑ|≡ƒÄ¼|≡ƒô¥|≡ƒîÉ|≡ƒÄñ|≡ƒöº|≡ƒÆ╛|≡ƒôñ|≡ƒöù)\s*Step\s+\d/i.test(rest) || /^ΓÅ¡∩╕Å/.test(rest)) {
+  if (/^(📥|🎬|📝|🌐|🎤|🔧|💾|📤|🔗)\s*Step\s+\d/i.test(rest) || /^⏭️/.test(rest)) {
     type = 'step';
-  } else if (/^Γ£à/.test(rest) || /done|complete|success|saved/i.test(rest)) {
+  } else if (/^✅/.test(rest) || /done|complete|success|saved/i.test(rest)) {
     type = 'success';
-  } else if (/^Γ¥î|ERROR|PIPELINE ERROR|RESUME ERROR/i.test(rest)) {
+  } else if (/^❌|ERROR|PIPELINE ERROR|RESUME ERROR/i.test(rest)) {
     type = 'error';
-  } else if (/^ΓÜá∩╕Å|WARN/i.test(rest)) {
+  } else if (/^⚠️|WARN/i.test(rest)) {
     type = 'warning';
-  } else if (/^(≡ƒöä|ΓÅ│|≡ƒöæ|≡ƒÅá|≡ƒôè|≡ƒÄº|≡ƒñû|≡ƒÄ╡|ΓÅ▒|≡ƒöÇ)/.test(rest)) {
+  } else if (/^(🔄|⏳|🔑|🏠|📊|🎧|🤖|🎵|⏱|🔀)/.test(rest)) {
     type = 'info';
   } else if (/^\s{2,}/.test(rest)) {
     type = 'detail';  // indented sub-info
@@ -3038,7 +3038,7 @@ function formatLogLine(raw) {
   return line;
 }
 
-// ΓöÇΓöÇ Scraper ΓöÇΓöÇ
+// ── Scraper ──
 let scrapeVideos = [];
 let scrapeSeriesGroups = [];
 let completedUrls = new Set();
@@ -3148,9 +3148,9 @@ function renderScrapeResults(result) {
         ${isDone && localProject ? `<div class="video-local-project">Local: <a href="javascript:void(0)" onclick="jumpToProject('${localProject}')" style="color: #64ffda; text-decoration: underline; font-weight: bold;">${localProject}</a></div>` : ''}
         <div class="video-translation" id="vt-${i}"></div>
         <div class="video-meta">
-          ${plays ? `<span>Γû╢ ${plays}</span>` : ''}
-          ${v.digg_count ? `<span>Γ¥ñ ${v.digg_count}</span>` : ''}
-          ${date ? `<span>≡ƒôà ${date}</span>` : ''}
+          ${plays ? `<span>▶ ${plays}</span>` : ''}
+          ${v.digg_count ? `<span>❤ ${v.digg_count}</span>` : ''}
+          ${date ? `<span>📅 ${date}</span>` : ''}
         </div>
       </div>
     </div>`;
@@ -3325,11 +3325,11 @@ async function renderSeriesGroups(payload) {
       <h3>Series Grouping (AI)</h3>
       <p>Detected ${groups.length} series. Standalone videos: ${standaloneCount}. ${coverLine}</p>
       <div class="btn-group" style="margin-bottom:8px">
-        <button class="btn btn-outline btn-sm" onclick="selectAllSeriesGroups(true)">Γÿæ Select All Series</button>
-        <button class="btn btn-outline btn-sm" onclick="selectAllSeriesGroups(false)">ΓÿÉ Clear</button>
+        <button class="btn btn-outline btn-sm" onclick="selectAllSeriesGroups(true)">☑ Select All Series</button>
+        <button class="btn btn-outline btn-sm" onclick="selectAllSeriesGroups(false)">☐ Clear</button>
         <button class="btn btn-primary btn-sm" onclick="addSelectedSeriesToQueue(false)">+ Add Selected (All)</button>
         <button class="btn btn-primary btn-sm" onclick="addSelectedSeriesToQueue(true)">+ Add Selected (New)</button>
-        <button class="btn btn-primary btn-sm" onclick="startSelectedSeriesQueue()">Γû╢ Start Selected (New Only)</button>
+        <button class="btn btn-primary btn-sm" onclick="startSelectedSeriesQueue()">▶ Start Selected (New Only)</button>
         <span id="series-selected-count" class="badge badge-default">0 selected</span>
       </div>
       <div class="queue-items">
@@ -3509,7 +3509,7 @@ async function runDouyinWatchdogNow() {
   }
 }
 
-// ΓöÇΓöÇ TTS Engine Toggle ΓöÇΓöÇ
+// ── TTS Engine Toggle ──
 function toggleTtsOptions() {
   const engine = document.getElementById('cfg-tts_engine')?.value || 'gemini';
   const mode = document.getElementById('cfg-vieneu_mode')?.value || 'preset';
@@ -3527,13 +3527,13 @@ function toggleTtsOptions() {
   if (capcutGroup) capcutGroup.style.display = engine === 'capcut' ? '' : 'none';
 }
 
-// ΓöÇΓöÇ TTS Test ΓöÇΓöÇ
+// ── TTS Test ──
 async function testTts() {
   const btn = document.getElementById('btn-test-tts');
   const status = document.getElementById('tts-test-status');
   const audio = document.getElementById('tts-test-audio');
   btn.disabled = true;
-  status.textContent = 'ΓÅ│ Generating...';
+  status.textContent = '⏳ Generating...';
   audio.style.display = 'none';
   
   try {
@@ -3567,21 +3567,21 @@ async function testTts() {
       const url = URL.createObjectURL(blob);
       audio.src = url;
       audio.style.display = 'inline-block';
-      status.textContent = 'Γ£à Done!';
+      status.textContent = '✅ Done!';
       toast('TTS generated! Listen to preview.', 'success');
     } else {
       const err = await res.json();
-      status.textContent = 'Γ¥î Error';
+      status.textContent = '❌ Error';
       toast('TTS failed: ' + (err.error || 'Unknown error'), 'error');
     }
   } catch (e) {
-    status.textContent = 'Γ¥î Error';
+    status.textContent = '❌ Error';
     toast('TTS test error: ' + e.message, 'error');
   }
   btn.disabled = false;
 }
 
-// ΓöÇΓöÇ Queue Export/Import ΓöÇΓöÇ
+// ── Queue Export/Import ──
 async function exportQueue() {
   try {
     const d = await api('/api/pipeline/export');
@@ -3708,7 +3708,7 @@ async function importQueue() {
   try {
     const d = await api('/api/pipeline/import', { method: 'POST', body: {} });
     if (d.error) { toast(d.error, 'error'); return; }
-    toast(`Queue resumed! ${d.remaining} URLs c├▓n lß║íi`);
+    toast(`Queue resumed! ${d.remaining} URLs còn lại`);
     document.getElementById('saved-state-banner').classList.add('hidden');
     document.getElementById('queue-monitor').classList.remove('hidden');
     const items = document.getElementById('queue-items');
@@ -3716,7 +3716,7 @@ async function importQueue() {
       <div class="queue-item" id="qi-${i}">
         <span class="queue-idx">${i+1}</span>
         <span class="queue-url">${u.length > 50 ? u.substring(0,50)+'...' : u}</span>
-        <span class="queue-item-status badge ${i < d.resumed_from ? 'badge-success' : 'badge-default'}" id="qi-status-${i}">${i < d.resumed_from ? 'Γ£à Done (tr╞░ß╗¢c ─æ├│)' : 'ΓÅ│ Waiting'}</span>
+        <span class="queue-item-status badge ${i < d.resumed_from ? 'badge-success' : 'badge-default'}" id="qi-status-${i}">${i < d.resumed_from ? '✅ Done (trước đó)' : '⏳ Waiting'}</span>
       </div>
     `).join('');
     selectedQueueId = d.queue_id;
@@ -3732,8 +3732,8 @@ async function checkSavedState() {
       const banner = document.getElementById('saved-state-banner');
       const info = document.getElementById('saved-state-info');
       const badge = document.getElementById('saved-state-badge');
-      info.textContent = `Queue "${d.queue_id}" ΓÇö ${d.done_count}/${d.total} ─æ├ú xong, ${d.remaining} c├▓n lß║íi, ${d.errors} lß╗ùi. L╞░u l├║c: ${d.saved_at}`;
-      badge.textContent = `${d.remaining} ch╞░a xong`;
+      info.textContent = `Queue "${d.queue_id}" — ${d.done_count}/${d.total} đã xong, ${d.remaining} còn lại, ${d.errors} lỗi. Lưu lúc: ${d.saved_at}`;
+      badge.textContent = `${d.remaining} chưa xong`;
       banner.classList.remove('hidden');
     }
   } catch (e) { /* no saved state */ }
@@ -3743,7 +3743,7 @@ function dismissSavedState() {
   document.getElementById('saved-state-banner').classList.add('hidden');
 }
 
-// ΓöÇΓöÇ Init ΓöÇΓöÇ
+// ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
     try {
         const saved = localStorage.getItem('latest_scrape_result');
@@ -3772,7 +3772,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-// ΓöÇΓöÇΓöÇ Jump To Project ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ─── Jump To Project ─────────────────────────────────────────────────────────
 function jumpToProject(projectName) {
   const tabProjects = document.querySelector('[data-tab="projects"]');
   if (tabProjects) {
@@ -3783,7 +3783,7 @@ function jumpToProject(projectName) {
   }
 }
 
-// ΓòÉΓòÉΓòÉ NEW AI GROUP LOGIC ΓòÉΓòÉΓòÉ
+// ═══ NEW AI GROUP LOGIC ═══
 window.toggleSeriesGroupSelect = function(idx, checked) {
     if (!scrapeSeriesSelected) scrapeSeriesSelected = new Set();
     if (checked) scrapeSeriesSelected.add(idx);
@@ -3805,11 +3805,79 @@ window.selectAllSeriesGroups = function(state) {
     if (countEl) countEl.innerText = `${scrapeSeriesSelected.size} selected`;
 };
 
+;
+
+window.addSelectedSeriesToQueue = async function(newOnly) {
+    if (!scrapeSeriesSelected || scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
+    const btns = document.querySelectorAll('button');
+    btns.forEach(b => b.disabled = true);
+    try {
+        const added = await _queueSeriesGroups(Array.from(scrapeSeriesSelected), newOnly);
+        toast(`Added ${added} videos to queue from selected series!`, 'success');
+        selectAllSeriesGroups(false);
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    } finally {
+        btns.forEach(b => b.disabled = false);
+    }
+};
+
+window.startSelectedSeriesQueue = async function() {
+    if (!scrapeSeriesSelected || scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
+    const btns = document.querySelectorAll('button');
+    btns.forEach(b => b.disabled = true);
+    try {
+        const added = await _queueSeriesGroups(Array.from(scrapeSeriesSelected), true);
+        await api('/api/pipeline/queue/start', { method: 'POST' });
+        toast(`Added ${added} new videos and started queue!`, 'success');
+        selectAllSeriesGroups(false);
+        loadQueue();
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    } finally {
+        btns.forEach(b => b.disabled = false);
+    }
+};
+
+async function _queueSeriesGroups(indices, newOnly) {
+    let completedUrls = new Set();
+    if (newOnly) {
+        try {
+            const h = await api('/api/projects/completed-urls');
+            if (h.ok && Array.isArray(h.completed)) completedUrls = new Set(h.completed);
+        } catch(e) {}
+    }
+    
+    let totalAdded = 0;
+    
+    for (const idx of indices) {
+        const g = scrapeSeriesGroups[idx];
+        if (!g) continue;
+        
+        let urlsToQueue = g.urls || [];
+        if (newOnly) {
+            urlsToQueue = urlsToQueue.filter(u => !completedUrls.has(u));
+        }
+        if (urlsToQueue.length === 0) continue; 
+        
+        const payload = {
+            urls: urlsToQueue,
+            settings: window.currentScrapeSettings || {},
+            priority: 5,
+            group_series: true,
+            series_name: g.series_name_vi || g.series_name || '',
+            folder_name: g.folder_name || '',
+            episodes_range: `${g.episode_min || ''}-${g.episode_max || ''}`
+        };
+        await api('/api/pipeline/queue', { method: 'POST', body: payload });
+        totalAdded += urlsToQueue.length;
+    }
+    return totalAdded;
+}
 
 
 
-
-// ΓòÉΓòÉΓòÉ SERIES LIBRARY ΓòÉΓòÉΓòÉ
+// ═══ SERIES LIBRARY ═══
 function switchSeriesSubTab(subtab) {
     document.querySelectorAll('.series-sub-tab').forEach(t => t.classList.toggle('active', t.dataset.subtab === subtab));
     document.querySelectorAll('.series-sub-content').forEach(c => c.classList.toggle('hidden', c.id !== subtab));
@@ -3824,52 +3892,11 @@ async function loadSeriesLibrary() {
     listStandalones.innerHTML = '<div style="color:var(--text-dim)">Loading standalones...</div>';
     
     try {
-        const [res, rawRes, doneRes] = await Promise.all([
-            api('/api/series'),
-            api('/api/douyin/load-group').catch(() => ({groups: [], standalone: []})),
-            api('/api/projects/completed-urls').catch(() => ({completed: []}))
-        ]);
+        const res = await api('/api/series');
         if (!res || res.error) throw new Error(res?.error || 'Failed to load series');
         
         const series = res.series || [];
         const standalones = res.standalones || [];
-        const completedUrls = new Set(doneRes.completed || []);
-        
-        // Merge RAW Scraped standalones
-        const rawStandalones = Array.isArray(rawRes.standalone) ? rawRes.standalone : [];
-        rawStandalones.forEach(raw => {
-            const u = typeof raw === 'string' ? raw : (raw.url || '');
-            if (u && !completedUrls.has(u)) {
-                // Not downloaded yet, inject as raw
-                standalones.push({
-                    is_raw: true,
-                    project_name: raw.douyin_meta?.douyin_title || 'Raw Standalone Video',
-                    douyin_meta: raw.douyin_meta,
-                    url: u
-                });
-            }
-        });
-        
-        // Merge RAW Scraped series groups
-        const rawGroups = Array.isArray(rawRes.groups) ? rawRes.groups : [];
-        rawGroups.forEach((g, idx) => {
-            let urls = Array.isArray(g.urls) ? g.urls : [];
-            let newUrls = urls.filter(u => u && !completedUrls.has(u));
-            if (newUrls.length > 0) {
-                // Has new episodes not downloaded yet
-                series.push({
-                    is_raw: true,
-                    series_name: g.series_name_vi || g.series_name || `Scraped Group ${idx+1}`,
-                    series_folder: g.folder || `group_${idx}`,
-                    total_downloaded: newUrls.length, // Display as total new
-                    episode_min: g.episode_min,
-                    episode_max: g.episode_max,
-                    raw_group_idx: idx,
-                    raw_urls: newUrls
-                });
-            }
-        });
-
         
         const badgeSeries = document.getElementById('series-count-badge');
         const badgeStandalone = document.getElementById('standalone-count-badge');
@@ -3894,37 +3921,7 @@ async function loadSeriesLibrary() {
     }
 }
 
-window.downloadRawSeries = function(idx, safeFolder, event) {
-    if (event) event.stopPropagation();
-    if (typeof scrapeSeriesGroups === 'undefined' || !scrapeSeriesGroups) return toast('Please open Scraper tab and load AI Group first to trigger this', 'error');
-    const group = scrapeSeriesGroups[idx];
-    if (!group) return toast('Group not found in memory. Please Load Saved AI Group in Scraper tab first.', 'error');
-    
-    const folder = prompt("Th╞░ mß╗Ñc l╞░u series n├áy:", safeFolder || group.folder || `series_${idx}`);
-    if (!folder) return;
-    
-    addSeriesToQueue(idx, true); // this will use newOnly=true
-};
-
 function renderSeriesCard(s) {
-    if (s.is_raw) {
-        return `
-        <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; opacity:0.65; border:1px dashed var(--border);" onclick="if(confirm('Tß║úi ngay ${s.raw_urls.length} tß║¡p mß╗¢i cß╗ºa series n├áy?')) { enqueueUrlsToPipelineInput(${JSON.stringify(s.raw_urls).replace(/"/g, "&quot;")}, 'raw-series'); }">
-          <div style="display:flex; gap:12px; margin-bottom:12px;">
-            <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; display:flex; align-items:center; justify-content:center; color:#666; font-size:2rem; flex-shrink:0;">
-                dYZ
-            </div>
-            <div style="flex:1; overflow:hidden;">
-                <h3 style="margin:0 0 6px; font-size:1rem; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${safeStr(s.series_name)}</h3>
-                <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Folder: <code>${safeStr(s.series_folder)}</code></div>
-                <div style="font-size:0.8rem; font-weight:bold; color:var(--accent); margin-bottom:4px;">${s.raw_urls.length} tß║¡p ch╞░a tß║úi</div>
-                <div style="font-size:0.8rem; color:var(--text-dim);">Click ─æß╗â ─æß║⌐y v├áo Pipeline tß║úi ngay</div>
-            </div>
-          </div>
-        </div>
-        `;
-    }
-
     const total = s.total_downloaded || 0;
     const rendered = s.rendered_count || 0;
     const uploaded = s.uploaded_count || 0;
@@ -3941,18 +3938,18 @@ function renderSeriesCard(s) {
     if (s.raw_urls && s.raw_urls.length > 0) {
         return `
         <div class="project-card" style="display:flex; flex-direction:column; justify-content:space-between; border:1px solid var(--accent); position:relative;">
+          
+          <!-- Action Buttons -->
+          <div style="position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:10;">
+              <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(0,0,0,0.5);" onclick="editSeriesName('${safeStr(s.series_folder)}', '${safeStr(s.series_name)}', event)" title="Sửa tên series">✏️</button>
+              <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(220,53,69,0.5);" onclick="deleteSeries('${safeStr(s.series_folder)}', event)" title="Xóa toàn bộ series">🗑️</button>
+          </div>
+          <!-- Merge Checkbox -->
+          <div style="position:absolute; top:8px; left:8px; z-index:10;">
+              <input type="checkbox" class="series-merge-cb" data-folder="${safeStr(s.series_folder)}" data-name="${safeStr(s.series_name)}" style="transform:scale(1.5);" onclick="event.stopPropagation(); updateMergeActionUI();">
+          </div>
 
-        <!-- Action Buttons -->
-        <div style="position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:10;">
-            <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(0,0,0,0.5);" onclick="editSeriesName('${safeStr(s.series_folder)}', '${safeStr(s.series_name)}', event)" title="Sửa tên series">✏️</button>
-            <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(220,53,69,0.5);" onclick="deleteSeries('${safeStr(s.series_folder)}', event)" title="Xóa toàn bộ series">🗑️</button>
-        </div>
-        <!-- Merge Checkbox -->
-        <div style="position:absolute; top:8px; left:8px; z-index:10;">
-            <input type="checkbox" class="series-merge-cb" data-folder="${safeStr(s.series_folder)}" data-name="${safeStr(s.series_name)}" style="transform:scale(1.5);" onclick="event.stopPropagation(); updateMergeActionUI();">
-        </div>
-
-<div style="display:flex; gap:12px; margin-bottom:12px; margin-top:20px; cursor:pointer;" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON' && !event.target.closest('button')) openSeriesInProjects('${safeStr(s.series_folder)}')">
+          <div style="display:flex; gap:12px; margin-bottom:12px; margin-top:20px; cursor:pointer;" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON' && !event.target.closest('button')) openSeriesInProjects('${safeStr(s.series_folder)}')">
             <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
                 ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">🎬</div>`}
             </div>
@@ -3980,7 +3977,7 @@ function renderSeriesCard(s) {
           
           <div style="margin-top:auto; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:space-between;">
               <div style="font-size:0.85rem; color:var(--accent); font-weight:bold;">✨ ${s.raw_urls.length} tập mới vừa Scrape!</div>
-              <button class="btn btn-primary btn-sm" onclick="if(confirm('Tải ngay ${s.raw_urls.length} tập mới vào Pipeline?')) { enqueueUrlsToPipelineInput(${JSON.stringify(s.raw_urls).replace(/"/g, '&quot;')}, 'raw-series-merge', {'series_name': '${safeStr(s.series_name)}', 'series_folder': '${safeStr(s.series_folder)}'}); }">+ Tải ngay</button>
+              <button class="btn btn-primary btn-sm" onclick="if(event.stopPropagation(), confirm('Tải ngay ${s.raw_urls.length} tập mới vào Pipeline?')) { addRawUrlsToPipeline(${JSON.stringify(s.raw_urls).replace(/"/g, '&quot;')}, '${safeStr(s.series_name)}', '${safeStr(s.series_folder)}'); }">+ Tải ngay</button>
           </div>
         </div>
         `;
@@ -3990,19 +3987,19 @@ function renderSeriesCard(s) {
     return `
     <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; position:relative;" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON' && !event.target.closest('button')) openSeriesInProjects('${safeStr(s.series_folder)}')">
 
-        <!-- Action Buttons -->
-        <div style="position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:10;">
-            <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(0,0,0,0.5);" onclick="editSeriesName('${safeStr(s.series_folder)}', '${safeStr(s.series_name)}', event)" title="Sửa tên series">✏️</button>
-            <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(220,53,69,0.5);" onclick="deleteSeries('${safeStr(s.series_folder)}', event)" title="Xóa toàn bộ series">🗑️</button>
-        </div>
-        <!-- Merge Checkbox -->
-        <div style="position:absolute; top:8px; left:8px; z-index:10;">
-            <input type="checkbox" class="series-merge-cb" data-folder="${safeStr(s.series_folder)}" data-name="${safeStr(s.series_name)}" style="transform:scale(1.5);" onclick="event.stopPropagation(); updateMergeActionUI();">
-        </div>
+          <!-- Action Buttons -->
+          <div style="position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:10;">
+              <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(0,0,0,0.5);" onclick="editSeriesName('${safeStr(s.series_folder)}', '${safeStr(s.series_name)}', event)" title="Sửa tên series">✏️</button>
+              <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(220,53,69,0.5);" onclick="deleteSeries('${safeStr(s.series_folder)}', event)" title="Xóa toàn bộ series">🗑️</button>
+          </div>
+          <!-- Merge Checkbox -->
+          <div style="position:absolute; top:8px; left:8px; z-index:10;">
+              <input type="checkbox" class="series-merge-cb" data-folder="${safeStr(s.series_folder)}" data-name="${safeStr(s.series_name)}" style="transform:scale(1.5);" onclick="event.stopPropagation(); updateMergeActionUI();">
+          </div>
 
 <div style="display:flex; gap:12px; margin-bottom:12px; margin-top:20px;">
         <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
-            ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">≡ƒÄ¼</div>`}
+            ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">🎬</div>`}
         </div>
         <div style="flex:1; overflow:hidden;">
             <h3 style="margin:0 0 6px; font-size:1rem; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${safeStr(s.series_name)}</h3>
@@ -4030,22 +4027,6 @@ function renderSeriesCard(s) {
 }
 
 function renderStandaloneCard(p) {
-    if (p.is_raw) {
-        const title = p.douyin_meta?.douyin_title || p.project_name || 'Raw Video';
-        return `
-        <div class="project-card" style="cursor:pointer; display:flex; gap:12px; align-items:center; opacity:0.65; border:1px dashed var(--border);" onclick="if(confirm('Tß║úi ngay video n├áy?')) { enqueueUrlsToPipelineInput(['${p.url}'], 'raw-standalone'); }">
-            <div style="width:80px; height:80px; border-radius:6px; background:#1e1e1e; display:flex; align-items:center; justify-content:center; color:#666; font-size:1.5rem; flex-shrink:0;">
-                dYZ
-            </div>
-            <div style="flex:1; overflow:hidden;">
-                <h3 style="margin:0 0 6px; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${safeStr(title)}</h3>
-                <div style="font-size:0.8rem; font-weight:bold; color:var(--accent); margin-bottom:4px;">Ch╞░a tß║úi (Scraped)</div>
-                <div style="font-size:0.8rem; color:var(--text-dim);">Click ─æß╗â tß║úi ngay</div>
-            </div>
-        </div>
-        `;
-    }
-
     const meta = p.metadata || {};
     const title = meta.title || p.douyin_meta?.douyin_title || p.project_name;
     const thumb = p.thumbnail ? `/api/project/${encodeURIComponent(p.project_name)}/file/thumbnail.jpg` : '';
@@ -4058,7 +4039,7 @@ function renderStandaloneCard(p) {
     return `
     <div class="project-card" style="cursor:pointer; display:flex; gap:12px; align-items:center;" onclick="openSeriesInProjects('${safeStr(p.project_name)}')">
         <div style="width:80px; height:80px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
-            ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:1.5rem">≡ƒÄ¼</div>`}
+            ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:1.5rem">🎬</div>`}
         </div>
         <div style="flex:1; overflow:hidden;">
             <h3 style="margin:0 0 6px; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${safeStr(title)}</h3>
@@ -4083,7 +4064,7 @@ function openSeriesInProjects(filterText) {
             if (!opt) {
                 opt = document.createElement('option');
                 opt.value = `custom_${filterText}`;
-                opt.innerText = `≡ƒöì T├¼m: ${filterText}`;
+                opt.innerText = `🔍 Tìm: ${filterText}`;
                 filterSelect.appendChild(opt);
             }
             filterSelect.value = opt.value;
@@ -4174,4 +4155,31 @@ function startSelectedSeriesQueue() {
   startBatch();
 }
 
-
+async function previewUrls() {
+    const el = document.getElementById('pipeline-preview');
+    const input = document.getElementById('input-url');
+    if (!el || !input) return;
+    const urls = input.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!urls.length) {
+        el.innerHTML = '<div class="url-preview-empty">⚠️ No Douyin URLs detected</div>';
+        return;
+    }
+    try {
+        const res = await api('/api/douyin/preview', { method: 'POST', body: { urls } });
+        if (res.error) throw new Error(res.error);
+        const found = res.previews || [];
+        if (!found.length) {
+            el.innerHTML = '<div class="url-preview-empty">❌ No valid Douyin URLs recognized</div>';
+            return;
+        }
+        el.innerHTML = `<div class="url-preview-header">🔍 Found ${found.length} URL(s):</div>` +
+            found.map(p => `
+            <div class="url-preview-item">
+                <span class="url-text">${p.url}</span>
+                ${p.project_name ? `<span class="badge badge-success">Folder: ${p.project_name}</span>` : '<span class="badge badge-default">New</span>'}
+            </div>
+            `).join('');
+    } catch (e) {
+        el.innerHTML = `<div class="url-preview-empty" style="color:var(--error)">Error previewing: ${e.message}</div>`;
+    }
+}
