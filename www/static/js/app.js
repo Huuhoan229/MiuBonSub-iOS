@@ -3283,8 +3283,9 @@ async function renderSeriesGroups(payload) {
       <div class="btn-group" style="margin-bottom:8px">
         <button class="btn btn-outline btn-sm" onclick="selectAllSeriesGroups(true)">☑ Select All Series</button>
         <button class="btn btn-outline btn-sm" onclick="selectAllSeriesGroups(false)">☐ Clear</button>
-        <button class="btn btn-primary btn-sm" onclick="addSelectedSeriesToQueue()">+ Add Selected to Queue</button>
-        <button class="btn btn-primary btn-sm" onclick="startSelectedSeriesQueue()">▶ Start Selected Now</button>
+        <button class="btn btn-primary btn-sm" onclick="addSelectedSeriesToQueue(false)">+ Add Selected (All)</button>
+        <button class="btn btn-primary btn-sm" onclick="addSelectedSeriesToQueue(true)">+ Add Selected (New)</button>
+        <button class="btn btn-primary btn-sm" onclick="startSelectedSeriesQueue()">▶ Start Selected (New Only)</button>
         <span id="series-selected-count" class="badge badge-default">0 selected</span>
       </div>
       <div class="queue-items">
@@ -3323,7 +3324,8 @@ async function renderSeriesGroups(payload) {
                 </div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end">
                   ${duplicateCount > 0 && uniqueUrls.length ? `<button class="btn btn-outline btn-sm" onclick="addSeriesUniqueEpisodesToQueue(${idx})">+ Add Unique Episodes</button>` : ''}
-                  <button class="btn btn-primary btn-sm" onclick="addSeriesToQueue(${idx})">+ Add Series to Queue</button>
+                  <button class="btn btn-primary btn-sm" onclick="addSeriesToQueue(${idx}, false)">+ Add (All)</button>
+                  <button class="btn btn-primary btn-sm" onclick="addSeriesToQueue(${idx}, true)">+ Add (New)</button>
                 </div>
               </div>
               <div style="font-size:.82rem; color:var(--text-dim); margin-bottom:6px;">
@@ -3379,32 +3381,6 @@ function buildSeriesContextMap(group, urls) {
 }
 
 
-function addSeriesToQueue(idx) {
-  const group = scrapeSeriesGroups[idx];
-  if (!group) {
-    toast('Series not found', 'error');
-    return;
-  }
-  let urls = Array.isArray(group.urls) ? group.urls.filter(Boolean) : [];
-  
-  if (typeof completedUrls !== 'undefined' && completedUrls) {
-    urls = urls.filter(u => !completedUrls.has(u));
-  }
-  
-  if (!urls.length) {
-    toast('No remaining URLs in this series (maybe all are DONE)', 'error');
-    return;
-  }
-  
-  const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
-  const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
-  group.folder = finalFolder;
-  
-  const groupContexts = buildSeriesContextMap(group, urls);
-  urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
-
-  enqueueUrlsToPipelineInput(urls, `series:${finalFolder || idx}`, groupContexts);
-}
 
 function addSeriesUniqueEpisodesToQueue(idx) {
   const group = scrapeSeriesGroups[idx];
@@ -3763,22 +3739,8 @@ function jumpToProject(projectName) {
   }
 }
 
-
-// ═══ AI GROUP SERIES FUNCTIONS ═══
-window.selectAllSeriesGroups = function(state) {
-    if (!window.scrapeSeriesSelected) window.scrapeSeriesSelected = new Set();
-    window.scrapeSeriesSelected.clear();
-    if (state && window.scrapeSeriesGroups) {
-        window.scrapeSeriesGroups.forEach((g, idx) => window.scrapeSeriesSelected.add(idx));
-    }
-    document.querySelectorAll('.series-checkbox').forEach(cb => {
-        cb.checked = state;
-    });
-    const countEl = document.getElementById('series-selected-count');
-    if (countEl) countEl.innerText = `${window.scrapeSeriesSelected.size} selected`;
-};
-
-window.toggleSeriesGroup = function(idx, checked) {
+// ═══ NEW AI GROUP LOGIC ═══
+window.toggleSeriesGroupSelect = function(idx, checked) {
     if (!window.scrapeSeriesSelected) window.scrapeSeriesSelected = new Set();
     if (checked) window.scrapeSeriesSelected.add(idx);
     else window.scrapeSeriesSelected.delete(idx);
@@ -3786,26 +3748,39 @@ window.toggleSeriesGroup = function(idx, checked) {
     if (countEl) countEl.innerText = `${window.scrapeSeriesSelected.size} selected`;
 };
 
-window.addSingleSeriesToQueue = async function(btn, idx) {
-    btn.disabled = true;
+window.selectAllSeriesGroups = function(state) {
+    if (!window.scrapeSeriesSelected) window.scrapeSeriesSelected = new Set();
+    window.scrapeSeriesSelected.clear();
+    if (state && window.scrapeSeriesGroups) {
+        window.scrapeSeriesGroups.forEach((g, idx) => window.scrapeSeriesSelected.add(idx));
+    }
+    document.querySelectorAll('[id^="sg-cb-"]').forEach(cb => {
+        cb.checked = state;
+    });
+    const countEl = document.getElementById('series-selected-count');
+    if (countEl) countEl.innerText = `${window.scrapeSeriesSelected.size} selected`;
+};
+
+window.addSeriesToQueue = async function(idx, newOnly) {
+    const btns = document.querySelectorAll('button');
+    btns.forEach(b => b.disabled = true);
     try {
-        const added = await _queueSeriesGroups([idx]);
-        toast(`Added ${added} new videos to queue!`, 'success');
+        const added = await _queueSeriesGroups([idx], newOnly);
+        toast(`Added ${added} videos to queue!`, 'success');
     } catch (e) {
         toast('Error: ' + e.message, 'error');
     } finally {
-        btn.disabled = false;
+        btns.forEach(b => b.disabled = false);
     }
 };
 
-window.addSelectedSeriesToQueue = async function() {
+window.addSelectedSeriesToQueue = async function(newOnly) {
     if (!window.scrapeSeriesSelected || window.scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
-    const btns = document.querySelectorAll('button[onclick="addSelectedSeriesToQueue()"]');
+    const btns = document.querySelectorAll('button');
     btns.forEach(b => b.disabled = true);
     try {
-        const added = await _queueSeriesGroups(Array.from(window.scrapeSeriesSelected));
-        toast(`Added ${added} new videos to queue from selected series!`, 'success');
-        if (window.scrapeSeriesSelected) window.scrapeSeriesSelected.clear();
+        const added = await _queueSeriesGroups(Array.from(window.scrapeSeriesSelected), newOnly);
+        toast(`Added ${added} videos to queue from selected series!`, 'success');
         selectAllSeriesGroups(false);
     } catch (e) {
         toast('Error: ' + e.message, 'error');
@@ -3816,13 +3791,12 @@ window.addSelectedSeriesToQueue = async function() {
 
 window.startSelectedSeriesQueue = async function() {
     if (!window.scrapeSeriesSelected || window.scrapeSeriesSelected.size === 0) return toast('No series selected', 'warning');
-    const btns = document.querySelectorAll('button[onclick="startSelectedSeriesQueue()"]');
+    const btns = document.querySelectorAll('button');
     btns.forEach(b => b.disabled = true);
     try {
-        const added = await _queueSeriesGroups(Array.from(window.scrapeSeriesSelected));
+        const added = await _queueSeriesGroups(Array.from(window.scrapeSeriesSelected), true);
         await api('/api/pipeline/queue/start', { method: 'POST' });
         toast(`Added ${added} new videos and started queue!`, 'success');
-        if (window.scrapeSeriesSelected) window.scrapeSeriesSelected.clear();
         selectAllSeriesGroups(false);
         loadQueue();
     } catch (e) {
@@ -3832,9 +3806,14 @@ window.startSelectedSeriesQueue = async function() {
     }
 };
 
-async function _queueSeriesGroups(indices) {
-    const history = await api('/api/douyin/history');
-    const completedUrls = new Set((history || []).map(h => h.url));
+async function _queueSeriesGroups(indices, newOnly) {
+    let completedUrls = new Set();
+    if (newOnly) {
+        try {
+            const h = await api('/api/projects/completed-urls');
+            if (h.ok && Array.isArray(h.completed)) completedUrls = new Set(h.completed);
+        } catch(e) {}
+    }
     
     let totalAdded = 0;
     
@@ -3842,12 +3821,14 @@ async function _queueSeriesGroups(indices) {
         const g = window.scrapeSeriesGroups[idx];
         if (!g) continue;
         
-        // ONLY GET NEW VIDEOS (SKIP DONE)
-        const newUrls = (g.urls || []).filter(u => !completedUrls.has(u));
-        if (newUrls.length === 0) continue; 
+        let urlsToQueue = g.urls || [];
+        if (newOnly) {
+            urlsToQueue = urlsToQueue.filter(u => !completedUrls.has(u));
+        }
+        if (urlsToQueue.length === 0) continue; 
         
         const payload = {
-            urls: newUrls,
+            urls: urlsToQueue,
             settings: window.currentScrapeSettings || {},
             priority: 5,
             group_series: true,
@@ -3856,7 +3837,7 @@ async function _queueSeriesGroups(indices) {
             episodes_range: `${g.episode_min || ''}-${g.episode_max || ''}`
         };
         await api('/api/pipeline/queue', { method: 'POST', body: payload });
-        totalAdded += newUrls.length;
+        totalAdded += urlsToQueue.length;
     }
     return totalAdded;
 }
