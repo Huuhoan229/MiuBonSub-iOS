@@ -3940,8 +3940,19 @@ function renderSeriesCard(s) {
 
     if (s.raw_urls && s.raw_urls.length > 0) {
         return `
-        <div class="project-card" style="display:flex; flex-direction:column; justify-content:space-between; border:1px solid var(--accent);">
-          <div style="display:flex; gap:12px; margin-bottom:12px; cursor:pointer;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
+        <div class="project-card" style="display:flex; flex-direction:column; justify-content:space-between; border:1px solid var(--accent); position:relative;">
+
+        <!-- Action Buttons -->
+        <div style="position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:10;">
+            <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(0,0,0,0.5);" onclick="editSeriesName('${safeStr(s.series_folder)}', '${safeStr(s.series_name)}', event)" title="Sửa tên series">✏️</button>
+            <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(220,53,69,0.5);" onclick="deleteSeries('${safeStr(s.series_folder)}', event)" title="Xóa toàn bộ series">🗑️</button>
+        </div>
+        <!-- Merge Checkbox -->
+        <div style="position:absolute; top:8px; left:8px; z-index:10;">
+            <input type="checkbox" class="series-merge-cb" data-folder="${safeStr(s.series_folder)}" data-name="${safeStr(s.series_name)}" style="transform:scale(1.5);" onclick="event.stopPropagation(); updateMergeActionUI();">
+        </div>
+
+<div style="display:flex; gap:12px; margin-bottom:12px; margin-top:20px; cursor:pointer;" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON' && !event.target.closest('button')) openSeriesInProjects('${safeStr(s.series_folder)}')">
             <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
                 ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">🎬</div>`}
             </div>
@@ -3977,8 +3988,19 @@ function renderSeriesCard(s) {
 
     
     return `
-    <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
-      <div style="display:flex; gap:12px; margin-bottom:12px;">
+    <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; position:relative;" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON' && !event.target.closest('button')) openSeriesInProjects('${safeStr(s.series_folder)}')">
+
+        <!-- Action Buttons -->
+        <div style="position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:10;">
+            <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(0,0,0,0.5);" onclick="editSeriesName('${safeStr(s.series_folder)}', '${safeStr(s.series_name)}', event)" title="Sửa tên series">✏️</button>
+            <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(220,53,69,0.5);" onclick="deleteSeries('${safeStr(s.series_folder)}', event)" title="Xóa toàn bộ series">🗑️</button>
+        </div>
+        <!-- Merge Checkbox -->
+        <div style="position:absolute; top:8px; left:8px; z-index:10;">
+            <input type="checkbox" class="series-merge-cb" data-folder="${safeStr(s.series_folder)}" data-name="${safeStr(s.series_name)}" style="transform:scale(1.5);" onclick="event.stopPropagation(); updateMergeActionUI();">
+        </div>
+
+<div style="display:flex; gap:12px; margin-bottom:12px; margin-top:20px;">
         <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
             ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">≡ƒÄ¼</div>`}
         </div>
