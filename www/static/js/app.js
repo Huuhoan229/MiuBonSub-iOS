@@ -429,7 +429,7 @@ function toast(msg, type = 'success') {
 // ── Tabs ──
 function switchTab(tab) {
   currentTab = tab;
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab[data-tab]').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('hidden', c.id !== `tab-${tab}`));
   if (tab === 'projects') loadProjects();
     if (tab === 'series') loadSeriesLibrary();
@@ -3756,7 +3756,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(checkHealth, 30000);
   activeQueuesTimer = setInterval(refreshActiveQueues, 5000);
   setInterval(loadDouyinWatchdogState, 45000);
-  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
+  document.querySelectorAll('.tab[data-tab]').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
   toggleTtsOptions();
 });
 
