@@ -4016,3 +4016,114 @@ function openSeriesInProjects(filterText) {
         }
     }, 100);
 }
+
+
+function addSeriesToQueue(idx, newOnly = false) {
+  const group = scrapeSeriesGroups[idx];
+  if (!group) {
+    toast('Series not found', 'error');
+    return;
+  }
+  let urls = Array.isArray(group.urls) ? group.urls.filter(Boolean) : [];
+  if (newOnly && typeof completedUrls !== 'undefined' && completedUrls) {
+    urls = urls.filter(u => !completedUrls.has(u));
+  }
+  if (!urls.length) {
+    toast('No remaining URLs to add for this series', 'error');
+    return;
+  }
+  
+  const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
+  const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
+  group.folder = finalFolder;
+  
+  const groupContexts = buildSeriesContextMap(group, urls);
+  urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
+
+  enqueueUrlsToPipelineInput(urls, `series:${finalFolder || idx}`, groupContexts);
+}
+
+function toggleSeriesGroupSelect(idx, checked) {
+  if (checked) scrapeSeriesSelected.add(idx);
+  else scrapeSeriesSelected.delete(idx);
+  const cb = document.getElementById(`sg-cb-${idx}`);
+  if (cb) cb.checked = checked;
+  const badge = document.getElementById('series-selected-count');
+  if (badge) badge.innerText = `${scrapeSeriesSelected.size} selected`;
+}
+
+function selectAllSeriesGroups(checked) {
+  (scrapeSeriesGroups || []).forEach((_, idx) => toggleSeriesGroupSelect(idx, checked));
+}
+
+function addSelectedSeriesToQueue(newOnly = false) {
+  if (!scrapeSeriesSelected.size) {
+    toast('No series selected', 'error');
+    return;
+  }
+  let totalAdded = 0;
+  scrapeSeriesSelected.forEach(idx => {
+    const group = scrapeSeriesGroups[idx];
+    if (!group) return;
+    let urls = Array.isArray(group.urls) ? group.urls.filter(Boolean) : [];
+    if (newOnly && typeof completedUrls !== 'undefined' && completedUrls) {
+      urls = urls.filter(u => !completedUrls.has(u));
+    }
+    if (!urls.length) return;
+    
+    const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
+    const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
+    group.folder = finalFolder;
+    
+    const groupContexts = buildSeriesContextMap(group, urls);
+    urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
+
+    const addedCount = enqueueUrlsToPipelineInput(urls, `series:${finalFolder || idx}`, groupContexts);
+    totalAdded += addedCount;
+  });
+  if (totalAdded > 0) {
+    toast(`Added total ${totalAdded} URLs from ${scrapeSeriesSelected.size} series`);
+  } else {
+    toast('No remaining new URLs in selected series', 'error');
+  }
+}
+
+function startSelectedSeriesQueue() {
+  if (!scrapeSeriesSelected.size) {
+    toast('No series selected', 'error');
+    return;
+  }
+  // Add new only for selected series
+  addSelectedSeriesToQueue(true);
+  // Then start batch!
+  startBatch();
+}
+
+async function previewUrls() {
+    const el = document.getElementById('pipeline-preview');
+    const input = document.getElementById('input-url');
+    if (!el || !input) return;
+    const urls = input.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!urls.length) {
+        el.innerHTML = '<div class="url-preview-empty">⚠️ No Douyin URLs detected</div>';
+        return;
+    }
+    try {
+        const res = await api('/api/douyin/preview', { method: 'POST', body: { urls } });
+        if (res.error) throw new Error(res.error);
+        const found = res.previews || [];
+        if (!found.length) {
+            el.innerHTML = '<div class="url-preview-empty">❌ No valid Douyin URLs recognized</div>';
+            return;
+        }
+        el.innerHTML = `<div class="url-preview-header">🔍 Found ${found.length} URL(s):</div>` +
+            found.map(p => `
+            <div class="url-preview-item">
+                <span class="url-text">${p.url}</span>
+                ${p.project_name ? `<span class="badge badge-success">Folder: ${p.project_name}</span>` : '<span class="badge badge-default">New</span>'}
+            </div>
+            `).join('');
+    } catch (e) {
+        el.innerHTML = `<div class="url-preview-empty" style="color:var(--error)">Error previewing: ${e.message}</div>`;
+    }
+}
