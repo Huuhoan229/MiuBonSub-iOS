@@ -1762,21 +1762,6 @@ function _updateWarpUI(enabled) {
       }
   });
 
-/*
-function _old_updateWarpUI(enabled) {
-  const badge = document.getElementById('warp-status-badge');
-  const label = document.getElementById('warp-label');
-  if (badge) {
-    badge.textContent = enabled ? 'Bật' : 'Tắt';
-    badge.style.background = enabled ? 'rgba(255,127,0,.2)' : 'rgba(136,136,168,.12)';
-    badge.style.color = enabled ? '#ff7f00' : 'var(--text-dim)';
-  }
-  if (label) {
-    label.textContent = enabled ? '⚡ WARP đang bật — Douyin traffic sẽ đi qua WARP' : 'Tắt';
-    label.style.color = enabled ? '#ff7f00' : 'var(--text-dim)';
-  }
-}
-
 function onWarpToggle(cb) {
   _updateWarpUI(cb.checked);
   if (cb.checked) {
