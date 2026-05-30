@@ -19,6 +19,8 @@ window.changeBackendUrl = function() {
     }
 };
 
+const safeStr = (s) => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 let currentTab = 'pipeline';
 let pollTimer = null;
 let logOffset = 0;
