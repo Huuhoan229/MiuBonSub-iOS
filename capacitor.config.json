@@ -1,0 +1,10 @@
+{
+  "appId": "com.miubon.vsub",
+  "appName": "MiuBon Vietsub",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "http://REPLACE_ME_WITH_YOUR_SERVER_IP:5060",
+    "cleartext": true
+  }
+}

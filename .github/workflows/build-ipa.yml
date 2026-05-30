@@ -1,0 +1,42 @@
+name: Build iOS IPA for TrollStore
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build and Sync Capacitor
+        run: |
+          npx cap sync ios
+
+      - name: Build iOS App (Unsigned)
+        run: |
+          cd ios/App
+          # We build without code signing because TrollStore allows unsigned IPAs
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package IPA for TrollStore
+        run: |
+          mkdir -p Payload
+          mv ios/App/build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -r MiuBonVSub.ipa Payload
+      
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: MiuBonVSub-TrollStore
+          path: MiuBonVSub.ipa
