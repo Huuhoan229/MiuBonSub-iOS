@@ -21,6 +21,7 @@ jobs:
 
       - name: Build and Sync Capacitor
         run: |
+          chmod +x node_modules/.bin/cap || true
           npx cap sync ios
 
       - name: Build iOS App (Unsigned)
