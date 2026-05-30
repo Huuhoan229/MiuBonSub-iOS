@@ -3896,11 +3896,52 @@ async function loadSeriesLibrary() {
     listStandalones.innerHTML = '<div style="color:var(--text-dim)">Loading standalones...</div>';
     
     try {
-        const res = await api('/api/series');
+        const [res, rawRes, doneRes] = await Promise.all([
+            api('/api/series'),
+            api('/api/douyin/load-group').catch(() => ({groups: [], standalone: []})),
+            api('/api/projects/completed-urls').catch(() => ({completed: []}))
+        ]);
         if (!res || res.error) throw new Error(res?.error || 'Failed to load series');
         
         const series = res.series || [];
         const standalones = res.standalones || [];
+        const completedUrls = new Set(doneRes.completed || []);
+        
+        // Merge RAW Scraped standalones
+        const rawStandalones = Array.isArray(rawRes.standalone) ? rawRes.standalone : [];
+        rawStandalones.forEach(raw => {
+            const u = typeof raw === 'string' ? raw : (raw.url || '');
+            if (u && !completedUrls.has(u)) {
+                // Not downloaded yet, inject as raw
+                standalones.push({
+                    is_raw: true,
+                    project_name: raw.douyin_meta?.douyin_title || 'Raw Standalone Video',
+                    douyin_meta: raw.douyin_meta,
+                    url: u
+                });
+            }
+        });
+        
+        // Merge RAW Scraped series groups
+        const rawGroups = Array.isArray(rawRes.groups) ? rawRes.groups : [];
+        rawGroups.forEach((g, idx) => {
+            let urls = Array.isArray(g.urls) ? g.urls : [];
+            let newUrls = urls.filter(u => u && !completedUrls.has(u));
+            if (newUrls.length > 0) {
+                // Has new episodes not downloaded yet
+                series.push({
+                    is_raw: true,
+                    series_name: g.series_name_vi || g.series_name || `Scraped Group ${idx+1}`,
+                    series_folder: g.folder || `group_${idx}`,
+                    total_downloaded: newUrls.length, // Display as total new
+                    episode_min: g.episode_min,
+                    episode_max: g.episode_max,
+                    raw_group_idx: idx,
+                    raw_urls: newUrls
+                });
+            }
+        });
+
         
         const badgeSeries = document.getElementById('series-count-badge');
         const badgeStandalone = document.getElementById('standalone-count-badge');
@@ -3925,7 +3966,37 @@ async function loadSeriesLibrary() {
     }
 }
 
+window.downloadRawSeries = function(idx, safeFolder, event) {
+    if (event) event.stopPropagation();
+    if (typeof scrapeSeriesGroups === 'undefined' || !scrapeSeriesGroups) return toast('Please open Scraper tab and load AI Group first to trigger this', 'error');
+    const group = scrapeSeriesGroups[idx];
+    if (!group) return toast('Group not found in memory. Please Load Saved AI Group in Scraper tab first.', 'error');
+    
+    const folder = prompt("Thư mục lưu series này:", safeFolder || group.folder || `series_${idx}`);
+    if (!folder) return;
+    
+    addSeriesToQueue(idx, true); // this will use newOnly=true
+};
+
 function renderSeriesCard(s) {
+    if (s.is_raw) {
+        return `
+        <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; opacity:0.65; border:1px dashed var(--border);" onclick="if(confirm('Tải ngay ${s.raw_urls.length} tập mới của series này?')) { enqueueUrlsToPipelineInput(${JSON.stringify(s.raw_urls).replace(/"/g, "&quot;")}, 'raw-series'); }">
+          <div style="display:flex; gap:12px; margin-bottom:12px;">
+            <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; display:flex; align-items:center; justify-content:center; color:#666; font-size:2rem; flex-shrink:0;">
+                dYZ
+            </div>
+            <div style="flex:1; overflow:hidden;">
+                <h3 style="margin:0 0 6px; font-size:1rem; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${safeStr(s.series_name)}</h3>
+                <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Folder: <code>${safeStr(s.series_folder)}</code></div>
+                <div style="font-size:0.8rem; font-weight:bold; color:var(--accent); margin-bottom:4px;">${s.raw_urls.length} tập chưa tải</div>
+                <div style="font-size:0.8rem; color:var(--text-dim);">Click để đẩy vào Pipeline tải ngay</div>
+            </div>
+          </div>
+        </div>
+        `;
+    }
+
     const total = s.total_downloaded || 0;
     const rendered = s.rendered_count || 0;
     const uploaded = s.uploaded_count || 0;
@@ -3971,6 +4042,22 @@ function renderSeriesCard(s) {
 }
 
 function renderStandaloneCard(p) {
+    if (p.is_raw) {
+        const title = p.douyin_meta?.douyin_title || p.project_name || 'Raw Video';
+        return `
+        <div class="project-card" style="cursor:pointer; display:flex; gap:12px; align-items:center; opacity:0.65; border:1px dashed var(--border);" onclick="if(confirm('Tải ngay video này?')) { enqueueUrlsToPipelineInput(['${p.url}'], 'raw-standalone'); }">
+            <div style="width:80px; height:80px; border-radius:6px; background:#1e1e1e; display:flex; align-items:center; justify-content:center; color:#666; font-size:1.5rem; flex-shrink:0;">
+                dYZ
+            </div>
+            <div style="flex:1; overflow:hidden;">
+                <h3 style="margin:0 0 6px; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${safeStr(title)}</h3>
+                <div style="font-size:0.8rem; font-weight:bold; color:var(--accent); margin-bottom:4px;">Chưa tải (Scraped)</div>
+                <div style="font-size:0.8rem; color:var(--text-dim);">Click để tải ngay</div>
+            </div>
+        </div>
+        `;
+    }
+
     const meta = p.metadata || {};
     const title = meta.title || p.douyin_meta?.douyin_title || p.project_name;
     const thumb = p.thumbnail ? `/api/project/${encodeURIComponent(p.project_name)}/file/thumbnail.jpg` : '';
