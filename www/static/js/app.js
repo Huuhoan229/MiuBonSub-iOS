@@ -390,7 +390,7 @@ async function api(path, opts = {}) {
     return mockApi(path, opts);
   }
   
-  const { timeoutMs = 15000, ...fetchOpts } = opts;
+  const { timeoutMs = 30000, ...fetchOpts } = opts;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -404,12 +404,6 @@ async function api(path, opts = {}) {
     return await r.json();
   } catch (e) {
     clearTimeout(timeout);
-    if (!isDemoMode && (e.name === 'TypeError' || e.message?.includes('fetch') || e.name === 'AbortError')) {
-      console.warn("API request failed. Enabling Sandbox / Demo mode automatically.", e);
-      isDemoMode = true;
-      updateDemoBanner();
-      return mockApi(path, opts);
-    }
     if (e.name === 'AbortError') {
       throw new Error(`Timeout - server khong phan hoi sau ${Math.round(timeoutMs / 1000)} giay`);
     }
@@ -3013,13 +3007,13 @@ function formatLogLine(raw) {
 
   // Detect log type from emoji/keyword patterns
   let type = 'default';
-  if (/^(📥|🎬|📝|🌐|🎤|🔧|💾|📤|🔗)\s*Step\s+\d/i.test(rest) || /^⏭️/.test(rest)) {
+  if (/Step\s+\d/i.test(rest) || /⏭/.test(rest)) {
     type = 'step';
-  } else if (/^✅/.test(rest) || /done|complete|success|saved/i.test(rest)) {
+  } else if (/✅/.test(rest) || /done|complete|success|saved/i.test(rest)) {
     type = 'success';
-  } else if (/^❌|ERROR|PIPELINE ERROR|RESUME ERROR/i.test(rest)) {
+  } else if (/❌|ERROR|PIPELINE ERROR|RESUME ERROR/i.test(rest)) {
     type = 'error';
-  } else if (/^⚠️|WARN/i.test(rest)) {
+  } else if (/⚠️|WARN/i.test(rest)) {
     type = 'warning';
   } else if (/^(🔄|⏳|🔑|🏠|📊|🎧|🤖|🎵|⏱|🔀)/.test(rest)) {
     type = 'info';

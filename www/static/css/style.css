@@ -144,7 +144,7 @@ textarea{resize:vertical;min-height:80px}
 .url-num{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center}
 .url-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-dim);font-family:monospace;font-size:.75rem}
 /* Queue */
-.queue-items{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.queue-items{display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:350px;overflow-y:auto;padding-right:4px;}
 .queue-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;transition:all .3s;animation:fadeInLine .3s ease}
 .queue-item:hover{border-color:var(--primary)}
 .queue-idx{flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--card);border:1px solid var(--border);color:var(--text-dim);font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center}
