@@ -1,16 +1,25 @@
 import re
 
 path = r'E:\MiuBonVSub\MiuBonSub-iOS\www\index.html'
+VERSION = '20260602-084327'
+
 with open(path, 'r', encoding='utf-8') as f:
     text = f.read()
 
-# Replace <div class="app"> with a button for backend config at the top right
-button_html = """
-<div class="app">
-  <button onclick="changeBackendUrl()" style="position: fixed; bottom: 20px; left: 10px; z-index: 9999; background: rgba(0,0,0,0.7); color: #fff; backdrop-filter: blur(4px); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">⚙️ Đổi IP Server</button>
-"""
+text = re.sub(
+    r'<meta name="viewport" content="[^"]+">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">',
+    text,
+    count=1,
+)
+text = re.sub(r'style\.css\?v=[^"\']+', f'style.css?v={VERSION}', text)
+text = re.sub(r'app\.js\?v=[^"\']+', f'app.js?v={VERSION}', text)
 
-text = text.replace('<div class="app">', button_html)
+button = '''<div class="app">
+  <button class="ios-backend-button" onclick="changeBackendUrl()" title="Đổi Backend PC IP">⚙️ Đổi IP Server</button>
+'''
+if 'ios-backend-button' not in text:
+    text = text.replace('<div class="app">', button, 1)
 
-with open(path, 'w', encoding='utf-8') as f:
+with open(path, 'w', encoding='utf-8', newline='') as f:
     f.write(text)

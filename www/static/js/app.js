@@ -1,5 +1,7 @@
-let API = localStorage.getItem('MIUBON_API_BASE') || '';
-if (!API && !window.location.href.includes('localhost:5000') && !window.location.href.includes('localhost:5051') && !window.location.href.includes('127.0.0.1')) {
+const IS_CAPACITOR_APP = window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:' || window.location.protocol === 'file:' || !!window.Capacitor;
+const IS_IOS_REMOTE_MODE = IS_CAPACITOR_APP || window.location.pathname.startsWith('/ios') || window.location.search.includes('ios=1');
+let API = IS_IOS_REMOTE_MODE ? (localStorage.getItem('MIUBON_API_BASE') || '') : '';
+if (IS_IOS_REMOTE_MODE && !API) {
     setTimeout(() => {
         let input = prompt("Welcome to MiuBon Vietsub iOS App!\n\nPlease enter your Backend PC IP Address and Port (e.g. http://192.168.1.10:5060):", "http://");
         if (input) {
@@ -12,7 +14,7 @@ if (!API && !window.location.href.includes('localhost:5000') && !window.location
 
 window.changeBackendUrl = function() {
     let current = localStorage.getItem('MIUBON_API_BASE') || 'http://';
-    let input = prompt("Change Backend PC IP Address:", current);
+    let input = prompt("Nhập Backend PC IP/Port (ví dụ http://192.168.1.10:5060):", current);
     if (input !== null) {
         localStorage.setItem('MIUBON_API_BASE', input.replace(/\/+$/, ''));
         window.location.reload();
@@ -390,7 +392,7 @@ async function api(path, opts = {}) {
     return mockApi(path, opts);
   }
   
-  const { timeoutMs = 30000, ...fetchOpts } = opts;
+  const { timeoutMs = 15000, ...fetchOpts } = opts;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -404,6 +406,12 @@ async function api(path, opts = {}) {
     return await r.json();
   } catch (e) {
     clearTimeout(timeout);
+    if (!isDemoMode && (e.name === 'TypeError' || e.message?.includes('fetch') || e.name === 'AbortError')) {
+      console.warn("API request failed. Enabling Sandbox / Demo mode automatically.", e);
+      isDemoMode = true;
+      updateDemoBanner();
+      return mockApi(path, opts);
+    }
     if (e.name === 'AbortError') {
       throw new Error(`Timeout - server khong phan hoi sau ${Math.round(timeoutMs / 1000)} giay`);
     }
@@ -432,6 +440,20 @@ function switchTab(tab) {
   if (tab === 'tiktok') { loadTikTokStatus(); loadTikTokProjects(); loadTikTokQuickConfig(); }
   if (tab === 'facebook') { loadFacebookReelsStatus(); loadFacebookReelsProjects(); loadFacebookQuickConfig(); }
   if (tab === 'settings') loadConfig();
+  if (tab === 'running') {
+    loadRunningTab();
+    if (runningTabTimer) clearInterval(runningTabTimer);
+    runningTabTimer = setInterval(loadRunningTab, 2000);
+  } else {
+    if (runningTabTimer) {
+      clearInterval(runningTabTimer);
+      runningTabTimer = null;
+    }
+    if (runningItemLogTimer) {
+      clearInterval(runningItemLogTimer);
+      runningItemLogTimer = null;
+    }
+  }
   
   if (tab === 'ytqueue') {
     loadYTQueue();
@@ -640,13 +662,12 @@ let selectedQueueId = null;
 let lastQueueErrors = [];
 let lastQueueUrls = [];
 let pipelineUrlContexts = {};
-
-function addRawUrlsToPipeline(urls, seriesName, seriesFolder) {
-    const contextByUrl = {};
-    urls.forEach(u => contextByUrl[u] = { series_name: seriesName, series_folder: seriesFolder });
-    enqueueUrlsToPipelineInput(urls, 'raw-series-merge', contextByUrl);
-}
 let scrapeSeriesSelected = new Set();
+let runningTabTimer = null;
+let runningItemLogTimer = null;
+let runningSelectedQueueId = null;
+let runningSelectedItemIndex = null;
+let runningLogOffset = 0;
 
 function queueStatusBadgeClass(status) {
   if (status === 'done') return 'badge-success';
@@ -823,6 +844,21 @@ async function startQueueFromUrls(urls, sourceLabel = 'queue', btnEl = null, con
   }
 }
 
+function _queueItemStatusView(item, queueStatus, fallbackCurrent = false) {
+  const st = String((item || {}).status || '');
+  if (st === 'running_pipeline') return { cls: 'badge-info', text: 'Processing...' };
+  if (st === 'uploading') return { cls: 'badge-info', text: 'Uploading...' };
+  if (st === 'ready_waiting_upload') return { cls: 'badge-warning', text: 'Pending upload' };
+  if (st === 'done') return { cls: 'badge-success', text: 'Done' };
+  if (st === 'failed_final' || st === 'upload_error' || st === 'error') return { cls: 'badge-error', text: 'Failed' };
+  if (st === 'skipped') return { cls: 'badge-warning', text: 'Skipped' };
+  if (fallbackCurrent && (queueStatus === 'running' || queueStatus === 'paused')) {
+    if (queueStatus === 'paused') return { cls: 'badge-warning', text: 'Paused' };
+    return { cls: 'badge-info', text: 'Processing...' };
+  }
+  return { cls: 'badge-default', text: 'Waiting' };
+}
+
 async function pollQueue(queueId, urls) {
   try {
     const d = await api(`/api/pipeline/queue/${queueId}`);
@@ -840,40 +876,25 @@ async function pollQueue(queueId, urls) {
     const results = q.results || [];
     const errors = q.errors || [];
     const total = q.total || urls.length;
+    const runtimeItems = Array.isArray(q.runtime_items) ? q.runtime_items : [];
     for (let i = 0; i < total; i++) {
       const st = document.getElementById(`qi-status-${i}`);
       if (!st) continue;
-      if (i < completed) {
-        const wasError = errors.find(e => e.url === urls[i]);
-        if (wasError) {
-          st.className = 'badge badge-error'; st.textContent = '❌ Failed';
-        } else {
-          st.className = 'badge badge-success'; st.textContent = '✅ Done';
-        }
-      } else if (i === completed && (d.status === 'running' || d.status === 'paused')) {
-        if (d.status === 'paused') {
-          st.className = 'badge badge-warning';
-          st.textContent = q.current_job ? 'Finishing...' : 'Paused';
-        } else {
-          st.className = 'badge badge-info';
-          st.textContent = '🔄 Processing...';
-        }
-        // Show sub-job logs
-        if (q.current_job && !currentJobId) {
-          currentJobId = q.current_job;
-          logOffset = 0;
-          document.getElementById('pipeline-monitor').classList.remove('hidden');
-          document.getElementById('log-box').innerHTML = '';
-          if (pollTimer) clearInterval(pollTimer);
-          pollTimer = setInterval(() => pollJob(q.current_job), 2000);
-        } else if (q.current_job && q.current_job !== currentJobId) {
-          currentJobId = q.current_job;
-          logOffset = 0;
-          document.getElementById('log-box').innerHTML = '';
-          if (pollTimer) clearInterval(pollTimer);
-          pollTimer = setInterval(() => pollJob(q.current_job), 2000);
-        }
-      }
+      const view = _queueItemStatusView(runtimeItems[i], d.status, i === completed);
+      st.className = `badge ${view.cls}`;
+      st.textContent = view.text;
+    }
+
+    // Show logs for one currently-running pipeline job.
+    const runningItem = runtimeItems.find(it => String((it || {}).status || '') === 'running_pipeline' && (it || {}).job_id);
+    const activeJobId = (runningItem && runningItem.job_id) || q.current_job || null;
+    if (activeJobId && activeJobId !== currentJobId) {
+      currentJobId = activeJobId;
+      logOffset = 0;
+      document.getElementById('pipeline-monitor').classList.remove('hidden');
+      document.getElementById('log-box').innerHTML = '';
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(() => pollJob(activeJobId), 2000);
     }
     if (d.status === 'done' || d.status === 'error') {
       clearInterval(queueTimer);
@@ -900,6 +921,124 @@ async function pollQueue(queueId, urls) {
       }
     }
   } catch (e) { console.error(e); }
+}
+
+
+function _isRunningTabItemVisible(item) {
+  const st = String((item || {}).status || '');
+  return st === 'running_pipeline' || st === 'uploading' || st === 'ready_waiting_upload';
+}
+
+function _runningTabBadge(item) {
+  const st = String((item || {}).status || '');
+  if (st === 'running_pipeline') return { cls: 'badge-info', text: 'running' };
+  if (st === 'uploading') return { cls: 'badge-info', text: 'uploading' };
+  if (st === 'ready_waiting_upload') return { cls: 'badge-warning', text: 'pending_upload' };
+  return { cls: 'badge-default', text: st || 'unknown' };
+}
+
+async function loadRunningTab() {
+  const listEl = document.getElementById('running-queues-list');
+  if (!listEl) return;
+  try {
+    const d = await api('/api/pipeline/running');
+    const queues = Array.isArray(d.queues) ? d.queues : [];
+    const rows = [];
+    let selectedStillVisible = false;
+
+    queues.forEach((q) => {
+      const qid = String(q.queue_id || '');
+      const items = (Array.isArray(q.items) ? q.items : [])
+        .filter(_isRunningTabItemVisible)
+        .sort((a, b) => Number(a.index || 0) - Number(b.index || 0));
+      items.forEach((item) => {
+        const idx = Number(item.index || 0);
+        const active = (runningSelectedQueueId === qid && runningSelectedItemIndex === idx);
+        if (active) selectedStillVisible = true;
+        const badge = _runningTabBadge(item);
+        const statusText = safeHtml(String(item.status_text || item.status || ''));
+        rows.push(`
+          <div class="queue-item active-queue-row ${active ? 'active' : ''}" onclick="selectRunningItem('${qid}', ${idx})">
+            <span class="queue-idx">${idx + 1}</span>
+            <div class="active-queue-main">
+              <div class="active-queue-title">
+                <strong>#${idx + 1}</strong>
+                <span>[${safeHtml(String(item.status || ''))}]</span>
+              </div>
+              <div class="active-queue-sub">${statusText}</div>
+              <div class="active-queue-sub">${safeHtml(String(item.url || ''))}</div>
+            </div>
+            <div class="active-queue-actions">
+              <span class="badge ${badge.cls}">${badge.text}</span>
+            </div>
+          </div>
+        `);
+      });
+    });
+
+    if (!rows.length) {
+      listEl.innerHTML = '<div class="status-row" style="color:var(--text-dim)">No active running item.</div>';
+      const metaEl = document.getElementById('running-item-meta');
+      if (metaEl) metaEl.textContent = 'Chọn 1 item ở trên để xem chi tiết.';
+      const logsEl = document.getElementById('running-item-logs');
+      if (logsEl) logsEl.innerHTML = '';
+      if (runningItemLogTimer) {
+        clearInterval(runningItemLogTimer);
+        runningItemLogTimer = null;
+      }
+      runningSelectedQueueId = null;
+      runningSelectedItemIndex = null;
+      runningLogOffset = 0;
+      return;
+    }
+
+    listEl.innerHTML = rows.join('');
+
+    if (runningSelectedQueueId && runningSelectedItemIndex != null && selectedStillVisible) {
+      if (!runningItemLogTimer) {
+        runningItemLogTimer = setInterval(_pollRunningItemLogs, 1000);
+      }
+      await _pollRunningItemLogs();
+    }
+  } catch (e) {
+    listEl.innerHTML = `<div class="status-row" style="color:var(--error)">Running tab error: ${safeHtml(e.message || String(e))}</div>`;
+  }
+}
+
+window.selectRunningItem = async function(queueId, itemIndex) {
+  runningSelectedQueueId = String(queueId || '');
+  runningSelectedItemIndex = Number(itemIndex || 0);
+  runningLogOffset = 0;
+  const logsEl = document.getElementById('running-item-logs');
+  if (logsEl) logsEl.innerHTML = '';
+  await _pollRunningItemLogs();
+  if (runningItemLogTimer) clearInterval(runningItemLogTimer);
+  runningItemLogTimer = setInterval(_pollRunningItemLogs, 1000);
+  await loadRunningTab();
+};
+
+async function _pollRunningItemLogs() {
+  if (!runningSelectedQueueId || runningSelectedItemIndex == null) return;
+  try {
+    const d = await api(`/api/pipeline/queue/${runningSelectedQueueId}/item/${runningSelectedItemIndex}/logs?offset=${runningLogOffset}`);
+    const lines = Array.isArray(d.lines) ? d.lines : [];
+    const metaEl = document.getElementById('running-item-meta');
+    if (metaEl) {
+      const st = String(d.status || '').trim();
+      metaEl.textContent = `Queue ${runningSelectedQueueId} | URL #${runningSelectedItemIndex + 1}${st ? ' | ' + st : ''}`;
+    }
+    if (lines.length) {
+      const box = document.getElementById('running-item-logs');
+      if (box) {
+        box.innerHTML += lines.map(x => safeHtml(String(x))).join('<br>') + '<br>';
+        box.scrollTop = box.scrollHeight;
+      }
+    }
+    runningLogOffset = Number(d.total || (runningLogOffset + lines.length));
+  } catch (e) {
+    const metaEl = document.getElementById('running-item-meta');
+    if (metaEl) metaEl.textContent = `Log error: ${e.message || e}`;
+  }
 }
 
 function showFailedSection(errors) {
@@ -1136,16 +1275,11 @@ async function loadProjects() {
         <label class="project-checkbox" onclick="event.stopPropagation()">
           <input type="checkbox" class="project-cb" data-project="${pname}" onchange="updateProjectsSelectedCount()" />
         </label>` : '';
-            const title = (p.metadata || {}).title || (p.douyin_meta || {}).douyin_title || '';
-      const titleHtml = title ? `<h3 style="margin-bottom: 4px; font-size: 1.05rem; font-weight: 600; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${title.replace(/"/g, '&quot;')}">🎬 ${title}</h3><div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 6px; font-family: monospace;">📁 ${pname}</div>` : `<h3 style="margin-bottom: 8px;">📁 ${pname}</h3>`;
-      
       return `
       <div class="project-card ${complete ? 'project-complete' : 'project-incomplete'}" onclick="openProjectDetail('${pname}')">
         <div class="project-card-header">
           ${checkboxHtml}
-          <div style="display:flex; flex-direction:column; min-width:0; overflow:hidden;">
-              ${titleHtml}
-          </div>
+          <h3>📁 ${pname}</h3>
           ${statusBadge}
         </div>
         <p>Created: ${p.created_at || 'N/A'}</p>
@@ -2154,6 +2288,42 @@ async function scanYoutubeVideoMatch() {
   }
 }
 
+async function sortYoutubePlaylist() {
+  const key = (document.getElementById('ytmgr-key')?.value || 'main').trim() || 'main';
+  const defaultName = (document.getElementById('cfg-youtube_series_name')?.value || '').trim();
+  const playlistInput = prompt('Playlist name (or playlist ID) to sort:', defaultName || '');
+  if (playlistInput === null) return;
+  const playlistRaw = (playlistInput || '').trim();
+  if (!playlistRaw) return toast('Playlist name/ID required', 'error');
+  const modeInput = prompt('Sort mode: episode_asc | episode_desc | newest | oldest', 'episode_asc');
+  if (modeInput === null) return;
+  const mode = (modeInput || 'episode_asc').trim().toLowerCase();
+  if (!['episode_asc', 'episode_desc', 'newest', 'oldest'].includes(mode)) {
+    return toast('Invalid mode. Use: episode_asc, episode_desc, newest, oldest', 'error');
+  }
+
+  const matchStatus = document.getElementById('ytmgr-match-status');
+  if (matchStatus) matchStatus.textContent = `Sorting playlist "${playlistRaw}"...`;
+  try {
+    const body = { key, mode };
+    if (/^(PL|UU|LL|FL|RD|OLAK)/i.test(playlistRaw)) body.playlist_id = playlistRaw;
+    else body.playlist_name = playlistRaw;
+
+    const d = await api('/api/youtube/playlist/sort', { method: 'POST', body });
+    if (!d.ok) {
+      if (matchStatus) matchStatus.textContent = `Sort failed: ${d.error || 'Unknown error'}`;
+      return toast(d.error || 'Sort playlist failed', 'error');
+    }
+    const label = d.playlist_name || d.playlist_id || playlistRaw;
+    const msg = `Sorted "${label}": moved ${d.moved || 0}/${d.total || 0} items (${d.mode || mode})`;
+    if (matchStatus) matchStatus.textContent = msg;
+    toast(msg);
+  } catch (e) {
+    if (matchStatus) matchStatus.textContent = `Sort failed: ${e.message}`;
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
 async function youtubeDeleteVideo(videoId) {
   const key = (document.getElementById('ytmgr-key')?.value || 'main').trim() || 'main';
   if (!confirm(`Delete video ${videoId}?`)) return;
@@ -3007,13 +3177,13 @@ function formatLogLine(raw) {
 
   // Detect log type from emoji/keyword patterns
   let type = 'default';
-  if (/Step\s+\d/i.test(rest) || /⏭/.test(rest)) {
+  if (/^(📥|🎬|📝|🌐|🎤|🔧|💾|📤|🔗)\s*Step\s+\d/i.test(rest) || /^⏭️/.test(rest)) {
     type = 'step';
-  } else if (/✅/.test(rest) || /done|complete|success|saved/i.test(rest)) {
+  } else if (/^✅/.test(rest) || /done|complete|success|saved/i.test(rest)) {
     type = 'success';
-  } else if (/❌|ERROR|PIPELINE ERROR|RESUME ERROR/i.test(rest)) {
+  } else if (/^❌|ERROR|PIPELINE ERROR|RESUME ERROR/i.test(rest)) {
     type = 'error';
-  } else if (/⚠️|WARN/i.test(rest)) {
+  } else if (/^⚠️|WARN/i.test(rest)) {
     type = 'warning';
   } else if (/^(🔄|⏳|🔑|🏠|📊|🎧|🤖|🎵|⏱|🔀)/.test(rest)) {
     type = 'info';
@@ -3040,7 +3210,6 @@ function formatLogLine(raw) {
 // ── Scraper ──
 let scrapeVideos = [];
 let scrapeSeriesGroups = [];
-let completedUrls = new Set();
 
 function scrapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -3287,7 +3456,7 @@ async function renderSeriesGroups(payload) {
     : 'Cover clusters: unavailable';
     
   // FETCH COMPLETED URLS
-    completedUrls = new Set();
+  let completedUrls = new Set();
   try {
     const doneRes = await api('/api/projects/completed-urls');
     if (doneRes.ok && Array.isArray(doneRes.completed)) {
@@ -3400,6 +3569,13 @@ async function renderSeriesGroups(payload) {
   }, 100);
 }
 
+function _toEpisodeInt(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const out = Math.floor(n);
+  return out > 0 ? out : null;
+}
+
 function buildSeriesContextMap(group, urls) {
   const contextMap = {};
   const videos = Array.isArray(group?.videos) ? group.videos : [];
@@ -3408,13 +3584,74 @@ function buildSeriesContextMap(group, urls) {
     const u = (v?.url || '').trim();
     if (u) byUrl[u] = v;
   });
+
+  const orderedUrls = (Array.isArray(group?.urls) ? group.urls : videos.map(v => v?.url))
+    .map(u => (u || '').trim())
+    .filter(Boolean);
+  const idxByUrl = {};
+  orderedUrls.forEach((u, i) => { if (idxByUrl[u] == null) idxByUrl[u] = i; });
+
+  const known = [];
+  orderedUrls.forEach((u, i) => {
+    const ep = _toEpisodeInt(byUrl[u]?.episode_no);
+    if (ep != null) known.push({ i, ep });
+  });
+  const knownByIdx = new Map(known.map(k => [k.i, k.ep]));
+
+  const canHeadExtrapolate = known.length >= 2
+    && (known[1].i - known[0].i) > 0
+    && (known[1].ep - known[0].ep) === (known[1].i - known[0].i);
+  const canTailExtrapolate = known.length >= 2
+    && (known[known.length - 1].i - known[known.length - 2].i) > 0
+    && (known[known.length - 1].ep - known[known.length - 2].ep) === (known[known.length - 1].i - known[known.length - 2].i);
+
+  function inferEpisodeByIndex(idx) {
+    if (!Number.isFinite(idx) || idx < 0 || !known.length) return null;
+    const direct = knownByIdx.get(idx);
+    if (direct != null) return direct;
+
+    let left = null;
+    let right = null;
+    for (const k of known) {
+      if (k.i < idx) {
+        left = k;
+        continue;
+      }
+      if (k.i > idx) {
+        right = k;
+        break;
+      }
+    }
+
+    if (left && right) {
+      const idxGap = right.i - left.i;
+      const epGap = right.ep - left.ep;
+      if (idxGap > 0 && epGap === idxGap) {
+        const cand = left.ep + (idx - left.i);
+        return cand > 0 ? cand : null;
+      }
+      return null;
+    }
+    if (!left && right && canHeadExtrapolate) {
+      const cand = right.ep - (right.i - idx);
+      return cand > 0 ? cand : null;
+    }
+    if (left && !right && canTailExtrapolate) {
+      const cand = left.ep + (idx - left.i);
+      return cand > 0 ? cand : null;
+    }
+    return null;
+  }
+
   (urls || []).forEach((url) => {
     const v = byUrl[url] || {};
+    const idx = idxByUrl[url];
+    const episodeNo = _toEpisodeInt(v.episode_no) ?? inferEpisodeByIndex(idx);
     contextMap[url] = {
       series_name_vi: group?.series_name_vi || group?.series_name || '',
       series_name: group?.series_name || '',
       series_folder: group?.folder || '',
-      episode_no: v.episode_no ?? null,
+      episode_no: episodeNo ?? null,
       episode_min: group?.episode_min ?? null,
       episode_max: group?.episode_max ?? null,
       source: 'douyin_series_group'
@@ -3782,6 +4019,85 @@ function jumpToProject(projectName) {
   }
 }
 
+// ═══ NEW AI GROUP LOGIC ═══
+window.toggleSeriesGroupSelect = function(idx, checked) {
+    if (!scrapeSeriesSelected) scrapeSeriesSelected = new Set();
+    if (checked) scrapeSeriesSelected.add(idx);
+    else scrapeSeriesSelected.delete(idx);
+    const countEl = document.getElementById('series-selected-count');
+    if (countEl) countEl.innerText = `${scrapeSeriesSelected.size} selected`;
+};
+
+window.selectAllSeriesGroups = function(state) {
+    if (!scrapeSeriesSelected) scrapeSeriesSelected = new Set();
+    scrapeSeriesSelected.clear();
+    if (state && scrapeSeriesGroups) {
+        scrapeSeriesGroups.forEach((g, idx) => scrapeSeriesSelected.add(idx));
+    }
+    document.querySelectorAll('[id^="sg-cb-"]').forEach(cb => {
+        cb.checked = state;
+    });
+    const countEl = document.getElementById('series-selected-count');
+    if (countEl) countEl.innerText = `${scrapeSeriesSelected.size} selected`;
+};
+
+window.addSeriesToQueue = async function(idx, newOnly) {
+    const btns = document.querySelectorAll('button');
+    btns.forEach(b => b.disabled = true);
+    try {
+        const added = await _queueSeriesGroups([idx], newOnly);
+        toast(`Added ${added} videos to queue!`, 'success');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    } finally {
+        btns.forEach(b => b.disabled = false);
+    }
+};
+
+window.addSelectedSeriesToQueue = function(newOnly) {
+    return addSelectedSeriesToQueueLocal(!!newOnly);
+};
+
+window.startSelectedSeriesQueue = function() {
+    return startSelectedSeriesQueueLocal();
+};
+
+async function _queueSeriesGroups(indices, newOnly) {
+    let completedUrls = new Set();
+    if (newOnly) {
+        try {
+            const h = await api('/api/projects/completed-urls');
+            if (h.ok && Array.isArray(h.completed)) completedUrls = new Set(h.completed);
+        } catch(e) {}
+    }
+    
+    let totalAdded = 0;
+    
+    for (const idx of indices) {
+        const g = scrapeSeriesGroups[idx];
+        if (!g) continue;
+        
+        let urlsToQueue = g.urls || [];
+        if (newOnly) {
+            urlsToQueue = urlsToQueue.filter(u => !completedUrls.has(u));
+        }
+        if (urlsToQueue.length === 0) continue; 
+        
+        const payload = {
+            urls: urlsToQueue,
+            settings: window.currentScrapeSettings || {},
+            priority: 5,
+            group_series: true,
+            series_name: g.series_name_vi || g.series_name || '',
+            folder_name: g.folder_name || '',
+            episodes_range: `${g.episode_min || ''}-${g.episode_max || ''}`
+        };
+        await api('/api/pipeline/queue', { method: 'POST', body: payload });
+        totalAdded += urlsToQueue.length;
+    }
+    return totalAdded;
+}
+
 
 
 // ═══ SERIES LIBRARY ═══
@@ -3841,70 +4157,10 @@ function renderSeriesCard(s) {
     
     const renderPct = total > 0 ? Math.round((rendered / total) * 100) : 0;
     const uploadPct = total > 0 ? Math.round((uploaded / total) * 100) : 0;
-
-    if (s.raw_urls && s.raw_urls.length > 0) {
-        return `
-        <div class="project-card" style="display:flex; flex-direction:column; justify-content:space-between; border:1px solid var(--accent); position:relative;">
-          
-          <!-- Action Buttons -->
-          <div style="position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:10;">
-              <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(0,0,0,0.5);" onclick="editSeriesName('${safeStr(s.series_folder)}', '${safeStr(s.series_name)}', event)" title="Sửa tên series">✏️</button>
-              <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(220,53,69,0.5);" onclick="deleteSeries('${safeStr(s.series_folder)}', event)" title="Xóa toàn bộ series">🗑️</button>
-          </div>
-          <!-- Merge Checkbox -->
-          <div style="position:absolute; top:8px; left:8px; z-index:10;">
-              <input type="checkbox" class="series-merge-cb" data-folder="${safeStr(s.series_folder)}" data-name="${safeStr(s.series_name)}" style="transform:scale(1.5);" onclick="event.stopPropagation(); updateMergeActionUI();">
-          </div>
-
-          <div style="display:flex; gap:12px; margin-bottom:12px; margin-top:20px; cursor:pointer;" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON' && !event.target.closest('button')) openSeriesInProjects('${safeStr(s.series_folder)}')">
-            <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
-                ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">🎬</div>`}
-            </div>
-            <div style="flex:1; overflow:hidden;">
-                <h3 style="margin:0 0 6px; font-size:1rem; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${safeStr(s.series_name)}</h3>
-                <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Folder: <code>${safeStr(s.series_folder)}</code></div>
-                <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Episodes: <span class="badge badge-default">${total} downloaded</span> (Max: ${ep_max})</div>
-                <div style="font-size:0.8rem; color:var(--text-dim);">Latest update: ${safeStr(latest.created_at || '')}</div>
-            </div>
-          </div>
-          
-          <div style="margin-bottom:12px;">
-              <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
-                  <span>Rendered: ${rendered}/${total}</span>
-                  <span>${renderPct}%</span>
-              </div>
-              <div class="progress-bar" style="height:6px; margin-bottom:8px;"><div class="progress-fill" style="width:${renderPct}%; background:var(--accent);"></div></div>
-              
-              <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
-                  <span>Uploaded: ${uploaded}/${total}</span>
-                  <span>${uploadPct}%</span>
-              </div>
-              <div class="progress-bar" style="height:6px;"><div class="progress-fill" style="width:${uploadPct}%; background:var(--primary);"></div></div>
-          </div>
-          
-          <div style="margin-top:auto; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:space-between;">
-              <div style="font-size:0.85rem; color:var(--accent); font-weight:bold;">✨ ${s.raw_urls.length} tập mới vừa Scrape!</div>
-              <button class="btn btn-primary btn-sm" onclick="if(event.stopPropagation(), confirm('Tải ngay ${s.raw_urls.length} tập mới vào Pipeline?')) { addRawUrlsToPipeline(${JSON.stringify(s.raw_urls).replace(/"/g, '&quot;')}, '${safeStr(s.series_name)}', '${safeStr(s.series_folder)}'); }">+ Tải ngay</button>
-          </div>
-        </div>
-        `;
-    }
-
     
     return `
-    <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; position:relative;" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON' && !event.target.closest('button')) openSeriesInProjects('${safeStr(s.series_folder)}')">
-
-          <!-- Action Buttons -->
-          <div style="position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:10;">
-              <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(0,0,0,0.5);" onclick="editSeriesName('${safeStr(s.series_folder)}', '${safeStr(s.series_name)}', event)" title="Sửa tên series">✏️</button>
-              <button class="btn btn-sm btn-icon" style="padding:4px 8px; background:rgba(220,53,69,0.5);" onclick="deleteSeries('${safeStr(s.series_folder)}', event)" title="Xóa toàn bộ series">🗑️</button>
-          </div>
-          <!-- Merge Checkbox -->
-          <div style="position:absolute; top:8px; left:8px; z-index:10;">
-              <input type="checkbox" class="series-merge-cb" data-folder="${safeStr(s.series_folder)}" data-name="${safeStr(s.series_name)}" style="transform:scale(1.5);" onclick="event.stopPropagation(); updateMergeActionUI();">
-          </div>
-
-<div style="display:flex; gap:12px; margin-bottom:12px; margin-top:20px;">
+    <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
+      <div style="display:flex; gap:12px; margin-bottom:12px;">
         <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
             ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">🎬</div>`}
         </div>
@@ -4019,7 +4275,7 @@ function selectAllSeriesGroups(checked) {
   (scrapeSeriesGroups || []).forEach((_, idx) => toggleSeriesGroupSelect(idx, checked));
 }
 
-function addSelectedSeriesToQueue(newOnly = false) {
+function addSelectedSeriesToQueueLocal(newOnly = false) {
   if (!scrapeSeriesSelected.size) {
     toast('No series selected', 'error');
     return;
@@ -4051,15 +4307,15 @@ function addSelectedSeriesToQueue(newOnly = false) {
   }
 }
 
-function startSelectedSeriesQueue() {
+async function startSelectedSeriesQueueLocal() {
   if (!scrapeSeriesSelected.size) {
     toast('No series selected', 'error');
     return;
   }
   // Add new only for selected series
-  addSelectedSeriesToQueue(true);
+  addSelectedSeriesToQueueLocal(true);
   // Then start batch!
-  startBatch();
+  await startBatchPipeline();
 }
 
 async function previewUrls() {
