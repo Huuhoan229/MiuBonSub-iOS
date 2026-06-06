@@ -3,7 +3,7 @@ const IS_IOS_REMOTE_MODE = IS_CAPACITOR_APP || window.location.pathname.startsWi
 let API = IS_IOS_REMOTE_MODE ? (localStorage.getItem('MIUBON_API_BASE') || '') : '';
 if (IS_IOS_REMOTE_MODE && !API) {
     setTimeout(() => {
-        let input = prompt("Welcome to MiuBon Vietsub iOS App!\n\nPlease enter your Backend PC IP Address and Port (e.g. http://192.168.1.10:5060):", "http://");
+        let input = prompt("Welcome to MiuBon Vietsub iOS App!\n\nPlease enter your Backend PC IP Address and Port (e.g. https://miubon-vsub-online.vercel.app):", "https://miubon-vsub-online.vercel.app");
         if (input) {
             API = input.replace(/\/+$/, '');
             localStorage.setItem('MIUBON_API_BASE', API);
@@ -13,8 +13,8 @@ if (IS_IOS_REMOTE_MODE && !API) {
 }
 
 window.changeBackendUrl = function() {
-    let current = localStorage.getItem('MIUBON_API_BASE') || 'http://';
-    let input = prompt("Nhập Backend PC IP/Port (ví dụ http://192.168.1.10:5060):", current);
+    let current = localStorage.getItem('MIUBON_API_BASE') || 'https://miubon-vsub-online.vercel.app';
+    let input = prompt("Nhập Backend PC IP/Port (ví dụ https://miubon-vsub-online.vercel.app):", current);
     if (input !== null) {
         localStorage.setItem('MIUBON_API_BASE', input.replace(/\/+$/, ''));
         window.location.reload();
