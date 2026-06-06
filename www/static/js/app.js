@@ -23,6 +23,13 @@ window.changeBackendUrl = function() {
 
 const safeStr = (s) => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+function backendUrl(path) {
+  const s = String(path || '');
+  if (/^https?:\/\//i.test(s)) return s;
+  const base = String(API || '').replace(/\/+$/, '');
+  return base ? `${base}${s.startsWith('/') ? s : `/${s}`}` : s;
+}
+
 let currentTab = 'pipeline';
 let pollTimer = null;
 let logOffset = 0;
@@ -1591,7 +1598,7 @@ function closeProjectModal() {
 function watchProjectVideo() {
   if (!currentProjectName) return;
   // Assume final_video.mp4 is the main output. If not, open any video.
-  const url = `/api/project/${currentProjectName}/stream/final_video.mp4`;
+  const url = backendUrl(`/api/project/${currentProjectName}/stream/final_video.mp4`);
   window.open(url, '_blank');
 }
 
@@ -4744,10 +4751,10 @@ async function loadWatchLibrary() {
 
     grid.innerHTML = '';
     for (let s of watchLibraryData) {
-      let thumbUrl = '/static/placeholder.jpg';
+      let thumbUrl = 'static/placeholder.jpg';
       let latestEp = s.episodes[0];
       if (latestEp && latestEp.thumbnail) {
-        thumbUrl = '/api/project/' + latestEp.project_id + '/stream/thumbnail.jpg';
+        thumbUrl = backendUrl('/api/project/' + latestEp.project_id + '/stream/thumbnail.jpg');
       } else if (latestEp && latestEp.youtube && latestEp.youtube.videoId) {
         thumbUrl = 'https://img.youtube.com/vi/' + latestEp.youtube.videoId + '/maxresdefault.jpg';
       }
@@ -4762,7 +4769,7 @@ async function loadWatchLibrary() {
 
       card.innerHTML = `
         <div class="watch-series-cover-wrapper">
-          <img class="watch-series-cover" src="${thumbUrl}" onerror="this.src='/static/placeholder.jpg'">
+          <img class="watch-series-cover" src="${thumbUrl}" onerror="this.src='static/placeholder.jpg'">
           <div class="watch-series-badge">${badgeText}</div>
         </div>
         <div class="watch-series-info">
@@ -4826,7 +4833,7 @@ function playEpisodeByIndex(index) {
   });
 
   let videoEl = document.getElementById('watch-video-element');
-  videoEl.src = '/api/project/' + ep.project_id + '/stream/final_video.mp4';
+  videoEl.src = backendUrl('/api/project/' + ep.project_id + '/stream/final_video.mp4');
   videoEl.play().catch(e => console.log('Auto-play blocked:', e));
 
   updatePrevNextButtons();
