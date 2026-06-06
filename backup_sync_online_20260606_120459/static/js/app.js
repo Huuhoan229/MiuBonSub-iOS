@@ -1,9 +1,8 @@
-const IS_CAPACITOR_APP = window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:' || window.location.protocol === 'file:' || !!window.Capacitor;
-const IS_IOS_REMOTE_MODE = IS_CAPACITOR_APP || window.location.pathname.startsWith('/ios') || window.location.search.includes('ios=1');
+const IS_IOS_REMOTE_MODE = window.location.pathname.startsWith('/ios') || window.location.search.includes('ios=1');
 let API = IS_IOS_REMOTE_MODE ? (localStorage.getItem('MIUBON_API_BASE') || '') : '';
 if (IS_IOS_REMOTE_MODE && !API) {
     setTimeout(() => {
-        let input = prompt("Welcome to MiuBon Vietsub iOS App!\n\nPlease enter your Backend PC IP Address and Port (e.g. http://192.168.1.10:5060):", "http://");
+        let input = prompt("Welcome to MiuBon Vietsub iOS App!\n\nPlease enter your Backend PC IP Address and Port (e.g. http://192.168.1.10:2209):", "http://");
         if (input) {
             API = input.replace(/\/+$/, '');
             localStorage.setItem('MIUBON_API_BASE', API);
@@ -14,7 +13,7 @@ if (IS_IOS_REMOTE_MODE && !API) {
 
 window.changeBackendUrl = function() {
     let current = localStorage.getItem('MIUBON_API_BASE') || 'http://';
-    let input = prompt("Nhập Backend PC IP/Port (ví dụ http://192.168.1.10:5060):", current);
+    let input = prompt("Change Backend PC IP Address:", current);
     if (input !== null) {
         localStorage.setItem('MIUBON_API_BASE', input.replace(/\/+$/, ''));
         window.location.reload();
@@ -34,7 +33,7 @@ function safeHtml(str) {
 }
 
 // ═══ DEMO & SANDBOX STATE MANAGEMENT ═══
-let isDemoMode = (window.location.hostname === 'huuhoan229.github.io' ||
+let isDemoMode = (window.location.hostname === 'huuhoan229.github.io' || 
                   window.location.hostname.includes('github.io') ||
                   new URLSearchParams(window.location.search).get('demo') === 'true');
 
@@ -45,7 +44,7 @@ function getMockState() {
   if (state) {
     try { return JSON.parse(state); } catch (e) {}
   }
-
+  
   // Default sandbox state
   const defaultState = {
     config: {
@@ -116,7 +115,7 @@ function getMockState() {
     ],
     jobs: {}
   };
-
+  
   localStorage.setItem(MOCK_STATE_KEY, JSON.stringify(defaultState));
   return defaultState;
 }
@@ -164,7 +163,7 @@ window.resetDemoModeData = resetDemoModeData;
 // Simulated API routing logic
 function mockApi(path, opts = {}) {
   const state = getMockState();
-
+  
   if (path === '/api/health') {
     return Promise.resolve({
       has_api_key: true,
@@ -174,7 +173,7 @@ function mockApi(path, opts = {}) {
       facebook: { configured: state.config.facebook_page_access_token ? true : false, ok: state.config.facebook_page_access_token ? true : false }
     });
   }
-
+  
   if (path === '/api/config') {
     if (opts.method === 'POST') {
       const payload = typeof opts.body === 'string' ? JSON.parse(opts.body) : (opts.body || {});
@@ -184,11 +183,11 @@ function mockApi(path, opts = {}) {
     }
     return Promise.resolve(state.config);
   }
-
+  
   if (path === '/api/projects') {
     return Promise.resolve({ projects: state.projects });
   }
-
+  
   if (path === '/api/tiktok/auth') {
     return Promise.resolve({
       playwright_ok: true,
@@ -197,7 +196,7 @@ function mockApi(path, opts = {}) {
       storage_age_min: 5
     });
   }
-
+  
   if (path === '/api/tiktok/api/status') {
     return Promise.resolve({
       ok: state.tiktok.connected,
@@ -212,13 +211,13 @@ function mockApi(path, opts = {}) {
       open_id: "mock_open_id_666"
     });
   }
-
+  
   if (path === '/api/tiktok/api/disconnect') {
     state.tiktok.connected = false;
     saveMockState(state);
     return Promise.resolve({ ok: true });
   }
-
+  
   if (path === '/api/tiktok/oauth/start') {
     setTimeout(() => {
       const modal = document.getElementById('demo-oauth-modal');
@@ -226,7 +225,7 @@ function mockApi(path, opts = {}) {
     }, 100);
     return Promise.resolve({ ok: true, auth_url: '#' });
   }
-
+  
   if (path === '/api/tiktok/upload/start') {
     const jobId = 'tk_upload_sim_' + Date.now();
     state.jobs[jobId] = {
@@ -238,14 +237,14 @@ function mockApi(path, opts = {}) {
     saveMockState(state);
     return Promise.resolve({ ok: true, job_id: jobId });
   }
-
+  
   if (path.startsWith('/api/tiktok/upload/')) {
     const jobId = path.split('/').pop();
     const job = state.jobs[jobId];
     if (!job) {
       return Promise.resolve({ status: 'error', error: 'Job not found' });
     }
-
+    
     if (job.status === 'running') {
       job.pct += 25;
       if (job.pct === 25) {
@@ -265,7 +264,7 @@ function mockApi(path, opts = {}) {
       state.jobs[jobId] = job;
       saveMockState(state);
     }
-
+    
     return Promise.resolve({
       status: job.status,
       progress: { pct: job.pct, message: job.pct === 100 ? 'Done' : 'Uploading...' },
@@ -287,7 +286,7 @@ function mockApi(path, opts = {}) {
       results: [{ part: 1, ok: true, status: 'dry_run_success' }]
     });
   }
-
+  
   if (path.startsWith('/api/facebook/reels/status')) {
     return Promise.resolve({
       ok: true,
@@ -301,7 +300,7 @@ function mockApi(path, opts = {}) {
       } : null
     });
   }
-
+  
   if (path === '/api/facebook/reels/fetch-pages-with-token') {
     return Promise.resolve({
       ok: true,
@@ -321,7 +320,7 @@ function mockApi(path, opts = {}) {
       long_lived_token: "mock_long_lived_user_token_abc"
     });
   }
-
+  
   if (path === '/api/facebook/reels/upload/start') {
     const jobId = 'fb_upload_sim_' + Date.now();
     state.jobs[jobId] = {
@@ -333,14 +332,14 @@ function mockApi(path, opts = {}) {
     saveMockState(state);
     return Promise.resolve({ ok: true, job_id: jobId });
   }
-
+  
   if (path.startsWith('/api/facebook/reels/upload/')) {
     const jobId = path.split('/').pop();
     const job = state.jobs[jobId];
     if (!job) {
       return Promise.resolve({ status: 'error', error: 'Job not found' });
     }
-
+    
     if (job.status === 'running') {
       job.pct += 25;
       if (job.pct === 25) {
@@ -360,7 +359,7 @@ function mockApi(path, opts = {}) {
       state.jobs[jobId] = job;
       saveMockState(state);
     }
-
+    
     return Promise.resolve({
       status: job.status,
       progress: { pct: job.pct, message: job.pct === 100 ? 'Done' : 'Uploading...' },
@@ -382,7 +381,7 @@ function mockApi(path, opts = {}) {
       results: [{ part: 1, ok: true, video_id: 'fb_reel_sim_4567', status: 'dry_run_success' }]
     });
   }
-
+  
   return Promise.resolve({ ok: true, message: 'Simulated response' });
 }
 
@@ -423,7 +422,7 @@ async function api(path, opts = {}) {
   if (isDemoMode) {
     return mockApi(path, opts);
   }
-
+  
   const { timeoutMs = 45000, ...fetchOpts } = opts;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -495,7 +494,7 @@ function switchTab(tab) {
       runningItemLogTimer = null;
     }
   }
-
+  
   if (tab === 'ytqueue') {
     loadYTQueue();
     if (typeof ytQueuePollTimer !== 'undefined' && !ytQueuePollTimer) ytQueuePollTimer = setInterval(loadYTQueue, 5000);
@@ -584,7 +583,7 @@ async function checkHealth() {
       const activeQueues = [];
       let activeQueueId = null;
       let activePipelineId = null;
-
+      
       for (const jid of jobIds) {
         if (d.active_jobs[jid].queue) {
           const q = d.active_jobs[jid].queue || {};
@@ -728,8 +727,8 @@ function renderActiveQueues(queues) {
       : 'No series context';
     const skipAction = `<button class="btn btn-outline btn-sm" onclick="skipPipelineQueueItem('${q.id}')">Bỏ qua URL</button>`;
     const action = q.status === 'paused'
-      ? `<button class="btn btn-primary btn-sm" onclick="resumePipelineQueue('${q.id}')">&#9654; Resume</button> ${skipAction} <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">&#10006; Hủy Queue</button>`
-      : `<button class="btn btn-outline btn-sm" onclick="pauseQueue('${q.id}')">&#9208; Pause</button> ${skipAction} <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">&#10006; Hủy Queue</button>`;
+      ? `<button class="btn btn-primary btn-sm" onclick="resumePipelineQueue('${q.id}')">&#9654; Resume</button> ${skipAction} <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">&#10006; H?y Queue</button>`
+      : `<button class="btn btn-outline btn-sm" onclick="pauseQueue('${q.id}')">&#9208; Pause</button> ${skipAction} <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">&#10006; H?y Queue</button>`;
     return `
       <div class="queue-item active-queue-row ${q.id === selectedQueueId ? 'active' : ''}">
         <span class="queue-idx">${safeHtml(q.id)}</span>
@@ -1233,7 +1232,7 @@ function showResult(r) {
     </div>
     <div class="btn-group">
       ${r.final_video ? `<a href="/api/project/${r.project_id}/file/final_video.mp4" class="btn btn-primary btn-sm">⬇ Download Video</a>` : ''}
-      ${r.youtube?.url ? `<a href="${r.youtube.url}" target="_blank" class="btn btn-accent btn-sm">▶ Watch on YouTube</a>` : ''}
+      ${r.youtube?.url ? `<a href="${r.youtube.url}" target="_blank" class="btn btn-accent btn-sm">â–¶ Watch on YouTube</a>` : ''}
     </div>
   `;
 }
@@ -1352,13 +1351,13 @@ function updateProjectsSelectedCount() {
   const cbs = document.querySelectorAll('.project-cb');
   let count = 0;
   cbs.forEach(cb => { if (cb.checked) count++; });
-
+  
   const infoEl = document.getElementById('projects-selected-info');
   const countEl = document.getElementById('batch-resume-count');
   const deleteCountEl = document.getElementById('batch-delete-count');
   const btnResume = document.getElementById('btn-batch-resume');
   const btnDelete = document.getElementById('btn-batch-delete');
-
+  
   if (infoEl) infoEl.textContent = `${count} đã chọn`;
   if (countEl) countEl.textContent = count;
   if (deleteCountEl) deleteCountEl.textContent = count;
@@ -1425,12 +1424,12 @@ async function batchDeleteProjects() {
       body: { projects: selected }
     });
     if (d.error) { toast(d.error, 'error'); return; }
-
+    
     toast(`Đã xoá ${d.deleted.length} project thành công.`);
     if (d.errors?.length) {
       toast(`Có ${d.errors.length} lỗi khi xoá.`, 'error');
     }
-
+    
     // Clear selection and refresh
     const selectAllCb = document.getElementById('projects-select-all-cb');
     if (selectAllCb) selectAllCb.checked = false;
@@ -1445,12 +1444,12 @@ async function scanDuplicates() {
   try {
     const d = await api('/api/projects/duplicates');
     if (d.error) { toast(d.error, 'error'); return; }
-
+    
     if (!d.duplicates || !d.duplicates.length) {
       toast('Không tìm thấy project nào bị trùng URL.');
       return;
     }
-
+    
     // Render duplicates modal
     const list = document.getElementById('duplicates-list');
     list.innerHTML = d.duplicates.map((group, gIdx) => {
@@ -1477,7 +1476,7 @@ async function scanDuplicates() {
         </div>
       </div>`;
     }).join('');
-
+    
     document.getElementById('duplicates-modal').classList.remove('hidden');
   } catch (e) { toast('Error: ' + e.message, 'error'); }
   btn.disabled = false;
@@ -1493,20 +1492,20 @@ async function deleteSelectedDuplicates() {
   document.querySelectorAll('.dup-cb:checked').forEach(cb => {
     selected.push(cb.dataset.project);
   });
-
+  
   if (!selected.length) return toast('Chọn ít nhất 1 project để xoá', 'error');
   if (!confirm(`Xoá vĩnh viễn ${selected.length} project đã chọn?`)) return;
-
+  
   const btn = document.getElementById('btn-delete-duplicates');
   btn.disabled = true;
   btn.textContent = '⏳ Đang xoá...';
-
+  
   try {
     const d = await api('/api/projects/bulk-delete', {
       method: 'POST',
       body: { projects: selected }
     });
-
+    
     if (d.error) { toast(d.error, 'error'); }
     else {
       toast(`Đã xoá ${d.deleted.length} project.`);
@@ -1514,7 +1513,7 @@ async function deleteSelectedDuplicates() {
       loadProjects();
     }
   } catch (e) { toast('Error: ' + e.message, 'error'); }
-
+  
   btn.disabled = false;
   btn.textContent = '🗑 Xoá các mục đã chọn';
 }
@@ -1645,7 +1644,7 @@ function addToResumeQueue() {
   }
   resumeQueue.push(currentProjectName);
   renderResumeQueue();
-  toast(`➕ ${currentProjectName} added to resume queue`);
+  toast(`âž• ${currentProjectName} added to resume queue`);
   closeProjectModal();
 }
 
@@ -1692,7 +1691,7 @@ async function startResumeQueue() {
       method: 'POST',
       body: { projects: resumeQueue }
     });
-    if (d.error) { toast(d.error, 'error'); btn.disabled = false; btn.textContent = '▶ Start Resume Queue'; return; }
+    if (d.error) { toast(d.error, 'error'); btn.disabled = false; btn.textContent = 'â–¶ Start Resume Queue'; return; }
 
     toast(`Resume queue started: ${d.total} projects`);
 
@@ -1723,7 +1722,7 @@ async function startResumeQueue() {
     renderResumeQueue();
   } catch (e) { toast('Error: ' + e.message, 'error'); }
   btn.disabled = false;
-  btn.textContent = '▶ Start Resume Queue';
+  btn.textContent = 'â–¶ Start Resume Queue';
 }
 
 async function pollResumeQueue(queueId, projects) {
@@ -1918,13 +1917,13 @@ async function saveConfig() {
 function toggleTtsOptions() {
   const engine = document.getElementById('cfg-tts_engine')?.value || 'gemini';
   const mode = document.getElementById('cfg-vieneu_mode')?.value || 'preset';
-
+  
   const vieneuModeGroup = document.getElementById('vieneu-mode-group');
   const vieneuVoiceGroup = document.getElementById('vieneu-voice-group');
   const vnRef = document.getElementById('vieneu-ref-group');
   const xttsRef = document.getElementById('xtts-ref-group');
   const capcutGroup = document.getElementById('capcut-voice-group');
-
+  
   if (vieneuModeGroup) vieneuModeGroup.style.display = engine === 'vieneu' ? '' : 'none';
   if (vieneuVoiceGroup) vieneuVoiceGroup.style.display = (engine === 'vieneu' && mode === 'preset') ? '' : 'none';
   if (vnRef) vnRef.style.display = (engine === 'vieneu' && mode === 'clone') ? '' : 'none';
@@ -1939,7 +1938,7 @@ function _updateWarpUI(enabled) {
     const fLabel = document.getElementById('floating-warp-label');
     const fToggle = document.getElementById('floating-warp-toggle');
     const mToggle = document.getElementById('cfg-douyin_warp_enabled');
-
+    
     if (badge) {
       badge.textContent = enabled ? 'Bật' : 'Tắt';
       badge.style.background = enabled ? 'rgba(255,127,0,.2)' : 'rgba(136,136,168,.12)';
@@ -2501,7 +2500,7 @@ async function scanYoutubeVideoMatch() {
     const rows = d.rows || [];
     renderYoutubeVideos(rows, 'match');
     if (matchStatus) {
-      matchStatus.textContent = `Matched ${d.matched || 0}/${d.total_videos || rows.length} video(s) với project local (pages=${d.pages || 1}).`;
+      matchStatus.textContent = `Matched ${d.matched || 0}/${d.total_videos || rows.length} video(s) v?i project local (pages=${d.pages || 1}).`;
     }
     toast(`Scan done: matched ${d.matched || 0}/${d.total_videos || rows.length}`);
   } catch (e) {
@@ -2692,17 +2691,17 @@ async function loadTikTokQuickConfig() {
 
 async function saveTikTokTabConfig() {
   const payload = {};
-
+  
   const mm = document.getElementById('tk-max-minutes');
   const split = document.getElementById('tk-auto-split');
   const headless = document.getElementById('tk-headless');
   const provider = document.getElementById('tk-provider');
-
+  
   if (mm) payload.tiktok_max_minutes = parseInt(mm.value || '10', 10);
   if (split) payload.tiktok_auto_split = split.checked;
   if (headless) payload.tiktok_headless = headless.checked;
   if (provider) payload.tiktok_upload_provider = provider.value;
-
+  
   try {
     const d = await api('/api/config', { method: 'POST', body: payload });
     if (d.ok) toast('✅ Đã lưu cấu hình mặc định (Max phút, Auto split, Headless) !');
@@ -3611,10 +3610,10 @@ async function startScrape() {
         if (s.result) {
           scrapeVideos = s.result.videos || [];
           renderScrapeResults(s.result);
-
+          
           // AUTO-GROUP SERIES AFTER RENDER
-          setTimeout(() => {
-            groupSeriesByAI();
+          setTimeout(() => { 
+            groupSeriesByAI(); 
           }, 1500);
         }
         toast(`Found ${scrapeVideos.length} videos! Grouping series...`);
@@ -3664,7 +3663,7 @@ function renderScrapeResults(result) {
         ${isDone && localProject ? `<div class="video-local-project">Local: <a href="javascript:void(0)" onclick="jumpToProject('${localProject}')" style="color: #64ffda; text-decoration: underline; font-weight: bold;">${localProject}</a></div>` : ''}
         <div class="video-translation" id="vt-${i}"></div>
         <div class="video-meta">
-          ${plays ? `<span>▶ ${plays}</span>` : ''}
+          ${plays ? `<span>â–¶ ${plays}</span>` : ''}
           ${v.digg_count ? `<span>❤ ${v.digg_count}</span>` : ''}
           ${date ? `<span>📅 ${date}</span>` : ''}
         </div>
@@ -3802,7 +3801,7 @@ async function renderSeriesGroups(payload) {
   const coverLine = coverMeta.covered
     ? `Cover clusters: ${coverMeta.clusters || 0} from ${coverMeta.covered} covers`
     : 'Cover clusters: unavailable';
-
+    
   // FETCH COMPLETED URLS
   scrapeCompletedUrls = new Set();
   try {
@@ -3846,7 +3845,7 @@ async function renderSeriesGroups(payload) {
         <button class="btn btn-outline btn-sm" onclick="selectAllSeriesGroups(false)">☐ Clear</button>
         <button class="btn btn-primary btn-sm" onclick="addSelectedSeriesToQueue(false)">+ Add Selected (All)</button>
         <button class="btn btn-primary btn-sm" onclick="addSelectedSeriesToQueue(true)">+ Add Selected (New)</button>
-        <button class="btn btn-primary btn-sm" onclick="startSelectedSeriesQueue()">▶ Start Selected (New Only)</button>
+        <button class="btn btn-primary btn-sm" onclick="startSelectedSeriesQueue()">â–¶ Start Selected (New Only)</button>
         <span id="series-selected-count" class="badge badge-default">0 selected</span>
       </div>
       <div class="queue-items">
@@ -4018,20 +4017,20 @@ function addSeriesUniqueEpisodesToQueue(idx) {
     return;
   }
   let urls = Array.isArray(group.unique_episode_urls) ? group.unique_episode_urls.filter(Boolean) : [];
-
+  
   if (scrapeCompletedUrls instanceof Set) {
     urls = urls.filter(u => !scrapeCompletedUrls.has(u));
   }
-
+  
   if (!urls.length) {
     toast('No remaining unique URLs in this series', 'error');
     return;
   }
-
+  
   const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
   const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
   group.folder = finalFolder;
-
+  
   const groupContexts = buildSeriesContextMap(group, urls);
   urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
 
@@ -4098,13 +4097,13 @@ async function runDouyinWatchdogNow() {
 function toggleTtsOptions() {
   const engine = document.getElementById('cfg-tts_engine')?.value || 'gemini';
   const mode = document.getElementById('cfg-vieneu_mode')?.value || 'preset';
-
+  
   const vieneuModeGroup = document.getElementById('vieneu-mode-group');
   const vieneuVoiceGroup = document.getElementById('vieneu-voice-group');
   const vnRef = document.getElementById('vieneu-ref-group');
   const xttsRef = document.getElementById('xtts-ref-group');
   const capcutGroup = document.getElementById('capcut-voice-group');
-
+  
   if (vieneuModeGroup) vieneuModeGroup.style.display = engine === 'vieneu' ? '' : 'none';
   if (vieneuVoiceGroup) vieneuVoiceGroup.style.display = (engine === 'vieneu' && mode === 'preset') ? '' : 'none';
   if (vnRef) vnRef.style.display = (engine === 'vieneu' && mode === 'clone') ? '' : 'none';
@@ -4120,14 +4119,14 @@ async function testTts() {
   btn.disabled = true;
   status.textContent = '⏳ Generating...';
   audio.style.display = 'none';
-
+  
   try {
     const engine = document.getElementById('cfg-tts_engine')?.value || 'gemini';
-    let refVoice = (engine === 'xtts')
-      ? document.getElementById('cfg-xtts_ref_voice')?.value
+    let refVoice = (engine === 'xtts') 
+      ? document.getElementById('cfg-xtts_ref_voice')?.value 
       : document.getElementById('cfg-vieneu_ref_voice')?.value;
     if (!refVoice) refVoice = 'sample.WAV';
-
+    
     const reqBody = {
       engine: engine,
       ref_voice: refVoice,
@@ -4140,13 +4139,13 @@ async function testTts() {
       tts_pitch: parseFloat(document.getElementById('cfg-tts_pitch')?.value || '1') || 1,
       tts_volume: parseFloat(document.getElementById('cfg-tts_volume')?.value || '1') || 1,
     };
-
+    
     const res = await fetch('/api/tts/test', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(reqBody)
     });
-
+    
     if (res.ok) {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -4410,19 +4409,19 @@ async function _queueSeriesGroups(indices, newOnly) {
             if (h.ok && Array.isArray(h.completed)) completedUrls = new Set(h.completed);
         } catch(e) {}
     }
-
+    
     let totalAdded = 0;
-
+    
     for (const idx of indices) {
         const g = scrapeSeriesGroups[idx];
         if (!g) continue;
-
+        
         let urlsToQueue = g.urls || [];
         if (newOnly) {
             urlsToQueue = urlsToQueue.filter(u => !completedUrls.has(u));
         }
-        if (urlsToQueue.length === 0) continue;
-
+        if (urlsToQueue.length === 0) continue; 
+        
         const payload = {
             urls: urlsToQueue,
             settings: window.currentScrapeSettings || {},
@@ -4450,34 +4449,34 @@ async function loadSeriesLibrary() {
     const listSeries = document.getElementById('series-list');
     const listStandalones = document.getElementById('standalone-list');
     if (!listSeries || !listStandalones) return;
-
+    
     listSeries.innerHTML = '<div style="color:var(--text-dim)">Loading series...</div>';
     listStandalones.innerHTML = '<div style="color:var(--text-dim)">Loading standalones...</div>';
-
+    
     try {
         const res = await api('/api/series');
         if (!res || res.error) throw new Error(res?.error || 'Failed to load series');
-
+        
         const series = res.series || [];
         const standalones = res.standalones || [];
-
+        
         const badgeSeries = document.getElementById('series-count-badge');
         const badgeStandalone = document.getElementById('standalone-count-badge');
         if (badgeSeries) badgeSeries.innerText = series.length;
         if (badgeStandalone) badgeStandalone.innerText = standalones.length;
-
+        
         if (series.length === 0) {
             listSeries.innerHTML = '<div style="color:var(--text-dim)">No series found.</div>';
         } else {
             listSeries.innerHTML = series.map(s => renderSeriesCard(s)).join('');
         }
-
+        
         if (standalones.length === 0) {
             listStandalones.innerHTML = '<div style="color:var(--text-dim)">No standalone movies found.</div>';
         } else {
             listStandalones.innerHTML = standalones.map(p => renderStandaloneCard(p)).join('');
         }
-
+        
     } catch (e) {
         listSeries.innerHTML = `<div style="color:var(--error)">Error: ${e.message}</div>`;
         listStandalones.innerHTML = `<div style="color:var(--error)">Error: ${e.message}</div>`;
@@ -4488,16 +4487,16 @@ function renderSeriesCard(s) {
     const total = s.total_downloaded || 0;
     const rendered = s.rendered_count || 0;
     const uploaded = s.uploaded_count || 0;
-
+    
     const ep_min = s.episode_min || '?';
     const ep_max = s.episode_max || '?';
-
+    
     const latest = s.latest_episode || {};
     const thumb = latest.thumbnail ? `/api/project/${encodeURIComponent(latest.project_name)}/file/thumbnail.jpg` : '';
-
+    
     const renderPct = total > 0 ? Math.round((rendered / total) * 100) : 0;
     const uploadPct = total > 0 ? Math.round((uploaded / total) * 100) : 0;
-
+    
     return `
     <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
       <div style="display:flex; gap:12px; margin-bottom:12px;">
@@ -4511,14 +4510,14 @@ function renderSeriesCard(s) {
             <div style="font-size:0.8rem; color:var(--text-dim);">Latest update: ${safeStr(latest.created_at || '')}</div>
         </div>
       </div>
-
+      
       <div>
           <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
               <span>Rendered: ${rendered}/${total}</span>
               <span>${renderPct}%</span>
           </div>
           <div class="progress-bar" style="height:6px; margin-bottom:8px;"><div class="progress-fill" style="width:${renderPct}%; background:var(--accent);"></div></div>
-
+          
           <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
               <span>Uploaded: ${uploaded}/${total}</span>
               <span>${uploadPct}%</span>
@@ -4533,12 +4532,12 @@ function renderStandaloneCard(p) {
     const meta = p.metadata || {};
     const title = meta.title || p.douyin_meta?.douyin_title || p.project_name;
     const thumb = p.thumbnail ? `/api/project/${encodeURIComponent(p.project_name)}/file/thumbnail.jpg` : '';
-
+    
     let statusText = 'Downloaded';
     let statusColor = 'var(--text-dim)';
     if (p.final_video) { statusText = 'Rendered'; statusColor = 'var(--accent)'; }
     if (p.youtube?.videoId || p.facebook_reels?.results) { statusText = 'Uploaded'; statusColor = 'var(--primary)'; }
-
+    
     return `
     <div class="project-card" style="cursor:pointer; display:flex; gap:12px; align-items:center;" onclick="openSeriesInProjects('${safeStr(p.project_name)}')">
         <div style="width:80px; height:80px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
@@ -4557,7 +4556,7 @@ function openSeriesInProjects(filterText) {
     // Switch to projects tab
     const tabProjects = document.querySelector('[data-tab="projects"]');
     if (tabProjects) tabProjects.click();
-
+    
     // Set custom filter
     setTimeout(() => {
         const filterSelect = document.getElementById('project-filter');
@@ -4591,11 +4590,11 @@ function addSeriesToQueue(idx, newOnly = false) {
     toast('No remaining URLs to add for this series', 'error');
     return;
   }
-
+  
   const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
   const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
   group.folder = finalFolder;
-
+  
   const groupContexts = buildSeriesContextMap(group, urls);
   urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
 
@@ -4629,11 +4628,11 @@ function addSelectedSeriesToQueueLocal(newOnly = false) {
       urls = urls.filter(u => !scrapeCompletedUrls.has(u));
     }
     if (!urls.length) return;
-
+    
     const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
     const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
     group.folder = finalFolder;
-
+    
     const groupContexts = buildSeriesContextMap(group, urls);
     urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
 
@@ -4696,52 +4695,24 @@ async function previewUrls() {
 ========================================= */
 let currentWatchSeries = null;
 let watchLibraryData = null;
-let currentEpIndex = -1;
-let currentPlayableEps = [];
 
 async function loadWatchLibrary() {
   document.getElementById('watch-grid-view').classList.remove('hidden');
   document.getElementById('watch-player-view').classList.add('hidden');
-
+  
   const grid = document.getElementById('watch-series-grid');
   grid.innerHTML = '<div style="color:var(--text-dim);">Đang tải dữ liệu...</div>';
-
+  
   try {
-    let res = await api('/api/series');
-    let data = res; // api() already parses JSON
+    let res = await fetch('/api/series');
+    let data = await res.json();
     watchLibraryData = data.series || [];
-
-    // Fetch standalone projects
-    try {
-        let pRes = await api('/api/projects');
-        let pData = pRes;
-        let projects = pData.projects || [];
-        let standaloneEps = projects.filter(p => p.is_complete && !p.series_name);
-        for (let p of standaloneEps) {
-            let title = p.metadata && p.metadata.title ? p.metadata.title : p.project_name;
-            watchLibraryData.push({
-                series_name: title,
-                series_folder: 'standalone_' + p.project_name,
-                episode_max: 1,
-                rendered_count: 1,
-                episodes: [{
-                    _ep_no: 1,
-                    project_id: p.project_name,
-                    final_video: true,
-                    thumbnail: true
-                }]
-            });
-        }
-    } catch(e) {
-        console.error('Error fetching standalone projects for watch UI', e);
-    }
-
-
+    
     if (watchLibraryData.length === 0) {
       grid.innerHTML = '<div style="color:var(--text-dim);">Không có series nào có video.</div>';
       return;
     }
-
+    
     grid.innerHTML = '';
     for (let s of watchLibraryData) {
       let thumbUrl = '/static/placeholder.jpg';
@@ -4751,27 +4722,24 @@ async function loadWatchLibrary() {
       } else if (latestEp && latestEp.youtube && latestEp.youtube.videoId) {
         thumbUrl = 'https://img.youtube.com/vi/' + latestEp.youtube.videoId + '/maxresdefault.jpg';
       }
-
+      
       let maxEp = s.episode_max ? s.episode_max : '??';
       let rendered = s.rendered_count || 0;
       let badgeText = rendered + '/' + maxEp;
-
+      
       let card = document.createElement('div');
       card.className = 'watch-series-card';
       card.onclick = () => openSeriesPlayer(s.series_folder);
-
-      card.innerHTML = `
-        <div class="watch-series-cover-wrapper">
-          <img class="watch-series-cover" src="${thumbUrl}" onerror="this.src='/static/placeholder.jpg'">
-          <div class="watch-series-badge">${badgeText}</div>
-        </div>
-        <div class="watch-series-info">
-          <div class="watch-series-title" title="${s.series_name.replace(/"/g, '&quot;')}">${s.series_name}</div>
-        </div>
-      `;
+      
+      card.innerHTML = '<img class="watch-series-cover" src="' + thumbUrl + '" onerror="this.src=\'/static/placeholder.jpg\'">' +
+        '<div class="watch-series-badge">' + badgeText + '</div>' +
+        '<div class="watch-series-rating">★ 9.0</div>' +
+        '<div class="watch-series-info">' +
+          '<div class="watch-series-title" title="' + s.series_name + '">' + s.series_name + '</div>' +
+        '</div>';
       grid.appendChild(card);
     }
-
+    
   } catch (err) {
     console.error(err);
     grid.innerHTML = '<div style="color:var(--error);">Lỗi khi tải thư viện!</div>';
@@ -4782,99 +4750,57 @@ function openSeriesPlayer(folder) {
   if (!watchLibraryData) return;
   let series = watchLibraryData.find(s => s.series_folder === folder);
   if (!series) return;
-
+  
   currentWatchSeries = series;
-
+  
   document.getElementById('watch-grid-view').classList.add('hidden');
   document.getElementById('watch-player-view').classList.remove('hidden');
   document.getElementById('watch-player-title').innerText = series.series_name;
-
+  
   const epGrid = document.getElementById('watch-episodes-grid');
+  document.getElementById('watch-episodes-count').innerText = series.episodes.length + ' tập';
   epGrid.innerHTML = '';
-  document.getElementById('watch-search-ep').value = '';
-
+  
   let sortedEps = [...series.episodes].sort((a,b) => (a._ep_no || 0) - (b._ep_no || 0));
-  currentPlayableEps = sortedEps.filter(ep => ep.final_video);
-
-  for (let i = 0; i < currentPlayableEps.length; i++) {
-    let ep = currentPlayableEps[i];
+  let firstEp = null;
+  
+  for (let ep of sortedEps) {
+    if (!ep.final_video) continue;
+    
+    if (!firstEp) firstEp = ep;
+    
     let btn = document.createElement('div');
-    btn.className = 'watch-ep-btn ep-item-btn';
+    btn.className = 'watch-ep-btn';
     let epNum = ep._ep_no || '?';
     btn.innerText = epNum;
-    btn.setAttribute('data-index', i);
-    btn.onclick = () => playEpisodeByIndex(i);
+    btn.onclick = () => playEpisode(ep.project_id, btn);
     epGrid.appendChild(btn);
   }
-
-  if (currentPlayableEps.length === 0) {
+  
+  if (epGrid.children.length === 0) {
     epGrid.innerHTML = '<div style="grid-column: 1/-1; color: var(--text-dim);">Chưa có tập nào được render video.</div>';
     document.getElementById('watch-video-element').src = '';
-    updatePrevNextButtons();
   } else {
-    playEpisodeByIndex(0);
+    playEpisode(firstEp.project_id, epGrid.children[0]);
   }
 }
 
-function playEpisodeByIndex(index) {
-  if (index < 0 || index >= currentPlayableEps.length) return;
-  currentEpIndex = index;
-  let ep = currentPlayableEps[index];
-
-  document.querySelectorAll('.watch-ep-btn').forEach(b => {
-    b.classList.toggle('active', parseInt(b.getAttribute('data-index')) === index);
-  });
-
+function playEpisode(projectId, btnElement) {
+  document.querySelectorAll('.watch-ep-btn').forEach(b => b.classList.remove('active'));
+  if (btnElement) {
+    btnElement.classList.add('active');
+  }
+  
   let videoEl = document.getElementById('watch-video-element');
-  videoEl.src = '/api/project/' + ep.project_id + '/stream/final_video.mp4';
+  videoEl.src = '/api/project/' + projectId + '/stream/final_video.mp4';
   videoEl.play().catch(e => console.log('Auto-play blocked:', e));
-
-  updatePrevNextButtons();
-}
-
-function playPrevEpisode() {
-  playEpisodeByIndex(currentEpIndex - 1);
-}
-
-function playNextEpisode() {
-  playEpisodeByIndex(currentEpIndex + 1);
-}
-
-function updatePrevNextButtons() {
-  const btnPrev = document.getElementById('watch-btn-prev');
-  const btnNext = document.getElementById('watch-btn-next');
-
-  if (!btnPrev || !btnNext) return;
-
-  if (currentEpIndex <= 0) {
-    btnPrev.disabled = true;
-  } else {
-    btnPrev.disabled = false;
-  }
-
-  if (currentEpIndex >= currentPlayableEps.length - 1 || currentEpIndex === -1) {
-    btnNext.disabled = true;
-  } else {
-    btnNext.disabled = false;
-  }
-}
-
-function filterEpisodes() {
-  let q = document.getElementById('watch-search-ep').value.toLowerCase();
-  document.querySelectorAll('.ep-item-btn').forEach(b => {
-    let text = b.innerText.toLowerCase();
-    b.style.display = text.includes(q) ? 'block' : 'none';
-  });
 }
 
 function closeWatchPlayer() {
   let videoEl = document.getElementById('watch-video-element');
   videoEl.pause();
   videoEl.src = '';
-  currentWatchSeries = null;
-  currentPlayableEps = [];
-  currentEpIndex = -1;
-
+  
   document.getElementById('watch-player-view').classList.add('hidden');
   document.getElementById('watch-grid-view').classList.remove('hidden');
 }

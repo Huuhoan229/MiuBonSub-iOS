@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>MiuBon Vietsub Pipeline — Douyin → YouTube Auto</title>
+<meta name="description" content="MiuBon Vietsub Pipeline — Full auto: Douyin download, vocal separation, translation, TTS dubbing, render and upload to YouTube">
+<link rel="stylesheet" href="/static/css/style.css?v=1780136514">
+</head>
+<body>
+<div class="glow-orb glow-1"></div>
+<div class="glow-orb glow-2"></div>
+
+
+<div class="app">
+  <button onclick="changeBackendUrl()" style="position: fixed; bottom: 20px; left: 10px; z-index: 9999; background: rgba(0,0,0,0.7); color: #fff; backdrop-filter: blur(4px); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">⚙️ Đổi IP Server</button>
+
+  <!-- Demo Sandbox Banner -->
+  <div id="demo-banner" class="hidden" style="background: linear-gradient(135deg, rgba(255, 179, 0, 0.15), rgba(255, 81, 0, 0.15)); border: 1px solid rgba(255, 145, 0, 0.25); border-radius: 12px; padding: 14px 20px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #ffe3b3; font-size: 0.88rem; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span style="font-size: 1.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">⚡</span>
+      <div style="line-height: 1.5; text-align: left;">
+        <strong style="color: #ffb300; font-weight: 700;">Demo & Reviewer Sandbox Active:</strong> Since the local backend server is offline, the app has entered sandbox mode. You can test the full TikTok & Facebook integration using the interactive OAuth simulators.
+      </div>
+    </div>
+    <button class="btn btn-accent btn-sm" onclick="resetDemoModeData()" style="white-space: nowrap; background: linear-gradient(135deg, #ff9100, #ff5100); border: none; color: #fff; font-weight: 600; padding: 6px 14px; border-radius: 6px; box-shadow: 0 4px 12px rgba(255,81,0,0.2); cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1.0)'">Reset Sandbox</button>
+  </div>
+
+<header>
+  <h1>🎬 MiuBon Vietsub Pipeline</h1>
+  <p>Douyin → Download → Demucs → Whisper → Translate → TTS → Render → YouTube</p>
+</header>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" data-tab="pipeline">🚀 Pipeline</button>
+  <button class="tab" data-tab="scraper">🔍 Scraper</button>
+  <button class="tab" data-tab="projects">📁 Projects</button>
+  <button class="tab" data-tab="series">📚 Thư viện Series</button>
+  
+  <button class="tab" data-tab="auth">🔐 Auth</button>
+  <button class="tab" data-tab="ytmanager">🎛 YT Manager</button>
+  <button class="tab" data-tab="ytqueue">📤 YT Queue</button>
+  <button class="tab" data-tab="tiktok">🎵 TikTok</button>
+  <button class="tab" data-tab="facebook">📘 Facebook Reels</button>
+  <button class="tab" data-tab="settings">⚙️ Settings</button>
+</div>
+
+<!-- ═══ PIPELINE TAB ═══ -->
+<div id="tab-pipeline" class="tab-content fade-in">
+  <!-- Status -->
+  <div class="card">
+    <h2><span>📊</span> System Status</h2>
+    <div id="health-status"><div class="status-row">Loading...</div></div>
+  </div>
+
+  <!-- Input -->
+  <div class="card">
+    <h2><span>🔗</span> Input URL / Queue</h2>
+    <div class="form-group">
+      <label>Paste Douyin URLs — one per line, or mixed text (auto-detect). Multiple URLs = batch queue.</label>
+      <textarea id="input-url" rows="5" placeholder="Paste Douyin links here (mỗi link 1 dòng)...&#10;&#10;https://v.douyin.com/xxxxx/&#10;https://v.douyin.com/yyyyy/&#10;&#10;Hoặc paste cả đoạn share text chứa nhiều link..."></textarea>
+    </div>
+    <div id="url-preview" class="url-preview hidden"></div>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="btn-start" onclick="startPipeline()">🚀 Start Pipeline</button>
+      <button class="btn btn-accent" id="btn-batch" onclick="startBatchPipeline()">📋 Start Queue (Batch)</button>
+      <button class="btn btn-outline btn-sm" onclick="previewUrls()">🔍 Preview URLs</button>
+      <button class="btn btn-outline btn-sm" onclick="exportQueue()" title="Lưu trạng thái queue hiện tại">💾 Export Queue</button>
+      <button class="btn btn-outline btn-sm" onclick="importQueueFromFile()" title="Chọn file JSON để thêm URL còn lại vào hàng chờ Pipeline">📥 Import & Queue</button>
+    </div>
+  </div>
+
+  <!-- Saved State Recovery Banner -->
+  <div id="saved-state-banner" class="card hidden" style="border:1px solid rgba(255,200,0,0.3);background:rgba(255,200,0,0.05)">
+    <h2><span>💾</span> Phát hiện Queue đang dở <span id="saved-state-badge" class="badge badge-info"></span></h2>
+    <p id="saved-state-info" style="font-size:.85rem;color:var(--text-dim);margin-bottom:12px"></p>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="importQueue()">▶ Tiếp tục chạy</button>
+      <button class="btn btn-outline btn-sm" onclick="dismissSavedState()">✕ Bỏ qua</button>
+      <button class="btn btn-outline btn-sm" onclick="exportQueueToFile()" title="Tải file JSON về máy">⬇ Tải file JSON</button>
+    </div>
+  </div>
+
+  <!-- Active Queue List -->
+  <div id="active-queues-card" class="card hidden">
+    <h2><span>📚</span> Queue đang chạy <span id="active-queues-count" class="badge badge-info">0</span></h2>
+    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:10px">
+      Pause sẽ dừng trước URL tiếp theo, không cắt ngang project đang render/dịch.
+    </p>
+    <div id="active-queues-list" class="queue-items"></div>
+  </div>
+
+  <!-- Queue Monitor -->
+  <div id="queue-monitor" class="card hidden">
+    <h2><span>📋</span> Queue Progress <span id="queue-status" class="badge badge-info">RUNNING</span></h2>
+    <div class="progress-container">
+      <div class="progress-bar"><div class="progress-fill" id="queue-progress-fill" style="width:0%"></div></div>
+      <div class="progress-text"><span id="queue-msg">Starting queue...</span><span id="queue-pct">0%</span></div>
+    </div>
+    <div id="queue-items" class="queue-items"></div>
+    <!-- Failed items summary — shown when queue finishes with errors -->
+    <div id="queue-failed-section" class="hidden" style="margin-top:16px">
+      <h3 style="font-size:.92rem;color:var(--error);display:flex;align-items:center;gap:6px;margin-bottom:10px">
+        ❌ Failed Items <span id="queue-failed-count" class="badge badge-error">0</span>
+      </h3>
+      <div id="queue-failed-list" class="queue-failed-list"></div>
+      <div class="btn-group" style="margin-top:12px">
+        <button class="btn btn-danger btn-sm" id="btn-retry-failed" onclick="retryFailedQueue()">🔄 Retry All Failed</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Monitor -->
+  <div id="pipeline-monitor" class="card hidden">
+    <h2><span>⏳</span> Pipeline Progress <span id="job-status" class="badge badge-info">RUNNING</span></h2>
+    <div class="progress-container">
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      <div class="progress-text"><span id="progress-msg">Starting...</span><span id="progress-pct">0%</span></div>
+    </div>
+    <h2 style="margin-top:16px"><span>📋</span> Logs</h2>
+    <div class="log-box" id="log-box"></div>
+  </div>
+
+  <!-- Result -->
+  <div id="pipeline-result" class="card hidden"></div>
+</div>
+
+<!-- ═══ SCRAPER TAB ═══ -->
+<div id="tab-scraper" class="tab-content hidden">
+  <div class="card">
+    <h2><span>🔍</span> Douyin User Scraper</h2>
+    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">Paste a Douyin user profile URL to scan all their videos. Select videos to batch-process through the pipeline.</p>
+    <div class="form-group">
+      <label>Douyin User Profile URL</label>
+      <input id="scrape-url" placeholder="https://www.douyin.com/user/MS4wLjABAAAA..." />
+    </div>
+    <div class="grid-3">
+      <div class="form-group">
+        <label>Min Duration (seconds)</label>
+        <input id="scrape-min-duration" type="number" min="0" step="1" value="60" />
+      </div>
+      <div class="form-group">
+        <label>Sort Order</label>
+        <select id="scrape-sort-order">
+          <option value="oldest" selected>Oldest -> Newest</option>
+          <option value="newest">Newest -> Oldest</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Pipeline mode</label>
+        <input value="Run from old videos first" disabled />
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="btn-scrape" onclick="startScrape()">🔍 Scan Videos</button>
+    </div>
+  </div>
+
+  <!-- Scrape progress -->
+  <div id="scrape-progress" class="card hidden">
+    <h2><span>⏳</span> Scanning... <span id="scrape-status-badge" class="badge badge-info">RUNNING</span></h2>
+    <div id="scrape-logs" class="log-box" style="max-height:200px"></div>
+  </div>
+
+  <!-- Video results -->
+  <div id="scrape-results" class="card hidden">
+    <h2><span>🎥</span> Videos — <span id="scrape-author"></span> <span id="scrape-count" class="badge badge-info">0</span></h2>
+    <div class="btn-group" style="margin-bottom:14px">
+      <button class="btn btn-outline btn-sm" onclick="selectAllVideos(true)">☑ Select All</button>
+      <button class="btn btn-outline btn-sm" onclick="selectAllVideos(false)">☐ Deselect All</button>
+      <button class="btn btn-outline btn-sm" onclick="selectNewVideos()">Select New Only</button>
+      <button class="btn btn-accent btn-sm" onclick="translateAllCaptions()">🌐 Translate Captions</button>
+      <button class="btn btn-outline btn-sm" id="btn-group-series" onclick="groupSeriesByAI()">AI Group Series (9router)</button>
+      <button class="btn btn-outline btn-sm" id="btn-load-ai-group" onclick="loadSavedAIGroup()">Load Saved AI Group</button>
+      <button class="btn btn-outline btn-sm" id="btn-start-series-queue" onclick="startSelectedSeriesQueue()">▶ Start Queue (Selected Series)</button>
+      <button class="btn btn-primary" id="btn-scrape-batch" onclick="startScrapeBatch()">+ Add Selected to Queue (<span id="selected-count">0</span>)</button>
+      <button class="btn btn-primary" onclick="startScrapeNewBatch()">+ Add New to Queue (<span id="selected-new-count">0</span>)</button>
+    </div>
+    <div id="scrape-video-list" class="video-grid"></div>
+    <div id="scrape-series-results" class="hidden" style="margin-top:16px"></div>
+  </div>
+
+  <div class="card">
+    <h2><span>🐶</span> Douyin User Watchdog</h2>
+    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:10px">
+      Auto scan user mới theo chu kỳ, nếu có video mới thì tự nhóm series + tự add vào pipeline queue.
+    </p>
+    <div class="grid-3">
+      <div class="form-group">
+        <label>User URLs (one per line)</label>
+        <textarea id="dywd-user-urls" rows="4" placeholder="https://www.douyin.com/user/...\nhttps://www.douyin.com/user/..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Interval (min)</label>
+        <input id="dywd-interval" type="number" min="2" step="1" value="15" />
+      </div>
+      <div class="form-group">
+        <label>Min Duration (sec)</label>
+        <input id="dywd-min-duration" type="number" min="0" step="1" value="60" />
+      </div>
+    </div>
+    <div class="btn-group">
+      <label class="btn btn-outline btn-sm" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="dywd-enabled" />
+        Enable Watchdog
+      </label>
+      <button class="btn btn-primary btn-sm" onclick="saveDouyinWatchdogConfig()">💾 Save Watchdog</button>
+      <button class="btn btn-outline btn-sm" onclick="runDouyinWatchdogNow()">🧪 Run Once Now</button>
+      <button class="btn btn-outline btn-sm" onclick="loadDouyinWatchdogState()">🔄 Refresh</button>
+    </div>
+    <div style="margin-top:10px;font-size:.82rem;color:var(--text-dim)">
+      <span id="dywd-status-line">Watchdog: loading...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SERIES LIBRARY TAB ═══ -->
+<div id="tab-series" class="tab-content hidden">
+  <div class="card">
+    <h2><span>📚</span> Thư viện Series <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="loadSeriesLibrary()">🔄 Refresh</button></h2>
+    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">Quản lý tổng quan các Phim Bộ (Series) và Phim Lẻ (Standalone).</p>
+    
+    <div class="tabs" style="border-bottom:1px solid var(--border); margin-bottom:16px; padding-bottom:0">
+      <button class="sub-tab series-sub-tab active" data-subtab="series-list" onclick="switchSeriesSubTab('series-list')" style="border-radius:6px 6px 0 0; border-bottom:none">📺 Phim Bộ (Series) <span id="series-count-badge" class="badge badge-info">0</span></button>
+      <button class="sub-tab series-sub-tab" data-subtab="standalone-list" onclick="switchSeriesSubTab('standalone-list')" style="border-radius:6px 6px 0 0; border-bottom:none">🎞 Phim Lẻ (Standalone) <span id="standalone-count-badge" class="badge badge-info">0</span></button>
+    </div>
+    
+    <div id="series-list" class="series-sub-content grid-2">
+       <div style="color:var(--text-dim); font-size:0.9rem;">Đang tải Thư viện Series...</div>
+    </div>
+    
+    <div id="standalone-list" class="series-sub-content hidden grid-2">
+       <div style="color:var(--text-dim); font-size:0.9rem;">Đang tải Phim lẻ...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PROJECTS TAB ═══ -->
+<div id="tab-projects" class="tab-content hidden">
+  <!-- Resume Queue -->
+  <div id="resume-queue-card" class="card hidden">
+    <h2><span>📋</span> Resume Queue <span id="resume-queue-count" class="badge badge-info">0</span>
+      <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="clearResumeQueue()">🗑 Clear</button>
+    </h2>
+    <div id="resume-queue-list" class="queue-items"></div>
+    <div class="btn-group" style="margin-top:12px">
+      <button class="btn btn-primary" id="btn-start-resume-queue" onclick="startResumeQueue()">> Start Resume Queue</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span>📁</span> Projects <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="loadProjects()">🔄 Refresh</button></h2>
+    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">Click a project to view files, resume pipeline, add to queue, or delete. Use checkboxes to batch resume.</p>
+    <!-- Filter & Batch Actions Bar -->
+    <div class="projects-toolbar">
+      <div class="projects-toolbar-left">
+        <label class="projects-select-all">
+          <input type="checkbox" id="projects-select-all-cb" onchange="toggleSelectAllProjects(this.checked)" />
+          <span>Chọn tất cả</span>
+        </label>
+        <div class="projects-filter">
+          <label for="project-filter">Lọc:</label>
+          <select id="project-filter" onchange="loadProjects()">
+            <option value="all">📋 Tất cả</option>
+            <option value="completed">✅ Đã hoàn thành (100%)</option>
+            <option value="partial">⏳ Đang dở dang (1-99%)</option>
+            <option value="incomplete">❌ Chưa hoàn thành (<100%)</option>
+            <option value="yt-uploaded">📺 YouTube: Uploaded success</option>
+            <option value="sort-pct-desc">📈 % Hoàn thành (Cao → Thấp)</option>
+            <option value="sort-pct-asc">📉 % Hoàn thành (Thấp → Cao)</option>
+          </select>
+        </div>
+        <span class="projects-count-badge" id="projects-count-badge">0 projects</span>
+      </div>
+      <div class="projects-toolbar-right">
+        <span class="projects-selected-info" id="projects-selected-info">0 đã chọn</span>
+        <button class="btn btn-primary btn-sm" id="btn-batch-resume" onclick="batchResumeProjects()" disabled>▶ Resume hàng loạt (<span id="batch-resume-count">0</span>)</button>
+        <button class="btn btn-danger btn-sm" id="btn-batch-delete" onclick="batchDeleteProjects()" disabled>🗑 Xoá hàng loạt (<span id="batch-delete-count">0</span>)</button>
+        <button class="btn btn-accent btn-sm" id="btn-scan-duplicates" onclick="scanDuplicates()">🔍 Quét trùng</button>
+      </div>
+    </div>
+    <div id="projects-list" class="grid-2"></div>
+  </div>
+</div>
+
+
+<!-- ═══ PROJECT DETAIL MODAL ═══ -->
+<div id="project-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeProjectModal()">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2><span>📁</span> <span id="modal-project-name">Project</span></h2>
+      <button class="modal-close" onclick="closeProjectModal()">✕</button>
+    </div>
+    <div id="modal-project-info" class="modal-info"></div>
+    <div id="modal-project-steps" class="steps-bar"></div>
+    <h3 style="margin:16px 0 10px;font-size:.95rem">📄 Files</h3>
+    <div id="modal-project-files" class="file-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-accent" id="btn-add-queue" onclick="addToResumeQueue()">+ Add to Queue</button>
+      <button class="btn btn-primary" id="btn-resume" onclick="resumeProject()">> Resume Pipeline</button>
+      <button class="btn btn-danger" id="btn-delete" onclick="deleteProject()">🗑 Delete Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DUPLICATES MODAL ═══ -->
+<div id="duplicates-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeDuplicatesModal()">
+  <div class="modal-content" style="max-width: 800px;">
+    <div class="modal-header">
+      <h2><span>🔍</span> Phát hiện Project trùng</h2>
+      <button class="modal-close" onclick="closeDuplicatesModal()">✕</button>
+    </div>
+    <p style="font-size:.85rem;color:var(--text-dim);margin-bottom:12px">Các project dưới đây có cùng URL Douyin. Bạn có thể chọn để xoá bớt (giữ lại 1 bản mới nhất).</p>
+    <div id="duplicates-list" class="duplicates-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="btn-delete-duplicates" onclick="deleteSelectedDuplicates()">🗑 Xoá các mục đã chọn</button>
+      <button class="btn btn-outline" onclick="closeDuplicatesModal()">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ AUTH TAB ═══ -->
+<div id="tab-auth" class="tab-content hidden">
+  <!-- Douyin -->
+  <div class="card">
+    <h2><span>🎵</span> Douyin Login</h2>
+    <p style="font-size:.85rem;color:var(--text-dim);margin-bottom:12px">Opens Chromium browser for you to login. Cookies are auto-captured.</p>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="douyinLogin()">🌐 Open Douyin Login</button>
+    </div>
+  </div>
+  <!-- YouTube -->
+  <div class="card">
+    <h2><span>📺</span> YouTube Channels <span id="yt-enabled-badge" class="badge badge-info" style="font-size:.7rem;margin-left:8px">0 kênh bật</span></h2>
+    <p style="font-size:.85rem;color:var(--text-dim);margin-bottom:12px">Upload xoay vòng (round-robin): mỗi video sẽ được up lên 1 kênh luân phiên. Bật/tắt kênh để kiểm soát.</p>
+    <div id="yt-accounts-list" style="margin-bottom:12px"></div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="youtubeLogin()">🔐 Login Main Channel</button>
+    </div>
+    <div class="form-group" style="margin-top:16px; border-top:1px solid var(--border); padding-top:16px">
+      <label>➕ Thêm kênh phụ</label>
+      <div style="display:flex; gap:8px">
+        <input id="yt-new-name" placeholder="Tên gợi nhớ (vd: Kenh2, KenhPhu...)" style="flex:1" />
+        <button class="btn btn-accent btn-sm" onclick="addYoutubeChannel()">Thêm kênh</button>
+      </div>
+      <p style="font-size:.72rem;color:var(--text-dim);margin-top:4px">Mỗi video render xong sẽ được up lần lượt: Video 1 → Kênh A, Video 2 → Kênh B, Video 3 → Kênh A... Tắt kênh nào thì bỏ qua kênh đó.</p>
+    </div>
+    <div class="form-group" style="margin-top:16px">
+      <label>Or paste OAuth Client Secrets JSON</label>
+      <textarea id="yt-secrets-json" rows="4" placeholder='{"installed":{"client_id":"...","client_secret":"..."}}'>  </textarea>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="importYTSecrets()">Import Secrets JSON</button>
+  </div>
+</div>
+
+<!-- ═══ YT MANAGER TAB ═══ -->
+<div id="tab-ytmanager" class="tab-content hidden">
+  <div class="card">
+    <h2><span>🎛</span> YouTube Video Manager</h2>
+    <div class="grid-3">
+      <div class="form-group">
+        <label>Channel Key</label>
+        <input id="ytmgr-key" value="main" placeholder="main / Kenh2 ..." />
+      </div>
+      <div class="form-group">
+        <label>Max Results</label>
+        <input id="ytmgr-max" type="number" min="1" max="2000" value="25" />
+      </div>
+      <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="loadYoutubeVideos()">🔄 Load Videos</button>
+        <button class="btn btn-outline btn-sm" onclick="scanYoutubeVideoMatch()">🧩 Scan Match</button>
+        <button class="btn btn-outline btn-sm" onclick="runYoutubeWatchdogOnce()">🧪 Run Watchdog Now</button>
+      </div>
+    </div>
+    <div class="form-group" style="max-width:320px;margin-top:8px">
+      <label>Status Filter</label>
+      <select id="ytmgr-status-filter" onchange="applyYoutubeStatusFilter()">
+        <option value="all">All</option>
+        <option value="processing">Processing</option>
+        <option value="failed">Failed</option>
+        <option value="succeeded">Succeeded</option>
+        <option value="matched">Matched Local</option>
+        <option value="unmatched">Unmatched Local</option>
+      </select>
+    </div>
+
+    <h3 style="margin:10px 0 8px;font-size:.9rem">Auto Reupload Watchdog</h3>
+    <div class="grid-3">
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="ytwd-enabled">
+          Enable watchdog
+        </label>
+      </div>
+      <div class="form-group"><label>Interval (min)</label><input id="ytwd-interval" type="number" min="3" max="240" value="15"></div>
+      <div class="form-group"><label>Stuck timeout (min)</label><input id="ytwd-stuck" type="number" min="10" max="1440" value="120"></div>
+      <div class="form-group"><label>Max reupload retries</label><input id="ytwd-retries" type="number" min="1" max="10" value="2"></div>
+      <div class="form-group"><label>Skip if views >=</label><input id="ytwd-minviews" type="number" min="0" max="1000000" value="1"></div>
+      <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="saveYoutubeWatchdogConfig()">💾 Save Watchdog Config</button>
+      </div>
+    </div>
+    <div id="ytwd-status" style="font-size:.8rem;color:var(--text-dim);margin:4px 0 10px"></div>
+    <div id="ytmgr-match-status" style="font-size:.8rem;color:var(--text-dim);margin:0 0 10px"></div>
+
+    <div style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px">
+      <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+        <thead>
+          <tr style="background:rgba(255,255,255,0.04)">
+            <th style="text-align:left;padding:8px">Title</th>
+            <th style="text-align:left;padding:8px">Status</th>
+            <th style="text-align:left;padding:8px">Match Local</th>
+            <th style="text-align:left;padding:8px">Age</th>
+            <th style="text-align:left;padding:8px">Views</th>
+            <th style="text-align:left;padding:8px">Action</th>
+          </tr>
+        </thead>
+        <tbody id="ytmgr-table-body">
+          <tr><td colspan="6" style="padding:10px;color:var(--text-dim)">No data</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ YT QUEUE TAB ═══ -->
+<div id="tab-ytqueue" class="tab-content hidden">
+  <div class="card">
+    <h3>📤 YouTube Upload Queue</h3>
+    <p style="font-size:0.9rem; color:var(--text-dim)">Danh sách các video đang chờ tải lên YouTube (do vượt quá Quota hoặc đang được xử lý ngầm).</p>
+    
+    <div style="margin: 12px 0;">
+      <button class="btn btn-outline btn-sm" onclick="loadYTQueue()">🔄 Refresh</button>
+      <span id="ytqueue-status" style="font-size:0.8rem; margin-left:10px; color:var(--text-dim);"></span>
+    </div>
+
+    <div style="overflow-x:auto; background:var(--bg-dark); border:1px solid var(--border); border-radius:6px;">
+      <table style="width:100%; text-align:left; border-collapse:collapse; font-size:0.9rem;">
+        <thead>
+          <tr style="background:var(--bg-light); border-bottom:1px solid var(--border);">
+            <th style="padding:10px;">Video (Meta)</th>
+            <th style="padding:10px;">Kênh</th>
+            <th style="padding:10px;">Trạng thái</th>
+            <th style="padding:10px;">Lỗi gần nhất</th>
+            <th style="padding:10px;">Thử lại (Lần)</th>
+            <th style="padding:10px;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody id="ytqueue-tbody">
+          <tr><td colspan="6" style="padding:10px; text-align:center; color:var(--text-dim);">Đang tải...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TIKTOK TAB ═══ -->
+<div id="tab-tiktok" class="tab-content hidden">
+  <div class="card">
+    <h2><span>🎵</span> TikTok Upload Manager</h2>
+    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">
+      Upload ngoài luồng pipeline. Có hỗ trợ tự cắt video theo phút tối đa + auto thêm caption Part/Tập.
+    </p>
+    <div class="btn-group" style="margin-bottom:10px">
+      <button class="btn btn-primary btn-sm" onclick="tiktokLogin()">🔐 Login TikTok</button>
+      <button class="btn btn-outline btn-sm" onclick="loadTikTokStatus()">🔄 Refresh Status</button>
+      <button class="btn btn-outline btn-sm" onclick="loadTikTokProjects()">📁 Reload Projects</button>
+    </div>
+    <div class="btn-group" style="margin-bottom:10px">
+      <button class="btn btn-accent btn-sm" onclick="connectTikTokApi()">🌐 Connect TikTok API</button>
+      <button class="btn btn-outline btn-sm" onclick="checkTikTokApiStatus()">🧪 Check TikTok API</button>
+      <button class="btn btn-outline btn-sm" onclick="disconnectTikTokApi()">🗑 Disconnect API</button>
+    </div>
+    <div id="tiktok-api-status" style="font-size:.82rem;color:var(--text-dim);margin-bottom:8px">TikTok API: checking...</div>
+    <div class="grid-3" style="margin-bottom:10px">
+      <div class="form-group">
+        <label>Import Session From Browser</label>
+        <select id="tk-import-browser">
+          <option value="edge" selected>Edge</option>
+          <option value="chrome">Chrome</option>
+          <option value="firefox">Firefox</option>
+          <option value="brave">Brave</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Browser Profile (optional)</label>
+        <input id="tk-import-profile" placeholder="Default / Profile 1 / ..." />
+      </div>
+      <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="importTikTokFromBrowser()">📥 Import Browser Session</button>
+      </div>
+    </div>
+    <div class="btn-group" style="margin-bottom:10px">
+      <input id="tk-cookies-file" type="file" accept=".txt,text/plain" style="display:none" onchange="importTikTokCookiesTextFile(this)">
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('tk-cookies-file').click()">Import cookies.txt</button>
+      <span style="font-size:.78rem;color:var(--text-dim)">Fallback khi browser import fail.</span>
+      <button class="btn btn-outline btn-sm" onclick="document.querySelector('[data-tab=\'settings\']').click()" style="margin-left:auto">⚙️ Cấu hình API Key</button>
+    </div>
+    <div id="tiktok-auth-status" style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">Checking TikTok status...</div>
+
+    <div class="grid-3">
+      <div class="form-group">
+        <label>Project đã render</label>
+        <select id="tk-project"></select>
+      </div>
+      <div class="form-group">
+        <label>Upload Provider</label>
+        <select id="tk-provider">
+          <option value="official_api">Official API (No Browser Upload)</option>
+          <option value="playwright">Browser Automation (Fallback)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Max phút / part</label>
+        <input id="tk-max-minutes" type="number" min="1" max="60" value="10">
+      </div>
+      <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="tk-auto-split" checked>
+          Auto split
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="tk-headless">
+          Headless
+        </label>
+      </div>
+    </div>
+
+    <div class="btn-group" style="margin-top:8px;align-items:center;">
+      <button class="btn btn-outline btn-sm" onclick="tiktokDryRun()">🧪 Preview Split + Caption</button>
+      <button class="btn btn-accent btn-sm" onclick="tiktokUploadNow()">📤 Upload TikTok</button>
+      <button class="btn btn-outline btn-sm" onclick="saveTikTokTabConfig()" style="margin-left:auto" title="Lưu các thông số ở trên làm mặc định cho lần sau">💾 Lưu làm mặc định</button>
+    </div>
+    <div class="progress-container" id="tiktok-progress-wrap" style="display:none">
+      <div class="progress-bar"><div class="progress-fill" id="tiktok-progress-fill" style="width:0%"></div></div>
+      <div class="progress-text"><span id="tiktok-progress-msg">Waiting...</span><span id="tiktok-progress-pct">0%</span></div>
+    </div>
+    <div id="tiktok-upload-result" class="log-box" style="max-height:260px;margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- ═══ FACEBOOK REELS TAB ═══ -->
+<div id="tab-facebook" class="tab-content hidden">
+  <div class="card">
+    <h2><span>📘</span> Facebook Reels Upload</h2>
+    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">
+      Upload reel outside pipeline. Caption uses the same TikTok caption builder.
+    </p>
+    <div class="btn-group" style="margin-bottom:10px">
+      <button class="btn btn-outline btn-sm" onclick="loadFacebookReelsStatus()">🔄 Refresh Status</button>
+      <button class="btn btn-outline btn-sm" onclick="loadFacebookReelsProjects()">📁 Reload Projects</button>
+      <button class="btn btn-outline btn-sm" onclick="saveFacebookTabConfig()" style="margin-left:auto">💾 Save Default</button>
+    </div>
+    <div id="facebook-reels-status" style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">Checking Facebook Reels status...</div>
+
+    <div class="card" style="margin:0 0 12px 0;padding:12px;border:1px solid var(--border)">
+      <h3 style="font-size:.92rem;margin-bottom:10px">🔑 Lấy Token Dài Hạn + Page Token</h3>
+      <div class="grid-3">
+        <div class="form-group">
+          <label>User Access Token</label>
+          <input id="fb-user-token" type="password" placeholder="Paste user token from Graph API Explorer">
+        </div>
+        <div class="form-group">
+          <label>Facebook App ID (optional)</label>
+          <input id="fb-app-id" placeholder="App ID">
+        </div>
+        <div class="form-group">
+          <label>Facebook App Secret (optional)</label>
+          <input id="fb-app-secret" type="password" placeholder="App Secret">
+        </div>
+      </div>
+      <div class="btn-group" style="margin-top:6px">
+        <button class="btn btn-outline btn-sm" onclick="fetchFacebookPagesWithToken()">🧪 Fetch Pages + Long Token</button>
+      </div>
+      <div id="fb-token-fetch-status" style="font-size:.8rem;color:var(--text-dim);margin-top:8px"></div>
+      <div class="form-group" style="margin-top:10px">
+        <label>Pages từ token</label>
+        <select id="fb-pages-select"></select>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-accent btn-sm" onclick="applySelectedFacebookPageToken()">✅ Dùng Page Token đã chọn</button>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="form-group">
+        <label>Rendered Project</label>
+        <select id="fb-project"></select>
+      </div>
+      <div class="form-group">
+        <label>Max minutes / part</label>
+        <input id="fb-max-minutes" type="number" min="1" max="120" value="10">
+      </div>
+      <div class="form-group">
+        <label>Video State</label>
+        <select id="fb-video-state">
+          <option value="PUBLISHED">PUBLISHED</option>
+          <option value="DRAFT">DRAFT</option>
+          <option value="SCHEDULED">SCHEDULED</option>
+        </select>
+      </div>
+      <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="fb-auto-split" checked>
+          Auto split
+        </label>
+      </div>
+    </div>
+
+    <div class="btn-group" style="margin-top:8px;align-items:center;">
+      <button class="btn btn-outline btn-sm" onclick="facebookReelsDryRun()">🧪 Preview Split + Caption</button>
+      <button class="btn btn-accent btn-sm" onclick="facebookReelsUploadNow()">📤 Upload Facebook Reels</button>
+    </div>
+    <div class="progress-container" id="fb-progress-wrap" style="display:none">
+      <div class="progress-bar"><div class="progress-fill" id="fb-progress-fill" style="width:0%"></div></div>
+      <div class="progress-text"><span id="fb-progress-msg">Waiting...</span><span id="fb-progress-pct">0%</span></div>
+    </div>
+    <div id="fb-upload-result" class="log-box" style="max-height:260px;margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- ═══ SETTINGS TAB ═══ -->
+<div id="tab-settings" class="tab-content hidden">
+  <div class="card">
+    <h2><span>🔑</span> API & General</h2>
+    <div class="grid-2">
+      <div class="form-group"><label>Gemini API Key (primary)</label><div style="display:flex;gap:8px;align-items:center"><input id="cfg-api_key" type="password" placeholder="AIza..." style="flex:1"><button class="btn btn-outline btn-sm" id="btn-check-api" onclick="checkApiKey()" style="white-space:nowrap">🔑 Check</button><button class="btn btn-outline btn-sm" id="btn-check-adc" onclick="checkADC()" style="white-space:nowrap" title="Check Google Cloud ADC (Vertex AI)">☁️ Check ADC</button></div><div id="api-key-status" style="margin-top:6px;font-size:.78rem"></div></div>
+      <div class="form-group"><label>Channel Name</label><input id="cfg-channel_name" value="MiuBonVietsub"></div>
+      <div class="form-group"><label>YouTube Title Mode</label><select id="cfg-youtube_title_mode"><option value="ai" selected>AI Clickbait (current)</option><option value="series_template">Series Template (dong bo)</option></select></div>
+      <div class="form-group"><label>YouTube Series Name (for template)</label><input id="cfg-youtube_series_name" placeholder="Dai Su Huynh Van Dao Tong"></div>
+      <div class="form-group"><label>YouTube Title Suffix (for template)</label><input id="cfg-youtube_title_suffix" placeholder="2K Sub"></div>
+      <div class="form-group">
+        <label>YouTube Upload Strategy</label>
+        <select id="cfg-youtube_upload_strategy">
+          <option value="round_robin" selected>Round-Robin (San đều Quota)</option>
+          <option value="sequential_fallback">Sequential Fallback (Dùng cạn từng kênh)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Gemini Model</label><select id="cfg-gemini_model"><option>gemini-2.5-flash</option><option>gemini-2.0-flash</option><option>gemini-2.5-pro</option></select></div>
+      <div class="form-group"><label>Whisper Model</label><select id="cfg-whisper_model"><option>tiny</option><option>base</option><option>small</option><option selected>medium</option><option>large-v2</option><option>large-v3</option></select></div>
+      <div class="form-group"><label>Source Language</label><input id="cfg-source_lang" value="zh"></div>
+      <div class="form-group"><label>Target Language</label><input id="cfg-target_lang" value="vi"></div>
+      <div class="form-group"><label>Translation Style</label><select id="cfg-translation_style"><option>Mặc định</option><option>Bựa, Hài</option><option>Nghiêm túc</option><option>Tu tiên, Kiếm hiệp</option><option>Hệ thống, Võng du</option><option>Gen Z</option></select></div>
+      <div class="form-group"><label>Translation Provider</label><select id="cfg-translation_provider"><option value="auto">Auto Fallback (Cloud → Local)</option><option value="azure">Azure Translator (Cloud)</option><option value="deepl">DeepL (Cloud)</option><option value="9router" selected>9Router (Cloud Proxy)</option><option value="gemini">Gemini (Cloud)</option><option value="ollama">Ollama (Local/Free)</option></select></div>
+      <div class="form-group"><label>Provider Order (for Auto)</label><input id="cfg-translation_provider_order" value="9router,ollama,azure,deepl,gemini" placeholder="9router,ollama,azure,deepl,gemini"></div>
+      <div class="form-group"><label>Local Translation Model (Ollama)</label><input id="cfg-local_translation_model" value="qwen3:8b" placeholder="qwen3:8b"></div>
+      <div class="form-group"><label>Local Translation API URL</label><input id="cfg-local_translation_api_url" value="http://127.0.0.1:11434/api/chat" placeholder="http://127.0.0.1:11434/api/chat"></div>
+      <div class="form-group"><label>Local Translation Timeout (sec)</label><input id="cfg-local_translation_timeout" type="number" value="180" min="30" max="1200"></div>
+      <div class="form-group"><label>Azure Translator Key</label><input id="cfg-azure_translator_key" type="password" placeholder="Azure key..."></div>
+      <div class="form-group"><label>Azure Translator Endpoint</label><input id="cfg-azure_translator_endpoint" value="https://api.cognitive.microsofttranslator.com" placeholder="https://api.cognitive.microsofttranslator.com"></div>
+      <div class="form-group"><label>Azure Translator Region</label><input id="cfg-azure_translator_region" placeholder="eastus (nếu resource yêu cầu)"></div>
+      <div class="form-group"><label>DeepL API Key</label><input id="cfg-deepl_api_key" type="password" placeholder="DeepL key..."></div>
+      <div class="form-group"><label>DeepL API URL</label><input id="cfg-deepl_api_url" value="https://api-free.deepl.com/v2/translate" placeholder="https://api-free.deepl.com/v2/translate"></div>
+      <div class="form-group"><label>9Router URL</label><input id="cfg-ninerouter_url" value="http://127.0.0.1:20128" placeholder="http://127.0.0.1:20128"></div>
+      <div class="form-group"><label>9Router API Key (optional)</label><input id="cfg-ninerouter_key" type="password" placeholder="9router key (nếu có)"></div>
+      <div class="form-group"><label>9Router Model (optional)</label><input id="cfg-ninerouter_model" placeholder="để trống = tự lấy model combo/đầu tiên"></div>
+      <div class="form-group"><label>9Router Timeout (sec)</label><input id="cfg-ninerouter_timeout" type="number" value="180" min="30" max="1200"></div>
+      <div class="form-group"><label>TikTok Upload Provider</label><select id="cfg-tiktok_upload_provider"><option value="official_api">Official API (recommended)</option><option value="playwright">Browser Automation</option></select></div>
+      <div class="form-group"><label>TikTok API Client Key</label><input id="cfg-tiktok_api_client_key" placeholder="TikTok client key"></div>
+      <div class="form-group"><label>TikTok API Client Secret</label><input id="cfg-tiktok_api_client_secret" type="password" placeholder="TikTok client secret"></div>
+      <div class="form-group"><label>TikTok API Redirect URI</label><input id="cfg-tiktok_api_redirect_uri" placeholder="http://127.0.0.1:5000/api/tiktok/oauth/callback"></div>
+      <div class="form-group"><label>TikTok API Scopes</label><input id="cfg-tiktok_api_scopes" value="user.info.basic,video.upload,video.publish"></div>
+      <div class="form-group"><label>TikTok API PKCE Mode</label><select id="cfg-tiktok_api_pkce_challenge_format"><option value="hex" selected>hex (recommended)</option><option value="base64url">base64url (RFC)</option></select></div>
+      <div class="form-group"><label>TikTok API Privacy Level</label><input id="cfg-tiktok_api_privacy_level" value="SELF_ONLY" placeholder="SELF_ONLY"></div>
+      <div class="form-group"><label>TikTok API Poll Timeout (sec)</label><input id="cfg-tiktok_api_poll_timeout_sec" type="number" value="900" min="60" max="3600"></div>
+      <div class="form-group"><label>TikTok API Poll Interval (sec)</label><input id="cfg-tiktok_api_poll_interval_sec" type="number" value="5" min="2" max="30"></div>
+      <div class="form-group"><label>Facebook Page Access Token</label><input id="cfg-facebook_page_access_token" type="password" placeholder="EAAB..."></div>
+      <div class="form-group"><label>Facebook App ID</label><input id="cfg-facebook_app_id" placeholder="for long-lived token exchange"></div>
+      <div class="form-group"><label>Facebook App Secret</label><input id="cfg-facebook_app_secret" type="password" placeholder="for long-lived token exchange"></div>
+      <div class="form-group"><label>Facebook Actor ID (Page ID or me)</label><input id="cfg-facebook_reels_actor_id" value="me" placeholder="me or page_id"></div>
+      <div class="form-group"><label>Facebook Graph Version</label><input id="cfg-facebook_graph_version" value="v22.0" placeholder="v22.0"></div>
+      <div class="form-group"><label>Facebook Upload Mode</label><select id="cfg-facebook_upload_mode"><option value="auto" selected>Auto: short = Reels, long = Video</option><option value="reels">Reels only</option><option value="video">Video only</option></select></div>
+      <div class="form-group"><label>Facebook Short/Reels Threshold (sec)</label><input id="cfg-facebook_reels_short_threshold_sec" type="number" min="15" max="3600" value="90"></div>
+      <div class="form-group"><label>Facebook Reels Video State</label><select id="cfg-facebook_reels_video_state"><option value="PUBLISHED">PUBLISHED</option><option value="DRAFT">DRAFT</option><option value="SCHEDULED">SCHEDULED</option></select></div>
+      <div class="form-group"><label>Facebook Reels Poll Timeout (sec)</label><input id="cfg-facebook_reels_poll_timeout_sec" type="number" value="600" min="30" max="7200"></div>
+      <div class="form-group"><label>Facebook Reels Poll Interval (sec)</label><input id="cfg-facebook_reels_poll_interval_sec" type="number" value="5" min="2" max="30"></div>
+      <div class="form-group"><label>Facebook Reels Request Timeout (sec)</label><input id="cfg-facebook_reels_request_timeout_sec" type="number" value="60" min="10" max="600"></div>
+      <div class="form-group"><label>Facebook API Proxy (optional)</label><input id="cfg-facebook_api_proxy" placeholder="socks5://127.0.0.1:40000"></div>
+      <div class="form-group"><label>Facebook Reels Max Minutes / Part</label><input id="cfg-facebook_reels_max_minutes" type="number" min="1" max="120" value="10"></div>
+      <div class="form-group"><label>Facebook Reels Auto Split</label><select id="cfg-facebook_reels_auto_split"><option value="true">true</option><option value="false">false</option></select></div>
+      <div class="form-group" style="display:flex;align-items:flex-end;gap:10px">
+        <button id="btn-test-translation" onclick="testTranslationApi()" class="btn btn-outline btn-sm" style="height:36px;white-space:nowrap">🌐 Test Translation API</button>
+        <div id="translation-test-status" style="font-size:.8rem;color:var(--text-dim);line-height:1.4"></div>
+      </div>
+      <div class="form-group"><label>TTS Engine</label><select id="cfg-tts_engine" onchange="toggleTtsOptions()"><option value="gemini" selected>🤖 Gemini TTS (API)</option><option value="vieneu">🏠 VieNeu (Local/Offline)</option><option value="xtts">🔊 XTTS v2 (Local/Free — Voice Clone)</option><option value="capcut">✂️ CapCut TTS (Local Server)</option></select></div>
+      <div class="form-group"><label>TTS Voice (Gemini)</label><input id="cfg-tts_voice" value="Zephyr" placeholder="Zephyr, Kore, Puck..."></div>
+      <div class="form-group" id="capcut-voice-group" style="display:none"><label>CapCut Voice ID</label><input id="cfg-capcut_voice" list="capcut-voices" value="BV074_streaming" placeholder="BV074_streaming"><datalist id="capcut-voices"><optgroup label="Giọng Mới / Hot (CapCut)"><option value="BV561_streaming">Duy Bắc (Nam)</option><option value="BV563_streaming">Hà Nữ (Nữ)</option><option value="BV564_streaming">Sài Nữ (Nữ)</option><option value="BV560_streaming">Anh Dũng (Nam)</option><option value="BV562_streaming">Chí Mai (Nữ)</option><option value="BV075_streaming">Giọng nam tự tin</option><option value="BV074_streaming">Cô Gái Hoạt Ngôn (Cute Female)</option></optgroup><optgroup label="Giọng Cơ Bản"><option value="BV016_streaming">Giọng nữ phổ thông</option><option value="BV011_streaming">Nam Trầm (Kể chuyện)</option><option value="BV012_streaming">Nam Thanh Niên</option></optgroup></datalist></div>
+      <div class="form-group" id="vieneu-mode-group" style="display:none">
+        <label>VieNeu Mode</label>
+        <select id="cfg-vieneu_mode" onchange="toggleTtsOptions()">
+          <option value="preset">Preset Voice (Mẫu có sẵn)</option>
+          <option value="clone">Voice Clone (Giọng clone từ file)</option>
+        </select>
+      </div>
+      <div class="form-group" id="vieneu-voice-group" style="display:none">
+        <label>VieNeu Preset Voice</label>
+        <select id="cfg-vieneu_voice">
+          <option value="Ngoc" selected>Ngoc (Nu mien Bac)</option>
+          <option value="Ly">Ly (Nu mien Bac)</option>
+          <option value="Doan">Doan (Nu mien Nam)</option>
+          <option value="Tuyen">Tuyen (Nam mien Bac)</option>
+          <option value="Vinh">Vinh (Nam mien Nam)</option>
+          <option value="Binh">Binh (Nam mien Bac)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Demucs Model</label><select id="cfg-demucs_model"><option selected>htdemucs</option><option>htdemucs_ft</option></select></div>
+      <div class="form-group" id="vieneu-ref-group" style="display:none"><label>VieNeu Reference Voice (WAV/MP3, 5-10s)</label><input id="cfg-vieneu_ref_voice" value="sample.WAV" placeholder="sample.WAV"></div>
+      <div class="form-group" id="xtts-ref-group" style="display:none"><label>🔊 XTTS Reference Voice (WAV/MP3, 5-30s — for voice clone)</label><input id="cfg-xtts_ref_voice" value="sample.WAV" placeholder="sample.WAV"></div>
+      <div class="form-group"><label>🎚️ TTS Speed (0.5 - 2.5x)</label><input id="cfg-tts_speed" type="number" min="0.5" max="2.5" step="0.05" value="1.00" placeholder="1.00"></div>
+      <div class="form-group"><label>🎵 TTS Pitch / Cao độ (0.7 - 1.5x)</label><input id="cfg-tts_pitch" type="number" min="0.7" max="1.5" step="0.05" value="1.00" placeholder="1.00"></div>
+      <div class="form-group"><label>🔊 TTS Volume / Âm lượng (0.2 - 3.0x)</label><input id="cfg-tts_volume" type="number" min="0.2" max="3.0" step="0.05" value="1.00" placeholder="1.00"></div>
+      <div class="form-group" style="display:flex;align-items:flex-end">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="cfg-auto_adjust_tts_speed">
+          Auto adjust speed to fit SRT slot (old behavior)
+        </label>
+      </div>
+      <div class="form-group" id="tts-test-group" style="margin-top:8px">
+        <button id="btn-test-tts" onclick="testTts()" class="btn btn-accent" style="background:linear-gradient(135deg,#7289DA,#FF69B4);font-weight:600">
+          🔊 Test TTS Voice
+        </button>
+        <span id="tts-test-status" style="margin-left:12px;font-size:.85rem;color:var(--text-dim)"></span>
+        <audio id="tts-test-audio" controls style="margin-left:12px;height:32px;vertical-align:middle;display:none"></audio>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:12px">
+      <label>🔑 Extra API Keys (for TTS/Translation rotation — one key per line)</label>
+      <textarea id="cfg-api_keys" rows="3" placeholder="AIzaSy...key2&#10;AIzaSy...key3&#10;AIzaSy...key4" style="font-family:monospace;font-size:.8rem"></textarea>
+      <p style="font-size:.72rem;color:var(--text-dim);margin-top:4px">Add multiple free Gemini API keys to avoid rate limits. Keys rotate automatically when one hits 429.</p>
+    </div>
+  </div>
+
+  <div class="card" style="border:1px solid rgba(255,127,0,0.25);background:rgba(255,127,0,0.04)">
+    <h2><span>🛡</span> Douyin WARP Proxy <span id="warp-status-badge" class="badge" style="font-size:.7rem;margin-left:8px">OFF</span></h2>
+    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:14px">
+      Route <strong>chỉ</strong> Douyin traffic qua Cloudflare WARP (SOCKS5) — phần còn lại của máy không bị ảnh hưởng.<br>
+      <span style="font-size:.75rem;opacity:.7">Setup: Mở WARP app → Settings → Advanced → bật <em>"WARP as local proxy"</em> (miễn phí)</span>
+    </p>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+      <label class="warp-toggle" title="Bật/tắt WARP proxy cho Douyin">
+        <input type="checkbox" id="cfg-douyin_warp_enabled" onchange="onWarpToggle(this)">
+        <span class="warp-slider"></span>
+      </label>
+      <span id="warp-label" style="font-size:.88rem;font-weight:600;color:var(--text-dim)">Tắt</span>
+    </div>
+    <div class="form-group" style="max-width:380px">
+      <label>SOCKS5 Proxy URL <span style="font-size:.72rem;opacity:.6">(mặc định: socks5://127.0.0.1:40000)</span></label>
+      <div style="display:flex;gap:8px">
+        <input id="cfg-douyin_warp_proxy" placeholder="socks5://127.0.0.1:40000" style="flex:1;font-family:monospace;font-size:.85rem">
+        <button class="btn btn-outline btn-sm" onclick="testWarpProxy()" style="white-space:nowrap">🔌 Test</button>
+      </div>
+      <div id="warp-test-result" style="margin-top:6px;font-size:.78rem"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span>🎬</span> Render Settings</h2>
+    <div class="grid-3">
+      <div class="form-group">
+        <label>FFmpeg Video Encoder</label>
+        <select id="cfg-ffmpeg_encoder">
+          <option value="h264_nvenc" selected>GPU - h264_nvenc (NVIDIA)</option>
+          <option value="libx264">CPU - libx264</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Blur Sigma</label><input id="cfg-blur_sigma" type="number" value="20"></div>
+      <div class="form-group"><label>Mask Height (px)</label><input id="cfg-mask_h" type="number" value="100"></div>
+      <div class="form-group"><label>Mask Y Position (%)</label><input id="cfg-mask_y_pct" type="number" step="0.1" value="83.5"></div>
+      <div class="form-group"><label>Font Name</label><input id="cfg-font_name" value="UTM_Bebas.ttf"></div>
+      <div class="form-group"><label>Font Size</label><input id="cfg-font_size" type="number" value="28"></div>
+      <div class="form-group"><label>Margin V</label><input id="cfg-margin_v" type="number" value="16"></div>
+      <div class="form-group"><label>Rotate (°)</label><input id="cfg-rotate_deg" type="number" step="0.1" value="0.5"></div>
+      <div class="form-group"><label>Privacy</label><select id="cfg-privacy"><option>public</option><option>unlisted</option><option>private</option></select></div>
+      <div class="form-group"><label>Projects Dir</label><input id="cfg-projects_dir" value="D:/anti-sub-projects"></div>
+    </div>
+    <div style="display:flex;gap:20px;margin-top:8px">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-mirror" checked> Mirror (flip)</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-use_intro"> Use Intro</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-auto_upload"> Auto Upload</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-auto_upload_tiktok"> Auto Upload TikTok</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cfg-auto_upload_facebook_reels"> Auto Upload Facebook</label>
+    </div>
+    <div class="grid-3" style="margin-top:10px">
+      <div class="form-group"><label>TikTok Max Minutes / Part</label><input id="cfg-tiktok_max_minutes" type="number" min="1" max="60" value="10"></div>
+      <div class="form-group"><label>TikTok Caption Max Chars</label><input id="cfg-tiktok_caption_max_chars" type="number" min="60" max="255" value="255"></div>
+      <div class="form-group"><label>TikTok Upload Timeout (sec)</label><input id="cfg-tiktok_upload_timeout_sec" type="number" min="60" max="1800" value="240"></div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="cfg-tiktok_auto_split" checked>
+          TikTok Auto Split
+        </label>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="cfg-tiktok_headless">
+          TikTok Headless Upload
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span>📂</span> Upload Assets</h2>
+    <div class="grid-2">
+      <div class="form-group">
+        <label>Intro Video</label>
+        <input type="file" id="intro-file" accept="video/*">
+        <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="uploadIntro()">Upload Intro</button>
+      </div>
+      <div class="form-group">
+        <label>Custom Font (.ttf/.otf)</label>
+        <input type="file" id="font-file" accept=".ttf,.otf">
+        <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="uploadFont()">Upload Font</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-group">
+    <button class="btn btn-primary" onclick="saveConfig()">💾 Save Settings</button>
+    <button class="btn btn-outline" onclick="loadConfig()">🔄 Reload</button>
+  </div>
+</div>
+
+</div><!-- .app -->
+
+<!-- ═══ DEMO OAUTH MODAL ═══ -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif !important; }
+
+@keyframes modalSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+#demo-oauth-modal.hidden {
+  display: none !important;
+}
+</style>
+<div id="demo-oauth-modal" class="modal-overlay hidden" style="z-index: 10000; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+  <div class="modal-content" style="max-width: 480px; width: 90%; background: rgba(22, 22, 29, 0.95); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; box-shadow: 0 24px 64px rgba(0,0,0,0.75); padding: 30px; animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="display: inline-flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+        <span style="font-size: 2.8rem; filter: drop-shadow(0 4px 12px rgba(254,44,85,0.15));">🎬</span>
+        <span style="font-size: 1.6rem; color: rgba(255,255,255,0.3); font-weight: 300;">⇄</span>
+        <span style="font-size: 2.8rem; filter: drop-shadow(0 4px 12px rgba(37,244,238,0.15));">🎵</span>
+      </div>
+      <h2 style="font-size: 1.45rem; color: #fff; margin-bottom: 6px; font-weight: 700; letter-spacing: -0.02em;">Authorize MiuBon Pipeline</h2>
+      <p style="font-size: 0.88rem; color: var(--text-dim); line-height: 1.4;">The application requests authorization to connect your TikTok creator account.</p>
+    </div>
+    
+    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 12px; padding: 18px; margin-bottom: 24px;">
+      <h4 style="font-size: 0.92rem; color: #fff; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-weight: 600;">
+        <span style="font-size: 1rem;">📋</span> Requested Scopes:
+      </h4>
+      <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: var(--text-dim); display: flex; flex-direction: column; gap: 10px;">
+        <li style="display: flex; align-items: flex-start; gap: 10px;">
+          <span style="color: #00f5d4; font-weight: bold; margin-top: 1px;">✓</span>
+          <span><strong>video.upload:</strong> Upload video assets to TikTok servers (Content Posting API).</span>
+        </li>
+        <li style="display: flex; align-items: flex-start; gap: 10px;">
+          <span style="color: #00f5d4; font-weight: bold; margin-top: 1px;">✓</span>
+          <span><strong>video.publish:</strong> Complete the video sharing flow to your feed.</span>
+        </li>
+        <li style="display: flex; align-items: flex-start; gap: 10px;">
+          <span style="color: #00f5d4; font-weight: bold; margin-top: 1px;">✓</span>
+          <span><strong>user.info.basic:</strong> Read profile name and avatar for dashboard identification.</span>
+        </li>
+      </ul>
+    </div>
+    
+    <p style="font-size: 0.78rem; color: rgba(255,255,255,0.4); margin-bottom: 24px; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; text-align: center;">
+      🔒 Authorization occurs via secure simulated callback. No real credentials or sensitive data are stored.
+    </p>
+
+    <div class="modal-actions" style="display: flex; gap: 12px; justify-content: flex-end;">
+      <button class="btn btn-outline" onclick="closeDemoOAuthModal()" style="border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); background: transparent; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmDemoOAuth('tiktok')" style="background: linear-gradient(135deg, #fe2c55, #25f4ee); border: none; color: #000; font-weight: 700; padding: 10px 24px; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 15px rgba(254,44,85,0.25);">Authorize Account</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/app.js?v=1780136514"></script>
+
+</body>
+</html>
+
+
+
+

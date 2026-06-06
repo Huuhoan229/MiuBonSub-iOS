@@ -1,0 +1,60 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anti Sub - Terms of Service</title>
+  <style>
+    :root { --bg:#0b1020; --card:#111830; --text:#e9ecf6; --muted:#b9c0d4; --accent:#5fd3ff; }
+    body { margin:0; font-family:Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width:900px; margin:32px auto; padding:0 16px; }
+    .card { background:var(--card); border:1px solid #243055; border-radius:14px; padding:24px; }
+    h1,h2 { margin:0 0 12px; }
+    p,li { color:var(--muted); line-height:1.6; }
+    a { color:var(--accent); }
+    .meta { font-size:14px; color:#9aa5c3; margin-bottom:20px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Terms of Service</h1>
+      <div class="meta">App: Anti Sub | Effective date: May 18, 2026</div>
+
+      <p>These Terms of Service govern your use of Anti Sub ("Service"). By using this Service, you agree to these Terms.</p>
+
+      <h2>1. Service Description</h2>
+      <p>Anti Sub helps users process subtitles and upload videos to social platforms using authorized APIs, including TikTok integrations when enabled.</p>
+
+      <h2>2. User Authorization</h2>
+      <p>You are responsible for all actions performed through your connected accounts. You must only connect accounts that you own or are authorized to manage.</p>
+
+      <h2>3. User Content</h2>
+      <p>You retain ownership of your content. You are solely responsible for ensuring your uploaded content complies with applicable laws and platform policies.</p>
+
+      <h2>4. Acceptable Use</h2>
+      <ul>
+        <li>No unlawful, abusive, or infringing use.</li>
+        <li>No attempts to bypass platform restrictions, abuse rate limits, or perform unauthorized automation.</li>
+        <li>No use that violates TikTok Terms, Community Guidelines, or Content Posting rules.</li>
+      </ul>
+
+      <h2>5. Third-Party Services</h2>
+      <p>The Service may rely on third-party APIs and platforms (for example TikTok). Their availability, limits, and policies may change without notice and may affect functionality.</p>
+
+      <h2>6. Disclaimer</h2>
+      <p>The Service is provided "as is" without warranties of any kind. We do not guarantee uninterrupted operation, approval by third-party platforms, or specific posting outcomes.</p>
+
+      <h2>7. Limitation of Liability</h2>
+      <p>To the maximum extent allowed by law, we are not liable for indirect, incidental, or consequential damages resulting from use of the Service.</p>
+
+      <h2>8. Changes</h2>
+      <p>We may update these Terms from time to time. Continued use after changes means you accept the revised Terms.</p>
+
+      <h2>9. Contact</h2>
+      <p>For support, contact: <a href="mailto:hhoan.cv@gmail.com">hhoan.cv@gmail.com</a></p>
+    </div>
+  </div>
+</body>
+</html>
+
