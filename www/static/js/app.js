@@ -4706,6 +4706,28 @@ let watchLibraryData = null;
 let currentEpIndex = -1;
 let currentPlayableEps = [];
 
+function watchSeriesContext(ep) {
+  const meta = ep && (ep.metadata || ep.meta) ? (ep.metadata || ep.meta) : {};
+  return (ep && ep.series_context) || meta.series_context || {};
+}
+
+function watchParseEpisodeNo(text) {
+  const s = String(text || '');
+  const m = s.match(/(?:Tập|Tap|Ep|Episode|第)\s*(\d{1,5})/i);
+  return m ? Number(m[1]) : null;
+}
+
+function watchEpisodeNo(ep, fallbackIndex = 0) {
+  const meta = ep && (ep.metadata || ep.meta) ? (ep.metadata || ep.meta) : {};
+  const ctx = watchSeriesContext(ep);
+  const raw = (ep && (ep._ep_no || ep.episode_no || ep.episode || ep.ep || ep.episode_number)) ||
+    ctx.episode_no ||
+    meta.episode_no ||
+    watchParseEpisodeNo((ep && ep.title) || meta.title || meta.episode_tag || (ep && ep.douyin_meta && ep.douyin_meta.douyin_title));
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallbackIndex + 1;
+}
+
 async function loadWatchLibrary() {
   document.getElementById('watch-grid-view').classList.remove('hidden');
   document.getElementById('watch-player-view').classList.add('hidden');
@@ -4800,14 +4822,14 @@ function openSeriesPlayer(folder) {
   epGrid.innerHTML = '';
   document.getElementById('watch-search-ep').value = '';
 
-  let sortedEps = [...series.episodes].sort((a,b) => (a._ep_no || 0) - (b._ep_no || 0));
+  let sortedEps = [...series.episodes].sort((a,b) => watchEpisodeNo(a, 0) - watchEpisodeNo(b, 0));
   currentPlayableEps = sortedEps.filter(ep => ep.final_video);
 
   for (let i = 0; i < currentPlayableEps.length; i++) {
     let ep = currentPlayableEps[i];
     let btn = document.createElement('div');
     btn.className = 'watch-ep-btn ep-item-btn';
-    let epNum = ep._ep_no || '?';
+    let epNum = watchEpisodeNo(ep, i);
     btn.innerText = epNum;
     btn.setAttribute('data-index', i);
     btn.onclick = () => playEpisodeByIndex(i);
