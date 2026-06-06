@@ -34,7 +34,7 @@ function safeHtml(str) {
 }
 
 // ═══ DEMO & SANDBOX STATE MANAGEMENT ═══
-let isDemoMode = (window.location.hostname === 'huuhoan229.github.io' || 
+let isDemoMode = (window.location.hostname === 'huuhoan229.github.io' ||
                   window.location.hostname.includes('github.io') ||
                   new URLSearchParams(window.location.search).get('demo') === 'true');
 
@@ -45,7 +45,7 @@ function getMockState() {
   if (state) {
     try { return JSON.parse(state); } catch (e) {}
   }
-  
+
   // Default sandbox state
   const defaultState = {
     config: {
@@ -116,7 +116,7 @@ function getMockState() {
     ],
     jobs: {}
   };
-  
+
   localStorage.setItem(MOCK_STATE_KEY, JSON.stringify(defaultState));
   return defaultState;
 }
@@ -164,7 +164,7 @@ window.resetDemoModeData = resetDemoModeData;
 // Simulated API routing logic
 function mockApi(path, opts = {}) {
   const state = getMockState();
-  
+
   if (path === '/api/health') {
     return Promise.resolve({
       has_api_key: true,
@@ -174,7 +174,7 @@ function mockApi(path, opts = {}) {
       facebook: { configured: state.config.facebook_page_access_token ? true : false, ok: state.config.facebook_page_access_token ? true : false }
     });
   }
-  
+
   if (path === '/api/config') {
     if (opts.method === 'POST') {
       const payload = typeof opts.body === 'string' ? JSON.parse(opts.body) : (opts.body || {});
@@ -184,11 +184,11 @@ function mockApi(path, opts = {}) {
     }
     return Promise.resolve(state.config);
   }
-  
+
   if (path === '/api/projects') {
     return Promise.resolve({ projects: state.projects });
   }
-  
+
   if (path === '/api/tiktok/auth') {
     return Promise.resolve({
       playwright_ok: true,
@@ -197,7 +197,7 @@ function mockApi(path, opts = {}) {
       storage_age_min: 5
     });
   }
-  
+
   if (path === '/api/tiktok/api/status') {
     return Promise.resolve({
       ok: state.tiktok.connected,
@@ -212,13 +212,13 @@ function mockApi(path, opts = {}) {
       open_id: "mock_open_id_666"
     });
   }
-  
+
   if (path === '/api/tiktok/api/disconnect') {
     state.tiktok.connected = false;
     saveMockState(state);
     return Promise.resolve({ ok: true });
   }
-  
+
   if (path === '/api/tiktok/oauth/start') {
     setTimeout(() => {
       const modal = document.getElementById('demo-oauth-modal');
@@ -226,7 +226,7 @@ function mockApi(path, opts = {}) {
     }, 100);
     return Promise.resolve({ ok: true, auth_url: '#' });
   }
-  
+
   if (path === '/api/tiktok/upload/start') {
     const jobId = 'tk_upload_sim_' + Date.now();
     state.jobs[jobId] = {
@@ -238,14 +238,14 @@ function mockApi(path, opts = {}) {
     saveMockState(state);
     return Promise.resolve({ ok: true, job_id: jobId });
   }
-  
+
   if (path.startsWith('/api/tiktok/upload/')) {
     const jobId = path.split('/').pop();
     const job = state.jobs[jobId];
     if (!job) {
       return Promise.resolve({ status: 'error', error: 'Job not found' });
     }
-    
+
     if (job.status === 'running') {
       job.pct += 25;
       if (job.pct === 25) {
@@ -265,7 +265,7 @@ function mockApi(path, opts = {}) {
       state.jobs[jobId] = job;
       saveMockState(state);
     }
-    
+
     return Promise.resolve({
       status: job.status,
       progress: { pct: job.pct, message: job.pct === 100 ? 'Done' : 'Uploading...' },
@@ -287,7 +287,7 @@ function mockApi(path, opts = {}) {
       results: [{ part: 1, ok: true, status: 'dry_run_success' }]
     });
   }
-  
+
   if (path.startsWith('/api/facebook/reels/status')) {
     return Promise.resolve({
       ok: true,
@@ -301,7 +301,7 @@ function mockApi(path, opts = {}) {
       } : null
     });
   }
-  
+
   if (path === '/api/facebook/reels/fetch-pages-with-token') {
     return Promise.resolve({
       ok: true,
@@ -321,7 +321,7 @@ function mockApi(path, opts = {}) {
       long_lived_token: "mock_long_lived_user_token_abc"
     });
   }
-  
+
   if (path === '/api/facebook/reels/upload/start') {
     const jobId = 'fb_upload_sim_' + Date.now();
     state.jobs[jobId] = {
@@ -333,14 +333,14 @@ function mockApi(path, opts = {}) {
     saveMockState(state);
     return Promise.resolve({ ok: true, job_id: jobId });
   }
-  
+
   if (path.startsWith('/api/facebook/reels/upload/')) {
     const jobId = path.split('/').pop();
     const job = state.jobs[jobId];
     if (!job) {
       return Promise.resolve({ status: 'error', error: 'Job not found' });
     }
-    
+
     if (job.status === 'running') {
       job.pct += 25;
       if (job.pct === 25) {
@@ -360,7 +360,7 @@ function mockApi(path, opts = {}) {
       state.jobs[jobId] = job;
       saveMockState(state);
     }
-    
+
     return Promise.resolve({
       status: job.status,
       progress: { pct: job.pct, message: job.pct === 100 ? 'Done' : 'Uploading...' },
@@ -382,17 +382,49 @@ function mockApi(path, opts = {}) {
       results: [{ part: 1, ok: true, video_id: 'fb_reel_sim_4567', status: 'dry_run_success' }]
     });
   }
-  
+
   return Promise.resolve({ ok: true, message: 'Simulated response' });
 }
 
 // ── API Helpers ──
+
+let ytAccountsCache = [];
+
+function syncYtManagerKeyFromAccounts(accounts) {
+  const ytmgrKey = document.getElementById('ytmgr-key');
+  if (!ytmgrKey || !accounts?.length) return;
+  const current = (ytmgrKey.value || '').trim();
+  const currentAcc = accounts.find(acc => acc.key === current);
+  const currentUsable = currentAcc && currentAcc.ok && currentAcc.enabled !== false;
+  const firstUsable = accounts.find(acc => acc.ok && acc.enabled !== false) || accounts.find(acc => acc.ok) || accounts[0];
+  if ((!current || current === 'main' || !currentUsable) && firstUsable?.key) {
+    ytmgrKey.value = firstUsable.key;
+  }
+}
+
+async function ensureYtManagerKey() {
+  const el = document.getElementById('ytmgr-key');
+  if (!el) return 'main';
+  syncYtManagerKeyFromAccounts(ytAccountsCache);
+  let key = (el.value || '').trim();
+  const known = ytAccountsCache.some(acc => acc.key === key && acc.ok && acc.enabled !== false);
+  if (key && key !== 'main' && known) return key;
+  try {
+    const d = await api('/api/youtube/auth', { timeoutMs: 30000 });
+    ytAccountsCache = d.accounts || [];
+    syncYtManagerKeyFromAccounts(ytAccountsCache);
+  } catch (e) {
+    console.warn('Cannot refresh YouTube accounts:', e);
+  }
+  return (el.value || 'main').trim() || 'main';
+}
+
 async function api(path, opts = {}) {
   if (isDemoMode) {
     return mockApi(path, opts);
   }
-  
-  const { timeoutMs = 15000, ...fetchOpts } = opts;
+
+  const { timeoutMs = 45000, ...fetchOpts } = opts;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -403,17 +435,26 @@ async function api(path, opts = {}) {
       body: fetchOpts.body ? JSON.stringify(fetchOpts.body) : undefined
     });
     clearTimeout(timeout);
-    return await r.json();
+    const text = await r.text();
+    let data = {};
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        const preview = text.replace(/\s+/g, ' ').slice(0, 300);
+        throw new Error(`HTTP ${r.status}: backend returned non-JSON: ${preview}`);
+      }
+    }
+    if (!r.ok && !data.error) data.error = `HTTP ${r.status}`;
+    return data;
   } catch (e) {
     clearTimeout(timeout);
-    if (!isDemoMode && (e.name === 'TypeError' || e.message?.includes('fetch') || e.name === 'AbortError')) {
-      console.warn("API request failed. Enabling Sandbox / Demo mode automatically.", e);
-      isDemoMode = true;
-      updateDemoBanner();
-      return mockApi(path, opts);
-    }
     if (e.name === 'AbortError') {
       throw new Error(`Timeout - server khong phan hoi sau ${Math.round(timeoutMs / 1000)} giay`);
+    }
+    if (!isDemoMode && (e.name === 'TypeError' || e.message?.includes('fetch'))) {
+      console.warn("API request failed. Staying in live mode instead of switching to Sandbox.", e);
+      throw new Error('Khong ket noi duoc backend/tunnel. Thu reload sau vai giay, khong can Reset Sandbox.');
     }
     throw e;
   }
@@ -435,7 +476,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('hidden', c.id !== `tab-${tab}`));
   if (tab === 'projects') loadProjects();
     if (tab === 'series') loadSeriesLibrary();
-  if (tab === 'auth') checkHealth();
+  if (tab === 'auth') { checkHealth(); checkGDriveStatus(); }
   if (tab === 'ytmanager') { checkHealth(); loadYoutubeWatchdogState(); loadYoutubeVideos(); }
   if (tab === 'tiktok') { loadTikTokStatus(); loadTikTokProjects(); loadTikTokQuickConfig(); }
   if (tab === 'facebook') { loadFacebookReelsStatus(); loadFacebookReelsProjects(); loadFacebookQuickConfig(); }
@@ -454,7 +495,7 @@ function switchTab(tab) {
       runningItemLogTimer = null;
     }
   }
-  
+
   if (tab === 'ytqueue') {
     loadYTQueue();
     if (typeof ytQueuePollTimer !== 'undefined' && !ytQueuePollTimer) ytQueuePollTimer = setInterval(loadYTQueue, 5000);
@@ -468,7 +509,7 @@ function switchTab(tab) {
 // ── Health Check ──
 async function checkHealth() {
   try {
-    const d = await api('/api/health');
+    const d = await api('/api/health', { timeoutMs: 45000 });
     const el = document.getElementById('health-status');
     el.innerHTML = `
       <div class="status-row"><span class="status-dot ${d.test_9router ? 'yellow' : 'red'}" id="status-9router-dot"></span>9Router API: <span id="status-9router-text">${d.test_9router ? 'Checking...' : 'Disabled'}</span></div>
@@ -531,18 +572,10 @@ async function checkHealth() {
       badge.textContent = `${d.youtube.enabled_count || 0} kênh bật`;
     }
 
-    // YT Manager should use the active channel key, not hardcoded `main`.
-    // This prevents "Token not found for channel [main]" when the real channel is `mbv`.
-    const ytmgrKey = document.getElementById('ytmgr-key');
-    if (ytmgrKey && d.youtube?.accounts?.length) {
-      const accounts = d.youtube.accounts || [];
-      const current = (ytmgrKey.value || '').trim();
-      const currentAcc = accounts.find(acc => acc.key === current);
-      const currentUsable = currentAcc && currentAcc.ok && currentAcc.enabled !== false;
-      const firstUsable = accounts.find(acc => acc.ok && acc.enabled !== false) || accounts.find(acc => acc.ok) || accounts[0];
-      if ((!current || current === 'main') && !currentUsable && firstUsable?.key) {
-        ytmgrKey.value = firstUsable.key;
-      }
+    // YT Manager should use an existing enabled channel key, not hardcoded `main`.
+    if (d.youtube?.accounts?.length) {
+      ytAccountsCache = d.youtube.accounts || [];
+      syncYtManagerKeyFromAccounts(ytAccountsCache);
     }
 
     // Restore active jobs/queues if page reloaded
@@ -551,7 +584,7 @@ async function checkHealth() {
       const activeQueues = [];
       let activeQueueId = null;
       let activePipelineId = null;
-      
+
       for (const jid of jobIds) {
         if (d.active_jobs[jid].queue) {
           const q = d.active_jobs[jid].queue || {};
@@ -693,9 +726,10 @@ function renderActiveQueues(queues) {
     const series = q.series_counts && Object.keys(q.series_counts).length
       ? Object.entries(q.series_counts).slice(0, 4).map(([name, n]) => `${safeHtml(name)}:${n}`).join(' | ')
       : 'No series context';
+    const skipAction = `<button class="btn btn-outline btn-sm" onclick="skipPipelineQueueItem('${q.id}')">Bỏ qua URL</button>`;
     const action = q.status === 'paused'
-      ? `<button class="btn btn-primary btn-sm" onclick="resumePipelineQueue('${q.id}')">▶ Resume</button> <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">✖ Hủy Queue</button>`
-      : `<button class="btn btn-outline btn-sm" onclick="pauseQueue('${q.id}')">⏸ Pause</button> <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">✖ Hủy Queue</button>`;
+      ? `<button class="btn btn-primary btn-sm" onclick="resumePipelineQueue('${q.id}')">&#9654; Resume</button> ${skipAction} <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">&#10006; Hủy Queue</button>`
+      : `<button class="btn btn-outline btn-sm" onclick="pauseQueue('${q.id}')">&#9208; Pause</button> ${skipAction} <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">&#10006; Hủy Queue</button>`;
     return `
       <div class="queue-item active-queue-row ${q.id === selectedQueueId ? 'active' : ''}">
         <span class="queue-idx">${safeHtml(q.id)}</span>
@@ -755,6 +789,18 @@ async function resumePipelineQueue(queueId) {
     await refreshActiveQueues();
     if (selectedQueueId === queueId) await showQueueDetails(queueId, false);
   } catch (e) { toast('Resume failed: ' + e.message, 'error'); }
+}
+
+async function skipPipelineQueueItem(queueId) {
+  if (!confirm('Bỏ qua item đang chờ/đang chờ upload tiếp theo trong queue này? Job đang render/dịch sẽ không bị cắt ngang.')) return;
+  try {
+    const d = await api(`/api/pipeline/queue/${queueId}/skip`, { method: 'POST' });
+    if (d.error) return toast(d.error, 'error');
+    toast(`Skipped URL #${Number(d.skipped_index || 0) + 1}`);
+    await refreshActiveQueues();
+    if (selectedQueueId === queueId) await showQueueDetails(queueId, false);
+    if (typeof loadRunningTab === 'function') await loadRunningTab();
+  } catch (e) { toast('Skip failed: ' + e.message, 'error'); }
 }
 
 async function showQueueDetails(queueId, switchToPipeline = true) {
@@ -1265,6 +1311,7 @@ async function loadProjects() {
     }
     el.innerHTML = filtered.map((p, idx) => {
       const pname = p.project_name || 'Unknown';
+      const aiTitle = (p.metadata || {}).title || '';
       const stepsArr = p.steps_completed || [];
       const pct = Math.round(stepsArr.length / ALL_STEPS.length * 100);
       const complete = isProjectComplete(p);
@@ -1275,11 +1322,15 @@ async function loadProjects() {
         <label class="project-checkbox" onclick="event.stopPropagation()">
           <input type="checkbox" class="project-cb" data-project="${pname}" onchange="updateProjectsSelectedCount()" />
         </label>` : '';
+      const titleHtml = aiTitle
+        ? `<h3 title="${aiTitle.replace(/"/g, '&quot;')}">🎬 ${aiTitle.length > 60 ? aiTitle.substring(0, 57) + '...' : aiTitle}</h3>
+           <p style="margin:2px 0 0;font-size:.72rem;color:var(--text-dim);opacity:.8">📁 ${pname}</p>`
+        : `<h3>📁 ${pname}</h3>`;
       return `
       <div class="project-card ${complete ? 'project-complete' : 'project-incomplete'}" onclick="openProjectDetail('${pname}')">
         <div class="project-card-header">
           ${checkboxHtml}
-          <h3>📁 ${pname}</h3>
+          <div style="flex:1;min-width:0">${titleHtml}</div>
           ${statusBadge}
         </div>
         <p>Created: ${p.created_at || 'N/A'}</p>
@@ -1301,13 +1352,13 @@ function updateProjectsSelectedCount() {
   const cbs = document.querySelectorAll('.project-cb');
   let count = 0;
   cbs.forEach(cb => { if (cb.checked) count++; });
-  
+
   const infoEl = document.getElementById('projects-selected-info');
   const countEl = document.getElementById('batch-resume-count');
   const deleteCountEl = document.getElementById('batch-delete-count');
   const btnResume = document.getElementById('btn-batch-resume');
   const btnDelete = document.getElementById('btn-batch-delete');
-  
+
   if (infoEl) infoEl.textContent = `${count} đã chọn`;
   if (countEl) countEl.textContent = count;
   if (deleteCountEl) deleteCountEl.textContent = count;
@@ -1374,12 +1425,12 @@ async function batchDeleteProjects() {
       body: { projects: selected }
     });
     if (d.error) { toast(d.error, 'error'); return; }
-    
+
     toast(`Đã xoá ${d.deleted.length} project thành công.`);
     if (d.errors?.length) {
       toast(`Có ${d.errors.length} lỗi khi xoá.`, 'error');
     }
-    
+
     // Clear selection and refresh
     const selectAllCb = document.getElementById('projects-select-all-cb');
     if (selectAllCb) selectAllCb.checked = false;
@@ -1394,12 +1445,12 @@ async function scanDuplicates() {
   try {
     const d = await api('/api/projects/duplicates');
     if (d.error) { toast(d.error, 'error'); return; }
-    
+
     if (!d.duplicates || !d.duplicates.length) {
       toast('Không tìm thấy project nào bị trùng URL.');
       return;
     }
-    
+
     // Render duplicates modal
     const list = document.getElementById('duplicates-list');
     list.innerHTML = d.duplicates.map((group, gIdx) => {
@@ -1426,7 +1477,7 @@ async function scanDuplicates() {
         </div>
       </div>`;
     }).join('');
-    
+
     document.getElementById('duplicates-modal').classList.remove('hidden');
   } catch (e) { toast('Error: ' + e.message, 'error'); }
   btn.disabled = false;
@@ -1442,20 +1493,20 @@ async function deleteSelectedDuplicates() {
   document.querySelectorAll('.dup-cb:checked').forEach(cb => {
     selected.push(cb.dataset.project);
   });
-  
+
   if (!selected.length) return toast('Chọn ít nhất 1 project để xoá', 'error');
   if (!confirm(`Xoá vĩnh viễn ${selected.length} project đã chọn?`)) return;
-  
+
   const btn = document.getElementById('btn-delete-duplicates');
   btn.disabled = true;
   btn.textContent = '⏳ Đang xoá...';
-  
+
   try {
     const d = await api('/api/projects/bulk-delete', {
       method: 'POST',
       body: { projects: selected }
     });
-    
+
     if (d.error) { toast(d.error, 'error'); }
     else {
       toast(`Đã xoá ${d.deleted.length} project.`);
@@ -1463,7 +1514,7 @@ async function deleteSelectedDuplicates() {
       loadProjects();
     }
   } catch (e) { toast('Error: ' + e.message, 'error'); }
-  
+
   btn.disabled = false;
   btn.textContent = '🗑 Xoá các mục đã chọn';
 }
@@ -1522,6 +1573,10 @@ async function openProjectDetail(projectName) {
       btnQueue.textContent = inQueue ? '✅ In Queue' : '➕ Add to Queue';
     }
 
+    // Show/hide watch video button
+    const hasVideo = d.files.some(f => f.type === 'video');
+    document.getElementById('btn-watch-video').style.display = hasVideo ? '' : 'none';
+
     // Show modal
     document.getElementById('project-modal').classList.remove('hidden');
   } catch (e) {
@@ -1531,6 +1586,13 @@ async function openProjectDetail(projectName) {
 
 function closeProjectModal() {
   document.getElementById('project-modal').classList.add('hidden');
+}
+
+function watchProjectVideo() {
+  if (!currentProjectName) return;
+  // Assume final_video.mp4 is the main output. If not, open any video.
+  const url = `/api/project/${currentProjectName}/stream/final_video.mp4`;
+  window.open(url, '_blank');
 }
 
 async function resumeProject() {
@@ -1759,8 +1821,9 @@ async function loadConfig() {
       'tts_engine','tts_voice','vieneu_voice','vieneu_mode','vieneu_ref_voice','xtts_ref_voice','capcut_voice','tts_speed','tts_pitch','tts_volume','demucs_model',
       'tiktok_max_minutes','tiktok_caption_max_chars','tiktok_upload_timeout_sec',
       'blur_sigma','mask_h','mask_y_pct',
+      'thumbnail_mode','ai_thumbnail_provider','ai_thumbnail_model','ai_thumbnail_timeout_sec','ai_thumbnail_style','ai_thumbnail_api_key','ai_thumbnail_cloudflare_account_id','ai_thumbnail_cloudflare_api_token','ai_thumbnail_cloudflare_mode','ai_thumbnail_img2img_strength','ai_thumbnail_steps',
       'font_name','font_size','margin_v','rotate_deg','projects_dir','privacy',
-      'douyin_warp_proxy'];
+      'douyin_warp_proxy', 'batch_pipeline_concurrency', 'download_concurrency', 'gpu_heavy_concurrency', 'pipeline_retry_max'];
     fields.forEach(f => {
       const el = document.getElementById('cfg-' + f);
       if (el) {
@@ -1774,12 +1837,18 @@ async function loadConfig() {
           el.value = '90';
         } else if (f === 'facebook_reels_auto_split' && typeof d[f] === 'boolean') {
           el.value = d[f] ? 'true' : 'false';
+        } else if (f === 'ai_thumbnail_api_key') {
+          el.value = '';
+          el.placeholder = d.ai_thumbnail_api_key_masked ? `Saved: ${d.ai_thumbnail_api_key_masked}` : 'Leave blank to keep saved key';
+        } else if (f === 'ai_thumbnail_cloudflare_api_token') {
+          el.value = '';
+          el.placeholder = d.ai_thumbnail_cloudflare_api_token_masked ? `Saved: ${d.ai_thumbnail_cloudflare_api_token_masked}` : 'Leave blank to keep saved token';
         } else {
           el.value = d[f] ?? '';
         }
       }
     });
-    const cb = ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless'];
+    const cb = ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless','upload_fifo_strict','pipeline_skip_after_retry_exhausted'];
     cb.forEach(f => {
       const el = document.getElementById('cfg-' + f);
       if (el) el.checked = !!d[f];
@@ -1815,19 +1884,22 @@ async function saveConfig() {
     'tts_engine','tts_voice','vieneu_voice','vieneu_mode','vieneu_ref_voice','xtts_ref_voice','capcut_voice','tts_speed','tts_pitch','tts_volume','demucs_model',
     'tiktok_max_minutes','tiktok_caption_max_chars','tiktok_upload_timeout_sec',
     'ffmpeg_encoder','blur_sigma','mask_h','mask_y_pct',
+    'thumbnail_mode','ai_thumbnail_provider','ai_thumbnail_model','ai_thumbnail_timeout_sec','ai_thumbnail_style','ai_thumbnail_api_key','ai_thumbnail_cloudflare_account_id','ai_thumbnail_cloudflare_api_token','ai_thumbnail_cloudflare_mode','ai_thumbnail_img2img_strength','ai_thumbnail_steps',
     'font_name','font_size','margin_v','rotate_deg','projects_dir','privacy',
-    'douyin_warp_proxy'];
+    'douyin_warp_proxy', 'batch_pipeline_concurrency', 'download_concurrency', 'gpu_heavy_concurrency', 'pipeline_retry_max'];
   const cfg = {};
   fields.forEach(f => {
     const el = document.getElementById('cfg-' + f);
     if (el) {
       const v = el.value;
-      cfg[f] = ['blur_sigma','mask_h','font_size','margin_v','local_translation_timeout','ninerouter_timeout','tiktok_max_minutes','tiktok_caption_max_chars','tiktok_upload_timeout_sec','tiktok_api_poll_timeout_sec','tiktok_api_poll_interval_sec','facebook_reels_poll_timeout_sec','facebook_reels_poll_interval_sec','facebook_reels_request_timeout_sec','facebook_reels_short_threshold_sec','facebook_reels_max_minutes'].includes(f) ? parseInt(v) || 0
-        : ['mask_y_pct','rotate_deg','tts_speed','tts_pitch','tts_volume'].includes(f) ? parseFloat(v) || 0 : v;
+      if (f === 'ai_thumbnail_api_key' && !String(v || '').trim()) return;
+      if (f === 'ai_thumbnail_cloudflare_api_token' && !String(v || '').trim()) return;
+      cfg[f] = ['blur_sigma','mask_h','font_size','margin_v','local_translation_timeout','ninerouter_timeout','tiktok_max_minutes','tiktok_caption_max_chars','tiktok_upload_timeout_sec','tiktok_api_poll_timeout_sec','tiktok_api_poll_interval_sec','facebook_reels_poll_timeout_sec','facebook_reels_poll_interval_sec','facebook_reels_request_timeout_sec','facebook_reels_short_threshold_sec','facebook_reels_max_minutes', 'batch_pipeline_concurrency', 'download_concurrency', 'gpu_heavy_concurrency', 'pipeline_retry_max','ai_thumbnail_timeout_sec','ai_thumbnail_steps'].includes(f) ? parseInt(v) || 0
+        : ['mask_y_pct','rotate_deg','tts_speed','tts_pitch','tts_volume','ai_thumbnail_img2img_strength'].includes(f) ? parseFloat(v) || 0 : v;
       if (f === 'facebook_reels_auto_split') cfg[f] = String(v) === 'true';
     }
   });
-  ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless'].forEach(f => {
+  ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless','upload_fifo_strict','pipeline_skip_after_retry_exhausted'].forEach(f => {
     const el = document.getElementById('cfg-' + f);
     if (el) cfg[f] = el.checked;
   });
@@ -1846,13 +1918,13 @@ async function saveConfig() {
 function toggleTtsOptions() {
   const engine = document.getElementById('cfg-tts_engine')?.value || 'gemini';
   const mode = document.getElementById('cfg-vieneu_mode')?.value || 'preset';
-  
+
   const vieneuModeGroup = document.getElementById('vieneu-mode-group');
   const vieneuVoiceGroup = document.getElementById('vieneu-voice-group');
   const vnRef = document.getElementById('vieneu-ref-group');
   const xttsRef = document.getElementById('xtts-ref-group');
   const capcutGroup = document.getElementById('capcut-voice-group');
-  
+
   if (vieneuModeGroup) vieneuModeGroup.style.display = engine === 'vieneu' ? '' : 'none';
   if (vieneuVoiceGroup) vieneuVoiceGroup.style.display = (engine === 'vieneu' && mode === 'preset') ? '' : 'none';
   if (vnRef) vnRef.style.display = (engine === 'vieneu' && mode === 'clone') ? '' : 'none';
@@ -1867,7 +1939,7 @@ function _updateWarpUI(enabled) {
     const fLabel = document.getElementById('floating-warp-label');
     const fToggle = document.getElementById('floating-warp-toggle');
     const mToggle = document.getElementById('cfg-douyin_warp_enabled');
-    
+
     if (badge) {
       badge.textContent = enabled ? 'Bật' : 'Tắt';
       badge.style.background = enabled ? 'rgba(255,127,0,.2)' : 'rgba(136,136,168,.12)';
@@ -1985,6 +2057,120 @@ async function checkADC() {
 
 // ── Douyin Login ──
 
+async function checkGDriveStatus() {
+  const el = document.getElementById('gdrive-status');
+  if (el) el.textContent = 'Google Drive: checking...';
+  try {
+    const d = await api('/api/gdrive/status');
+    if (d.authenticated) {
+      if (el) el.textContent = 'Google Drive: connected';
+      return true;
+    }
+    if (el) el.textContent = `Google Drive: not connected (${d.reason || 'need login'})`;
+    return false;
+  } catch (e) {
+    if (el) el.textContent = 'Google Drive: backend route not available. Restart server after current queue finishes.';
+    return false;
+  }
+}
+
+
+function gdriveLogin() {
+  window.open(`${API}/api/gdrive/login`, '_blank');
+  toast('Opened Google Drive login. After consent, click Check Drive.');
+}
+
+function pollGDriveJob(jobId, onDone, statusEl) {
+  let ticks = 0;
+  const timer = setInterval(async () => {
+    ticks += 1;
+    try {
+      const job = await api(`/api/gdrive/job/${jobId}`, { timeoutMs: 10000 });
+      if (!job.ok) throw new Error(job.error || 'job not found');
+      if (statusEl) statusEl.textContent = `Google Drive ${job.kind}: ${job.status} - ${job.message || ''}`;
+      if (job.status === 'done') {
+        clearInterval(timer);
+        onDone?.(job.result, job);
+      } else if (job.status === 'error') {
+        clearInterval(timer);
+        toast(job.error || 'Google Drive job failed', 'error');
+        if (statusEl) statusEl.textContent = `Google Drive error: ${job.error || 'unknown error'}`;
+      }
+      if (ticks > 1800) {
+        clearInterval(timer);
+        if (statusEl) statusEl.textContent = 'Google Drive job still running in background. Refresh status later.';
+      }
+    } catch (e) {
+      clearInterval(timer);
+      toast('Google Drive job status error: ' + e.message, 'error');
+      if (statusEl) statusEl.textContent = 'Google Drive job status error: ' + e.message;
+    }
+  }, 2000);
+}
+
+async function syncProjectsFromGDrive() {
+  const el = document.getElementById('gdrive-sync-status');
+  if (el) el.textContent = 'Starting Google Drive sync...';
+  try {
+    const d = await api('/api/gdrive/sync_projects', {
+      method: 'POST',
+      body: { overwrite: false },
+      timeoutMs: 15000
+    });
+    if (!d.ok) {
+      if (el) el.textContent = 'Sync failed: ' + (d.error || 'unknown error');
+      toast(d.error || 'Google Drive sync failed', 'error');
+      return;
+    }
+    if (el) el.textContent = `Google Drive sync started: ${d.job_id}`;
+    pollGDriveJob(d.job_id, (payload) => {
+      const r = payload?.result || {};
+      const msg = `Drive sync done: ${r.synced?.length || 0} synced, ${r.skipped?.length || 0} skipped, ${r.errors?.length || 0} errors.`;
+      if (el) el.textContent = msg;
+      toast(msg);
+      if (typeof loadProjects === 'function') loadProjects();
+    }, el);
+  } catch (e) {
+    if (el) el.textContent = 'Sync start error: ' + e.message;
+    toast('Google Drive sync start error: ' + e.message, 'error');
+  }
+}
+
+async function uploadProjectGDrive() {
+  if (!currentProjectName) return;
+  const btn = document.getElementById('btn-gdrive-upload');
+  const oldText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Starting Drive job...';
+  }
+  try {
+    const d = await api(`/api/project/${currentProjectName}/upload_gdrive`, {
+      method: 'POST',
+      timeoutMs: 15000
+    });
+    if (!d.ok) {
+      toast(d.error || 'Google Drive upload failed', 'error');
+      return;
+    }
+    toast(`Google Drive upload started: ${d.job_id}`);
+    pollGDriveJob(d.job_id, (payload) => {
+      const result = payload?.result || {};
+      const uploaded = result.uploaded?.length ?? result.result?.uploaded?.length ?? 0;
+      const skipped = result.skipped?.length ?? result.result?.skipped?.length ?? 0;
+      toast(`Google Drive uploaded ${uploaded} files, skipped ${skipped}`);
+      if (btn) btn.textContent = oldText || 'Upload Drive';
+    });
+  } catch (e) {
+    toast('Google Drive upload start error: ' + e.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = oldText || 'Upload Drive';
+    }
+  }
+}
+
 async function testTranslationApi() {
   const btn = document.getElementById('btn-test-translation');
   const statusEl = document.getElementById('translation-test-status');
@@ -2017,10 +2203,12 @@ async function testTranslationApi() {
   try {
     const d = await api('/api/translation/test', { method: 'POST', body: payload });
     if (d.ok) {
-      const model = d.model ? ` | model: ${d.model}` : '';
-      const sample = d.sample_output ? `<br><span style="color:var(--text-dim)">Sample: ${d.sample_output}</span>` : '';
+      const isComboAlias = d.provider === '9router' && d.model === 'a';
+      const modelLabel = isComboAlias ? 'combo alias' : 'model th\u1eadt';
+      const model = d.model ? ` | ${modelLabel}: ${d.model}${isComboAlias ? ' - restart backend \u0111\u1ec3 l\u1ea5y model th\u1eadt' : ''}` : '';
+      const sample = d.sample_output ? `<br><span style="color:var(--text-dim)">Output: ${d.sample_output}</span>` : '';
       statusEl.innerHTML = `<span style="color:#4ade80">\u2705 OK: ${d.provider}${model} (${d.latency_ms}ms)</span>${sample}`;
-      toast(`Translation API OK: ${d.provider}`);
+      toast(`Translation API OK: ${d.provider}${d.model ? ' | ' + d.model : ''}`);
     } else {
       const attempts = Array.isArray(d.attempts) && d.attempts.length
         ? d.attempts.map(a => `${a.provider}: ${a.error}`).join(' | ')
@@ -2066,7 +2254,7 @@ async function addYoutubeChannel() {
       toast('Đã thêm kênh mới!');
       document.getElementById('yt-new-name').value = '';
       checkHealth();
-    } else toast(d.error || 'Lỗi', 'error');
+    } else toast(d.error || 'L?i', 'error');
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -2076,7 +2264,7 @@ async function toggleYtChannel(key, enabled) {
     if (d.ok) {
       toast(`Kênh [${key}]: ${enabled ? 'BẬT ✅' : 'TẮT ⚫'}`);
       checkHealth();
-    } else toast(d.error || 'Lỗi', 'error');
+    } else toast(d.error || 'L?i', 'error');
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -2085,7 +2273,7 @@ async function removeYtChannel(key) {
   try {
     const d = await api('/api/youtube/logout', { method: 'POST', body: { key } });
     if (d.ok) { toast(d.message); checkHealth(); }
-    else toast(d.error || 'Lỗi', 'error');
+    else toast(d.error || 'L?i', 'error');
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -2097,11 +2285,41 @@ async function importYTSecrets() {
   else toast(d.error, 'error');
 }
 
+
+function loadGDriveSecretsFile(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const el = document.getElementById('gdrive-secrets-json');
+    if (el) el.value = String(reader.result || '').trim();
+    toast(`Loaded ${file.name}`);
+  };
+  reader.onerror = () => toast('Cannot read Google Drive JSON file', 'error');
+  reader.readAsText(file, 'utf-8');
+}
+
+async function importGDriveSecrets() {
+  const el = document.getElementById('gdrive-secrets-json');
+  const v = (el?.value || '').trim();
+  if (!v) return toast('Choose or paste Google Drive OAuth JSON first', 'error');
+  const d = await api('/api/gdrive/import-secrets', { method: 'POST', body: { json: v, reset_token: true } });
+  if (d.ok) {
+    toast('Google Drive JSON imported. Login Drive again.');
+    if (el) el.value = '';
+    const file = document.getElementById('gdrive-secrets-file');
+    if (file) file.value = '';
+    checkGDriveStatus();
+  } else {
+    toast(d.error || 'Google Drive JSON import failed', 'error');
+  }
+}
+
 async function loadYoutubeWatchdogState() {
   const statusEl = document.getElementById('ytwd-status');
   if (!statusEl) return;
   try {
-    const d = await api('/api/youtube/watchdog/state');
+    const d = await api('/api/youtube/watchdog/state', { timeoutMs: 60000 });
     if (!d.ok) { statusEl.textContent = d.error || 'Watchdog state error'; return; }
     const enabled = !!d.enabled;
     const setNum = (id, v) => {
@@ -2142,9 +2360,9 @@ async function saveYoutubeWatchdogConfig() {
 function _ytStatusText(v) {
   const up = (v.upload_status || '').toLowerCase();
   const ps = (v.processing_status || '').toLowerCase();
-  if (up === 'failed' || up === 'rejected' || ps === 'failed' || ps === 'terminated') return `❌ ${up || ps}`;
-  if (ps === 'processing' || up === 'uploaded') return `⏳ ${ps || up}`;
-  return `✅ ${ps || up || 'ok'}`;
+  if (up === 'failed' || up === 'rejected' || ps === 'failed' || ps === 'terminated') return `FAILED ${up || ps}`;
+  if (ps === 'processing' || up === 'uploaded') return `PROCESSING ${ps || up}`;
+  return `OK ${ps || up || 'ok'}`;
 }
 
 let ytmgrRows = [];
@@ -2243,14 +2461,16 @@ function renderYoutubeVideos(rows, mode = 'plain') {
 }
 
 async function loadYoutubeVideos() {
-  const key = (document.getElementById('ytmgr-key')?.value || 'main').trim() || 'main';
   const max = parseInt(document.getElementById('ytmgr-max')?.value || '25', 10) || 25;
   const body = document.getElementById('ytmgr-table-body');
   const matchStatus = document.getElementById('ytmgr-match-status');
   if (matchStatus) matchStatus.textContent = '';
   if (body) body.innerHTML = '<tr><td colspan="6" style="padding:10px;color:var(--text-dim)">Loading...</td></tr>';
   try {
-    const d = await api(`/api/youtube/videos?key=${encodeURIComponent(key)}&max_results=${max}`);
+    const key = await ensureYtManagerKey();
+    const d = await api(`/api/youtube/videos?key=${encodeURIComponent(key)}&max_results=${max}`, {
+      timeoutMs: Math.max(120000, Math.min(600000, max * 1000))
+    });
     if (!d.ok) {
       if (body) body.innerHTML = `<tr><td colspan="6" style="padding:10px;color:var(--text-dim)">${_ytmgrEsc(d.error || 'Load videos failed')}</td></tr>`;
       return;
@@ -2263,14 +2483,16 @@ async function loadYoutubeVideos() {
 }
 
 async function scanYoutubeVideoMatch() {
-  const key = (document.getElementById('ytmgr-key')?.value || 'main').trim() || 'main';
   const max = parseInt(document.getElementById('ytmgr-max')?.value || '25', 10) || 25;
   const body = document.getElementById('ytmgr-table-body');
   const matchStatus = document.getElementById('ytmgr-match-status');
   if (body) body.innerHTML = '<tr><td colspan="6" style="padding:10px;color:var(--text-dim)">Scanning match...</td></tr>';
   if (matchStatus) matchStatus.textContent = 'Đang quét đối chiếu YouTube ↔ local project...';
   try {
-    const d = await api(`/api/youtube/videos/scan-match?key=${encodeURIComponent(key)}&max_results=${max}`);
+    const key = await ensureYtManagerKey();
+    const d = await api(`/api/youtube/videos/scan-match?key=${encodeURIComponent(key)}&max_results=${max}`, {
+      timeoutMs: Math.max(180000, Math.min(600000, max * 1000))
+    });
     if (!d.ok) {
       if (body) body.innerHTML = `<tr><td colspan="6" style="padding:10px;color:var(--text-dim)">${_ytmgrEsc(d.error || 'Scan failed')}</td></tr>`;
       if (matchStatus) matchStatus.textContent = 'Quét đối chiếu thất bại.';
@@ -2380,6 +2602,44 @@ async function youtubeReuploadProject(projectName, oldVideoId = '') {
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
+
+async function sortYoutubePlaylistFromManager(dryRun = false) {
+  const key = (document.getElementById('ytmgr-key')?.value || 'main').trim() || 'main';
+  const playlistName = (document.getElementById('ytmgr-playlist-name')?.value || '').trim();
+  const playlistId = (document.getElementById('ytmgr-playlist-id')?.value || '').trim();
+  const mode = (document.getElementById('ytmgr-playlist-mode')?.value || 'episode_asc').trim();
+  const status = document.getElementById('ytmgr-playlist-sort-status');
+  if (!playlistName && !playlistId) {
+    toast('Playlist name or Playlist ID is required', 'error');
+    return;
+  }
+  if (status) status.textContent = dryRun ? 'Dry run sorting...' : 'Sorting playlist...';
+  try {
+    const d = await api('/api/youtube/playlist/sort', {
+      method: 'POST',
+      timeoutMs: 300000,
+      body: {
+        key,
+        playlist_name: playlistName,
+        playlist_id: playlistId,
+        mode,
+        dry_run: !!dryRun
+      }
+    });
+    if (!d.ok) {
+      if (status) status.textContent = d.error || 'Sort failed';
+      toast(d.error || 'Sort failed', 'error');
+      return;
+    }
+    const msg = `${dryRun ? 'Dry run' : 'Sorted'} playlist: total=${d.total || 0}, moved=${d.moved || 0}`;
+    if (status) status.textContent = msg;
+    toast(msg);
+  } catch (e) {
+    if (status) status.textContent = 'Sort error: ' + e.message;
+    toast('Sort playlist error: ' + e.message, 'error');
+  }
+}
+
 async function runYoutubeWatchdogOnce() {
   try {
     const d = await api('/api/youtube/watchdog/run-once', { method: 'POST', body: {} });
@@ -2432,17 +2692,17 @@ async function loadTikTokQuickConfig() {
 
 async function saveTikTokTabConfig() {
   const payload = {};
-  
+
   const mm = document.getElementById('tk-max-minutes');
   const split = document.getElementById('tk-auto-split');
   const headless = document.getElementById('tk-headless');
   const provider = document.getElementById('tk-provider');
-  
+
   if (mm) payload.tiktok_max_minutes = parseInt(mm.value || '10', 10);
   if (split) payload.tiktok_auto_split = split.checked;
   if (headless) payload.tiktok_headless = headless.checked;
   if (provider) payload.tiktok_upload_provider = provider.value;
-  
+
   try {
     const d = await api('/api/config', { method: 'POST', body: payload });
     if (d.ok) toast('✅ Đã lưu cấu hình mặc định (Max phút, Auto split, Headless) !');
@@ -3068,56 +3328,143 @@ async function uploadFont() {
 }
 
 
-// ── YouTube Queue ──
+// YouTube Queue
 let ytQueuePollTimer = null;
+let ytQueueDragProjectDir = null;
+
+function _ytQueueProjectName(projectDir) {
+  return String(projectDir || '').split(/\\|\//).pop() || 'Unknown';
+}
 
 async function loadYTQueue() {
   const tbody = document.getElementById('ytqueue-tbody');
   const statusEl = document.getElementById('ytqueue-status');
   if (!tbody) return;
-  
+
   try {
     const d = await api('/api/youtube/queue');
     if (statusEl) {
-      statusEl.innerHTML = `Total items: ${d.count || 0} | Quota block: ${d.quota_block_seconds > 0 ? (d.quota_block_seconds/60).toFixed(1) + ' min' : 'None'} | Worker: ${d.worker?.running ? 'Running' : 'Stopped'}`;
+      const lockedText = d.items?.some(x => String(x.status || '').toLowerCase() === 'uploading')
+        ? ' | uploading item locked'
+        : '';
+      statusEl.innerHTML = `
+        Total items: ${d.count || 0} | Quota block: ${d.quota_block_seconds > 0 ? (d.quota_block_seconds/60).toFixed(1) + ' min' : 'None'} | Worker: ${d.worker?.running ? 'Running' : 'Stopped'}${lockedText}
+        <button class="btn btn-outline btn-sm" style="margin-left:10px;" onclick="sortYTQueue('episode_asc')">Sort episodes</button>
+        <button class="btn btn-outline btn-sm" onclick="sortYTQueue('created_asc')">Sort oldest</button>
+        <button class="btn btn-outline btn-sm" onclick="sortYTQueue('created_desc')">Sort newest</button>
+      `;
     }
-    
+
     if (!d.items || d.items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="padding:10px; text-align:center; color:var(--text-dim);">Không có video nào trong hàng chờ</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:10px; text-align:center; color:var(--text-dim);">No videos in upload queue</td></tr>';
       return;
     }
-    
-    tbody.innerHTML = d.items.map(item => {
-      const title = item.metadata?.title || item.project_dir?.split(/\\|\//).pop() || 'Unknown';
+
+    tbody.innerHTML = d.items.map((item, idx) => {
+      const titleMeta = item.title || item.metadata?.title || 'Unknown Title';
+      const projectName = _ytQueueProjectName(item.project_dir);
       const channel = item.channel_key || 'Default';
       const status = item.status || 'pending';
       const attempts = item.attempts || 0;
       const error = item.last_error || '';
-      
-      let statusHtml = status;
-      if (status === 'uploading') statusHtml = '<span class="badge badge-info">Đang tải lên</span>';
-      else if (status === 'pending') statusHtml = '<span class="badge badge-default">Đang chờ</span>';
-      else if (status === 'failed') statusHtml = '<span class="badge badge-error">Lỗi</span>';
-      
-      
-      
+      const encodedProject = encodeURIComponent(item.project_dir || '');
+      const isUploading = String(status).toLowerCase() === 'uploading';
+
+      let statusHtml = safeStr(status);
+      if (isUploading) statusHtml = '<span class="badge badge-info">Uploading</span>';
+      else if (status === 'pending') statusHtml = '<span class="badge badge-default">Pending</span>';
+      else if (status === 'failed') statusHtml = '<span class="badge badge-error">Failed</span>';
+
+      const dragAttrs = isUploading
+        ? ''
+        : `draggable="true" ondragstart="ytQueueDragStart(event, '${encodedProject}')" ondragend="ytQueueDragEnd(event)"`;
+      const rowStyle = isUploading ? 'opacity:.92;' : 'cursor:grab;';
+
       return `
-        <tr style="border-bottom:1px solid var(--border);">
-          <td style="padding:10px;">${safeStr(title)}</td>
+        <tr ${dragAttrs} ondragover="ytQueueDragOver(event)" ondrop="ytQueueDrop(event, ${idx})" style="border-bottom:1px solid var(--border);${rowStyle}" data-project-dir="${safeStr(item.project_dir || '')}">
+          <td style="padding:10px;">
+            <div style="font-weight:600; margin-bottom:4px; max-width:350px; white-space:normal; line-height:1.4;">
+              <span title="Drag to reorder" style="color:var(--text-dim);margin-right:6px;">::</span>${safeStr(titleMeta)}
+            </div>
+            <div style="font-size:0.85rem; color:var(--text-dim);">#${idx + 1} ${safeStr(projectName)}</div>
+          </td>
           <td style="padding:10px;"><code>${safeStr(channel)}</code></td>
           <td style="padding:10px;">${statusHtml}</td>
           <td style="padding:10px; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${safeStr(error)}">${safeStr(error)}</td>
           <td style="padding:10px;">${attempts}</td>
-          <td style="padding:10px;">
-            <button class="btn btn-outline btn-sm" onclick="reuploadYTItem('${encodeURIComponent(item.project_dir)}')">🔄 Re-upload</button> <button class=\"btn btn-error btn-sm\" onclick=\"cancelYTItem('${encodeURIComponent(item.project_dir)}')\">✖ Hủy</button>
+          <td style="padding:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-outline btn-sm" ${idx <= 0 || isUploading ? 'disabled' : ''} onclick="moveYTItem('${encodedProject}', ${idx - 1})">Up</button>
+            <button class="btn btn-outline btn-sm" ${idx >= d.items.length - 1 || isUploading ? 'disabled' : ''} onclick="moveYTItem('${encodedProject}', ${idx + 2})">Down</button>
+            <input type="number" min="1" max="${d.items.length}" value="${idx + 1}" title="Move to position" style="width:58px;padding:5px" ${isUploading ? 'disabled' : ''} onchange="moveYTItem('${encodedProject}', (parseInt(this.value,10)||1)-1)">
+            <button class="btn btn-outline btn-sm" onclick="reuploadYTItem('${encodedProject}')">Re-upload</button>
+            <button class="btn btn-error btn-sm" onclick="cancelYTItem('${encodedProject}')">Cancel</button>
           </td>
         </tr>
       `;
     }).join('');
-    
+
   } catch (e) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:10px; text-align:center; color:red;">Lỗi tải dữ liệu: ${e.message}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:10px; text-align:center; color:red;">Load queue error: ${safeStr(e.message)}</td></tr>`;
   }
+}
+
+async function sortYTQueue(mode = 'episode_asc') {
+  try {
+    const d = await api('/api/youtube/queue/sort', {
+      method: 'POST',
+      body: { mode }
+    });
+    if (d.error) {
+      toast(d.error, 'error');
+    } else {
+      toast(`Sorted YouTube queue: ${d.count || 0} items${d.locked ? ` (${d.locked} locked)` : ''}`);
+      loadYTQueue();
+    }
+  } catch (e) {
+    toast('Sort queue error: ' + e.message, 'error');
+  }
+}
+
+async function moveYTItem(projDirEncoded, toIndex) {
+  const projDir = decodeURIComponent(projDirEncoded);
+  try {
+    const d = await api('/api/youtube/queue/reorder', {
+      method: 'POST',
+      body: { project_dir: projDir, to_index: toIndex }
+    });
+    if (d.error) {
+      toast(d.error, 'error');
+    } else {
+      toast(d.changed ? 'Queue order updated' : 'Queue order unchanged');
+      loadYTQueue();
+    }
+  } catch (e) {
+    toast('Reorder queue error: ' + e.message, 'error');
+  }
+}
+
+function ytQueueDragStart(ev, projDirEncoded) {
+  ytQueueDragProjectDir = projDirEncoded;
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', projDirEncoded);
+  ev.currentTarget.style.opacity = '.55';
+}
+
+function ytQueueDragOver(ev) {
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+}
+
+function ytQueueDrop(ev, toIndex) {
+  ev.preventDefault();
+  const proj = ev.dataTransfer.getData('text/plain') || ytQueueDragProjectDir;
+  if (!proj) return;
+  moveYTItem(proj, toIndex);
+}
+
+function ytQueueDragEnd(ev) {
+  ytQueueDragProjectDir = null;
+  if (ev.currentTarget) ev.currentTarget.style.opacity = '';
 }
 
 
@@ -3210,6 +3557,7 @@ function formatLogLine(raw) {
 // ── Scraper ──
 let scrapeVideos = [];
 let scrapeSeriesGroups = [];
+let scrapeCompletedUrls = new Set();
 
 function scrapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -3263,10 +3611,10 @@ async function startScrape() {
         if (s.result) {
           scrapeVideos = s.result.videos || [];
           renderScrapeResults(s.result);
-          
+
           // AUTO-GROUP SERIES AFTER RENDER
-          setTimeout(() => { 
-            groupSeriesByAI(); 
+          setTimeout(() => {
+            groupSeriesByAI();
           }, 1500);
         }
         toast(`Found ${scrapeVideos.length} videos! Grouping series...`);
@@ -3454,15 +3802,16 @@ async function renderSeriesGroups(payload) {
   const coverLine = coverMeta.covered
     ? `Cover clusters: ${coverMeta.clusters || 0} from ${coverMeta.covered} covers`
     : 'Cover clusters: unavailable';
-    
+
   // FETCH COMPLETED URLS
-  let completedUrls = new Set();
+  scrapeCompletedUrls = new Set();
   try {
     const doneRes = await api('/api/projects/completed-urls');
     if (doneRes.ok && Array.isArray(doneRes.completed)) {
-      completedUrls = new Set(doneRes.completed);
+      scrapeCompletedUrls = new Set(doneRes.completed);
     }
   } catch(e) {}
+  const completedUrls = scrapeCompletedUrls;
 
   // Fetch existing projects for datalist
   let existingFolders = [];
@@ -3669,20 +4018,20 @@ function addSeriesUniqueEpisodesToQueue(idx) {
     return;
   }
   let urls = Array.isArray(group.unique_episode_urls) ? group.unique_episode_urls.filter(Boolean) : [];
-  
-  if (typeof completedUrls !== 'undefined' && completedUrls) {
-    urls = urls.filter(u => !completedUrls.has(u));
+
+  if (scrapeCompletedUrls instanceof Set) {
+    urls = urls.filter(u => !scrapeCompletedUrls.has(u));
   }
-  
+
   if (!urls.length) {
     toast('No remaining unique URLs in this series', 'error');
     return;
   }
-  
+
   const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
   const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
   group.folder = finalFolder;
-  
+
   const groupContexts = buildSeriesContextMap(group, urls);
   urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
 
@@ -3749,13 +4098,13 @@ async function runDouyinWatchdogNow() {
 function toggleTtsOptions() {
   const engine = document.getElementById('cfg-tts_engine')?.value || 'gemini';
   const mode = document.getElementById('cfg-vieneu_mode')?.value || 'preset';
-  
+
   const vieneuModeGroup = document.getElementById('vieneu-mode-group');
   const vieneuVoiceGroup = document.getElementById('vieneu-voice-group');
   const vnRef = document.getElementById('vieneu-ref-group');
   const xttsRef = document.getElementById('xtts-ref-group');
   const capcutGroup = document.getElementById('capcut-voice-group');
-  
+
   if (vieneuModeGroup) vieneuModeGroup.style.display = engine === 'vieneu' ? '' : 'none';
   if (vieneuVoiceGroup) vieneuVoiceGroup.style.display = (engine === 'vieneu' && mode === 'preset') ? '' : 'none';
   if (vnRef) vnRef.style.display = (engine === 'vieneu' && mode === 'clone') ? '' : 'none';
@@ -3771,14 +4120,14 @@ async function testTts() {
   btn.disabled = true;
   status.textContent = '⏳ Generating...';
   audio.style.display = 'none';
-  
+
   try {
     const engine = document.getElementById('cfg-tts_engine')?.value || 'gemini';
-    let refVoice = (engine === 'xtts') 
-      ? document.getElementById('cfg-xtts_ref_voice')?.value 
+    let refVoice = (engine === 'xtts')
+      ? document.getElementById('cfg-xtts_ref_voice')?.value
       : document.getElementById('cfg-vieneu_ref_voice')?.value;
     if (!refVoice) refVoice = 'sample.WAV';
-    
+
     const reqBody = {
       engine: engine,
       ref_voice: refVoice,
@@ -3791,13 +4140,13 @@ async function testTts() {
       tts_pitch: parseFloat(document.getElementById('cfg-tts_pitch')?.value || '1') || 1,
       tts_volume: parseFloat(document.getElementById('cfg-tts_volume')?.value || '1') || 1,
     };
-    
+
     const res = await fetch('/api/tts/test', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(reqBody)
     });
-    
+
     if (res.ok) {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -4041,17 +4390,8 @@ window.selectAllSeriesGroups = function(state) {
     if (countEl) countEl.innerText = `${scrapeSeriesSelected.size} selected`;
 };
 
-window.addSeriesToQueue = async function(idx, newOnly) {
-    const btns = document.querySelectorAll('button');
-    btns.forEach(b => b.disabled = true);
-    try {
-        const added = await _queueSeriesGroups([idx], newOnly);
-        toast(`Added ${added} videos to queue!`, 'success');
-    } catch (e) {
-        toast('Error: ' + e.message, 'error');
-    } finally {
-        btns.forEach(b => b.disabled = false);
-    }
+window.addSeriesToQueue = function(idx, newOnly) {
+    return addSeriesToQueue(idx, !!newOnly);
 };
 
 window.addSelectedSeriesToQueue = function(newOnly) {
@@ -4070,19 +4410,19 @@ async function _queueSeriesGroups(indices, newOnly) {
             if (h.ok && Array.isArray(h.completed)) completedUrls = new Set(h.completed);
         } catch(e) {}
     }
-    
+
     let totalAdded = 0;
-    
+
     for (const idx of indices) {
         const g = scrapeSeriesGroups[idx];
         if (!g) continue;
-        
+
         let urlsToQueue = g.urls || [];
         if (newOnly) {
             urlsToQueue = urlsToQueue.filter(u => !completedUrls.has(u));
         }
-        if (urlsToQueue.length === 0) continue; 
-        
+        if (urlsToQueue.length === 0) continue;
+
         const payload = {
             urls: urlsToQueue,
             settings: window.currentScrapeSettings || {},
@@ -4110,34 +4450,34 @@ async function loadSeriesLibrary() {
     const listSeries = document.getElementById('series-list');
     const listStandalones = document.getElementById('standalone-list');
     if (!listSeries || !listStandalones) return;
-    
+
     listSeries.innerHTML = '<div style="color:var(--text-dim)">Loading series...</div>';
     listStandalones.innerHTML = '<div style="color:var(--text-dim)">Loading standalones...</div>';
-    
+
     try {
         const res = await api('/api/series');
         if (!res || res.error) throw new Error(res?.error || 'Failed to load series');
-        
+
         const series = res.series || [];
         const standalones = res.standalones || [];
-        
+
         const badgeSeries = document.getElementById('series-count-badge');
         const badgeStandalone = document.getElementById('standalone-count-badge');
         if (badgeSeries) badgeSeries.innerText = series.length;
         if (badgeStandalone) badgeStandalone.innerText = standalones.length;
-        
+
         if (series.length === 0) {
             listSeries.innerHTML = '<div style="color:var(--text-dim)">No series found.</div>';
         } else {
             listSeries.innerHTML = series.map(s => renderSeriesCard(s)).join('');
         }
-        
+
         if (standalones.length === 0) {
             listStandalones.innerHTML = '<div style="color:var(--text-dim)">No standalone movies found.</div>';
         } else {
             listStandalones.innerHTML = standalones.map(p => renderStandaloneCard(p)).join('');
         }
-        
+
     } catch (e) {
         listSeries.innerHTML = `<div style="color:var(--error)">Error: ${e.message}</div>`;
         listStandalones.innerHTML = `<div style="color:var(--error)">Error: ${e.message}</div>`;
@@ -4148,16 +4488,16 @@ function renderSeriesCard(s) {
     const total = s.total_downloaded || 0;
     const rendered = s.rendered_count || 0;
     const uploaded = s.uploaded_count || 0;
-    
+
     const ep_min = s.episode_min || '?';
     const ep_max = s.episode_max || '?';
-    
+
     const latest = s.latest_episode || {};
     const thumb = latest.thumbnail ? `/api/project/${encodeURIComponent(latest.project_name)}/file/thumbnail.jpg` : '';
-    
+
     const renderPct = total > 0 ? Math.round((rendered / total) * 100) : 0;
     const uploadPct = total > 0 ? Math.round((uploaded / total) * 100) : 0;
-    
+
     return `
     <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
       <div style="display:flex; gap:12px; margin-bottom:12px;">
@@ -4171,14 +4511,14 @@ function renderSeriesCard(s) {
             <div style="font-size:0.8rem; color:var(--text-dim);">Latest update: ${safeStr(latest.created_at || '')}</div>
         </div>
       </div>
-      
+
       <div>
           <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
               <span>Rendered: ${rendered}/${total}</span>
               <span>${renderPct}%</span>
           </div>
           <div class="progress-bar" style="height:6px; margin-bottom:8px;"><div class="progress-fill" style="width:${renderPct}%; background:var(--accent);"></div></div>
-          
+
           <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
               <span>Uploaded: ${uploaded}/${total}</span>
               <span>${uploadPct}%</span>
@@ -4193,12 +4533,12 @@ function renderStandaloneCard(p) {
     const meta = p.metadata || {};
     const title = meta.title || p.douyin_meta?.douyin_title || p.project_name;
     const thumb = p.thumbnail ? `/api/project/${encodeURIComponent(p.project_name)}/file/thumbnail.jpg` : '';
-    
+
     let statusText = 'Downloaded';
     let statusColor = 'var(--text-dim)';
     if (p.final_video) { statusText = 'Rendered'; statusColor = 'var(--accent)'; }
     if (p.youtube?.videoId || p.facebook_reels?.results) { statusText = 'Uploaded'; statusColor = 'var(--primary)'; }
-    
+
     return `
     <div class="project-card" style="cursor:pointer; display:flex; gap:12px; align-items:center;" onclick="openSeriesInProjects('${safeStr(p.project_name)}')">
         <div style="width:80px; height:80px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
@@ -4217,7 +4557,7 @@ function openSeriesInProjects(filterText) {
     // Switch to projects tab
     const tabProjects = document.querySelector('[data-tab="projects"]');
     if (tabProjects) tabProjects.click();
-    
+
     // Set custom filter
     setTimeout(() => {
         const filterSelect = document.getElementById('project-filter');
@@ -4244,18 +4584,18 @@ function addSeriesToQueue(idx, newOnly = false) {
     return;
   }
   let urls = Array.isArray(group.urls) ? group.urls.filter(Boolean) : [];
-  if (newOnly && typeof completedUrls !== 'undefined' && completedUrls) {
-    urls = urls.filter(u => !completedUrls.has(u));
+  if (newOnly && scrapeCompletedUrls instanceof Set) {
+    urls = urls.filter(u => !scrapeCompletedUrls.has(u));
   }
   if (!urls.length) {
     toast('No remaining URLs to add for this series', 'error');
     return;
   }
-  
+
   const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
   const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
   group.folder = finalFolder;
-  
+
   const groupContexts = buildSeriesContextMap(group, urls);
   urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
 
@@ -4285,15 +4625,15 @@ function addSelectedSeriesToQueueLocal(newOnly = false) {
     const group = scrapeSeriesGroups[idx];
     if (!group) return;
     let urls = Array.isArray(group.urls) ? group.urls.filter(Boolean) : [];
-    if (newOnly && typeof completedUrls !== 'undefined' && completedUrls) {
-      urls = urls.filter(u => !completedUrls.has(u));
+    if (newOnly && scrapeCompletedUrls instanceof Set) {
+      urls = urls.filter(u => !scrapeCompletedUrls.has(u));
     }
     if (!urls.length) return;
-    
+
     const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
     const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
     group.folder = finalFolder;
-    
+
     const groupContexts = buildSeriesContextMap(group, urls);
     urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
 
@@ -4345,4 +4685,196 @@ async function previewUrls() {
     } catch (e) {
         el.innerHTML = `<div class="url-preview-empty" style="color:var(--error)">Error previewing: ${e.message}</div>`;
     }
+}
+
+
+
+/* =========================================
+
+/* =========================================
+   WATCH VIDEO UI LOGIC
+========================================= */
+let currentWatchSeries = null;
+let watchLibraryData = null;
+let currentEpIndex = -1;
+let currentPlayableEps = [];
+
+async function loadWatchLibrary() {
+  document.getElementById('watch-grid-view').classList.remove('hidden');
+  document.getElementById('watch-player-view').classList.add('hidden');
+
+  const grid = document.getElementById('watch-series-grid');
+  grid.innerHTML = '<div style="color:var(--text-dim);">Đang tải dữ liệu...</div>';
+
+  try {
+    let res = await fetch('/api/series');
+    let data = await res.json();
+    watchLibraryData = data.series || [];
+
+    // Fetch standalone projects
+    try {
+        let pRes = await fetch('/api/projects');
+        let pData = await pRes.json();
+        let projects = pData.projects || [];
+        let standaloneEps = projects.filter(p => p.is_complete && !p.series_name);
+        for (let p of standaloneEps) {
+            let title = p.metadata && p.metadata.title ? p.metadata.title : p.project_name;
+            watchLibraryData.push({
+                series_name: title,
+                series_folder: 'standalone_' + p.project_name,
+                episode_max: 1,
+                rendered_count: 1,
+                episodes: [{
+                    _ep_no: 1,
+                    project_id: p.project_name,
+                    final_video: true,
+                    thumbnail: true
+                }]
+            });
+        }
+    } catch(e) {
+        console.error('Error fetching standalone projects for watch UI', e);
+    }
+
+
+    if (watchLibraryData.length === 0) {
+      grid.innerHTML = '<div style="color:var(--text-dim);">Không có series nào có video.</div>';
+      return;
+    }
+
+    grid.innerHTML = '';
+    for (let s of watchLibraryData) {
+      let thumbUrl = '/static/placeholder.jpg';
+      let latestEp = s.episodes[0];
+      if (latestEp && latestEp.thumbnail) {
+        thumbUrl = '/api/project/' + latestEp.project_id + '/stream/thumbnail.jpg';
+      } else if (latestEp && latestEp.youtube && latestEp.youtube.videoId) {
+        thumbUrl = 'https://img.youtube.com/vi/' + latestEp.youtube.videoId + '/maxresdefault.jpg';
+      }
+
+      let maxEp = s.episode_max ? s.episode_max : '??';
+      let rendered = s.rendered_count || 0;
+      let badgeText = rendered + '/' + maxEp;
+
+      let card = document.createElement('div');
+      card.className = 'watch-series-card';
+      card.onclick = () => openSeriesPlayer(s.series_folder);
+
+      card.innerHTML = `
+        <div class="watch-series-cover-wrapper">
+          <img class="watch-series-cover" src="${thumbUrl}" onerror="this.src='/static/placeholder.jpg'">
+          <div class="watch-series-badge">${badgeText}</div>
+        </div>
+        <div class="watch-series-info">
+          <div class="watch-series-title" title="${s.series_name.replace(/"/g, '&quot;')}">${s.series_name}</div>
+        </div>
+      `;
+      grid.appendChild(card);
+    }
+
+  } catch (err) {
+    console.error(err);
+    grid.innerHTML = '<div style="color:var(--error);">Lỗi khi tải thư viện!</div>';
+  }
+}
+
+function openSeriesPlayer(folder) {
+  if (!watchLibraryData) return;
+  let series = watchLibraryData.find(s => s.series_folder === folder);
+  if (!series) return;
+
+  currentWatchSeries = series;
+
+  document.getElementById('watch-grid-view').classList.add('hidden');
+  document.getElementById('watch-player-view').classList.remove('hidden');
+  document.getElementById('watch-player-title').innerText = series.series_name;
+
+  const epGrid = document.getElementById('watch-episodes-grid');
+  epGrid.innerHTML = '';
+  document.getElementById('watch-search-ep').value = '';
+
+  let sortedEps = [...series.episodes].sort((a,b) => (a._ep_no || 0) - (b._ep_no || 0));
+  currentPlayableEps = sortedEps.filter(ep => ep.final_video);
+
+  for (let i = 0; i < currentPlayableEps.length; i++) {
+    let ep = currentPlayableEps[i];
+    let btn = document.createElement('div');
+    btn.className = 'watch-ep-btn ep-item-btn';
+    let epNum = ep._ep_no || '?';
+    btn.innerText = epNum;
+    btn.setAttribute('data-index', i);
+    btn.onclick = () => playEpisodeByIndex(i);
+    epGrid.appendChild(btn);
+  }
+
+  if (currentPlayableEps.length === 0) {
+    epGrid.innerHTML = '<div style="grid-column: 1/-1; color: var(--text-dim);">Chưa có tập nào được render video.</div>';
+    document.getElementById('watch-video-element').src = '';
+    updatePrevNextButtons();
+  } else {
+    playEpisodeByIndex(0);
+  }
+}
+
+function playEpisodeByIndex(index) {
+  if (index < 0 || index >= currentPlayableEps.length) return;
+  currentEpIndex = index;
+  let ep = currentPlayableEps[index];
+
+  document.querySelectorAll('.watch-ep-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.getAttribute('data-index')) === index);
+  });
+
+  let videoEl = document.getElementById('watch-video-element');
+  videoEl.src = '/api/project/' + ep.project_id + '/stream/final_video.mp4';
+  videoEl.play().catch(e => console.log('Auto-play blocked:', e));
+
+  updatePrevNextButtons();
+}
+
+function playPrevEpisode() {
+  playEpisodeByIndex(currentEpIndex - 1);
+}
+
+function playNextEpisode() {
+  playEpisodeByIndex(currentEpIndex + 1);
+}
+
+function updatePrevNextButtons() {
+  const btnPrev = document.getElementById('watch-btn-prev');
+  const btnNext = document.getElementById('watch-btn-next');
+
+  if (!btnPrev || !btnNext) return;
+
+  if (currentEpIndex <= 0) {
+    btnPrev.disabled = true;
+  } else {
+    btnPrev.disabled = false;
+  }
+
+  if (currentEpIndex >= currentPlayableEps.length - 1 || currentEpIndex === -1) {
+    btnNext.disabled = true;
+  } else {
+    btnNext.disabled = false;
+  }
+}
+
+function filterEpisodes() {
+  let q = document.getElementById('watch-search-ep').value.toLowerCase();
+  document.querySelectorAll('.ep-item-btn').forEach(b => {
+    let text = b.innerText.toLowerCase();
+    b.style.display = text.includes(q) ? 'block' : 'none';
+  });
+}
+
+function closeWatchPlayer() {
+  let videoEl = document.getElementById('watch-video-element');
+  videoEl.pause();
+  videoEl.src = '';
+  currentWatchSeries = null;
+  currentPlayableEps = [];
+  currentEpIndex = -1;
+
+  document.getElementById('watch-player-view').classList.add('hidden');
+  document.getElementById('watch-grid-view').classList.remove('hidden');
 }

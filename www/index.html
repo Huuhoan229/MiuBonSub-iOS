@@ -3,9 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="shortcut icon" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/static/app-icon.svg">
 <title>MiuBon Vietsub Pipeline — Douyin → YouTube Auto</title>
 <meta name="description" content="MiuBon Vietsub Pipeline — Full auto: Douyin download, vocal separation, translation, TTS dubbing, render and upload to YouTube">
-<link rel="stylesheet" href="/static/css/style.css?v=20260602-084327">
+<link rel="stylesheet" href="/static/css/style.css?v=20260606-113338">
 </head>
 <body>
 <div class="glow-orb glow-1"></div>
@@ -36,7 +39,8 @@
   <button class="tab" data-tab="scraper">🔍 Scraper</button>
   <button class="tab" data-tab="projects">📁 Projects</button>
   <button class="tab" data-tab="series">📚 Thư viện Series</button>
-  
+  <button class="tab" data-tab="watch" onclick="loadWatchLibrary()">▶ Xem Video</button>
+
   <button class="tab" data-tab="auth">🔐 Auth</button>
   <button class="tab" data-tab="ytmanager">🎛 YT Manager</button>
   <button class="tab" data-tab="ytqueue">📤 YT Queue</button>
@@ -235,16 +239,16 @@
   <div class="card">
     <h2><span>📚</span> Thư viện Series <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="loadSeriesLibrary()">🔄 Refresh</button></h2>
     <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">Quản lý tổng quan các Phim Bộ (Series) và Phim Lẻ (Standalone).</p>
-    
+
     <div class="tabs" style="border-bottom:1px solid var(--border); margin-bottom:16px; padding-bottom:0">
       <button class="sub-tab series-sub-tab active" data-subtab="series-list" onclick="switchSeriesSubTab('series-list')" style="border-radius:6px 6px 0 0; border-bottom:none">📺 Phim Bộ (Series) <span id="series-count-badge" class="badge badge-info">0</span></button>
       <button class="sub-tab series-sub-tab" data-subtab="standalone-list" onclick="switchSeriesSubTab('standalone-list')" style="border-radius:6px 6px 0 0; border-bottom:none">🎞 Phim Lẻ (Standalone) <span id="standalone-count-badge" class="badge badge-info">0</span></button>
     </div>
-    
+
     <div id="series-list" class="series-sub-content grid-2">
        <div style="color:var(--text-dim); font-size:0.9rem;">Đang tải Thư viện Series...</div>
     </div>
-    
+
     <div id="standalone-list" class="series-sub-content hidden grid-2">
        <div style="color:var(--text-dim); font-size:0.9rem;">Đang tải Phim lẻ...</div>
     </div>
@@ -260,7 +264,7 @@
     </h2>
     <div id="resume-queue-list" class="queue-items"></div>
     <div class="btn-group" style="margin-top:12px">
-      <button class="btn btn-primary" id="btn-start-resume-queue" onclick="startResumeQueue()">> Start Resume Queue</button>
+      <button class="btn btn-primary" id="btn-start-resume-queue" onclick="startResumeQueue()">▶ Start Resume Queue</button>
     </div>
   </div>
 
@@ -312,7 +316,9 @@
     <h3 style="margin:16px 0 10px;font-size:.95rem">📄 Files</h3>
     <div id="modal-project-files" class="file-list"></div>
     <div class="modal-actions">
+      <button class="btn btn-accent" id="btn-watch-video" onclick="watchProjectVideo()" style="display:none">▶ Xem Video</button>
       <button class="btn btn-accent" id="btn-add-queue" onclick="addToResumeQueue()">+ Add to Queue</button>
+      <button class="btn btn-outline" id="btn-gdrive-upload" onclick="uploadProjectGDrive()">Upload Drive</button>
       <button class="btn btn-primary" id="btn-resume" onclick="resumeProject()">> Resume Pipeline</button>
       <button class="btn btn-danger" id="btn-delete" onclick="deleteProject()">🗑 Delete Project</button>
     </div>
@@ -336,6 +342,49 @@
 </div>
 
 <!-- ═══ AUTH TAB ═══ -->
+<!-- 🎬 WATCH VIDEO TAB 🎬 -->
+<div id="tab-watch" class="tab-content hidden">
+  <!-- Grid View -->
+  <div id="watch-grid-view">
+    <h3 style="margin-top:0; color:var(--accent);">📺 Thư viện Video</h3>
+    <div id="watch-series-grid" class="watch-grid"></div>
+  </div>
+
+  <!-- Player View -->
+  <div id="watch-player-view" class="hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+      <h3 id="watch-player-title" style="margin:0; color:var(--accent);">...</h3>
+      <button class="btn btn-secondary" onclick="closeWatchPlayer()">🔙 Đóng Trình Phát</button>
+    </div>
+    <div class="watch-player-layout">
+      <!-- Left Column (Video) -->
+      <div class="watch-main-col">
+        <div class="watch-video-container">
+          <video id="watch-video-element" controls controlsList="nodownload"></video>
+        </div>
+
+        <div class="watch-controls-bar">
+          <div class="watch-controls-left">
+            <button class="watch-ctrl-btn" id="watch-btn-prev" onclick="playPrevEpisode()">❮ Tập trước</button>
+            <button class="watch-ctrl-btn" id="watch-btn-next" onclick="playNextEpisode()">Tập tiếp ❯</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column (Episodes) -->
+      <div class="watch-episodes-panel">
+        <div class="watch-episodes-header">
+          <span style="font-size:0.9rem;">Danh sách tập</span>
+          <input type="text" id="watch-search-ep" class="watch-search-input" placeholder="Tìm tập..." onkeyup="filterEpisodes()">
+        </div>
+        <div id="watch-episodes-grid" class="watch-episodes-grid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
 <div id="tab-auth" class="tab-content hidden">
   <!-- Douyin -->
   <div class="card">
@@ -366,6 +415,24 @@
       <textarea id="yt-secrets-json" rows="4" placeholder='{"installed":{"client_id":"...","client_secret":"..."}}'>  </textarea>
     </div>
     <button class="btn btn-outline btn-sm" onclick="importYTSecrets()">Import Secrets JSON</button>
+  </div>
+  <!-- Google Drive -->
+  <div class="card">
+    <h2><span>Drive</span> Google Drive Backup</h2>
+    <p style="font-size:.85rem;color:var(--text-dim);margin-bottom:12px">Login Drive de upload/sync project giua cac may.</p>
+    <div id="gdrive-status" style="font-size:.85rem;color:var(--text-dim);margin-bottom:8px">Checking Google Drive...</div>
+    <div id="gdrive-sync-status" style="font-size:.8rem;color:var(--text-dim);margin-bottom:12px"></div>
+    <div class="form-group" style="margin-top:12px">
+      <label>Google Drive OAuth Client JSON</label>
+      <input id="gdrive-secrets-file" type="file" accept=".json,application/json" onchange="loadGDriveSecretsFile(this)" />
+      <textarea id="gdrive-secrets-json" rows="3" placeholder='{"installed":{"client_id":"...","client_secret":"..."}}' style="margin-top:8px"></textarea>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-outline btn-sm" onclick="checkGDriveStatus()">Check Drive</button>
+      <button class="btn btn-primary btn-sm" onclick="gdriveLogin()">Login Google Drive</button>
+      <button class="btn btn-accent btn-sm" onclick="syncProjectsFromGDrive()">Sync Projects From Drive</button>
+      <button class="btn btn-outline btn-sm" onclick="importGDriveSecrets()">Import Drive JSON</button>
+    </div>
   </div>
 </div>
 
@@ -399,6 +466,35 @@
         <option value="matched">Matched Local</option>
         <option value="unmatched">Unmatched Local</option>
       </select>
+    </div>
+
+
+    <div class="card" style="margin:10px 0 12px 0;padding:12px;border:1px solid var(--border)">
+      <h3 style="font-size:.9rem;margin-bottom:8px">YouTube Playlist Sort</h3>
+      <div class="grid-3">
+        <div class="form-group">
+          <label>Playlist name</label>
+          <input id="ytmgr-playlist-name" placeholder="Exact playlist name" />
+        </div>
+        <div class="form-group">
+          <label>Playlist ID (optional)</label>
+          <input id="ytmgr-playlist-id" placeholder="PL..." />
+        </div>
+        <div class="form-group">
+          <label>Sort mode</label>
+          <select id="ytmgr-playlist-mode">
+            <option value="episode_asc">Episode ascending</option>
+            <option value="episode_desc">Episode descending</option>
+            <option value="created_asc">Oldest first</option>
+            <option value="created_desc">Newest first</option>
+          </select>
+        </div>
+      </div>
+      <div class="btn-group" style="margin-top:6px;align-items:center">
+        <button class="btn btn-outline btn-sm" onclick="sortYoutubePlaylistFromManager(true)">Dry run</button>
+        <button class="btn btn-primary btn-sm" onclick="sortYoutubePlaylistFromManager(false)">Sort Playlist</button>
+        <span id="ytmgr-playlist-sort-status" style="font-size:.8rem;color:var(--text-dim)"></span>
+      </div>
     </div>
 
     <h3 style="margin:10px 0 8px;font-size:.9rem">Auto Reupload Watchdog</h3>
@@ -445,7 +541,7 @@
   <div class="card">
     <h3>📤 YouTube Upload Queue</h3>
     <p style="font-size:0.9rem; color:var(--text-dim)">Danh sách các video đang chờ tải lên YouTube (do vượt quá Quota hoặc đang được xử lý ngầm).</p>
-    
+
     <div style="margin: 12px 0;">
       <button class="btn btn-outline btn-sm" onclick="loadYTQueue()">🔄 Refresh</button>
       <span id="ytqueue-status" style="font-size:0.8rem; margin-left:10px; color:var(--text-dim);"></span>
@@ -783,13 +879,15 @@
       <div class="form-group"><label>Blur Sigma</label><input id="cfg-blur_sigma" type="number" value="20"></div>
       <div class="form-group"><label>Mask Height (px)</label><input id="cfg-mask_h" type="number" value="100"></div>
       <div class="form-group"><label>Mask Y Position (%)</label><input id="cfg-mask_y_pct" type="number" step="0.1" value="83.5"></div>
-      <div class="form-group"><label>Font Name</label><input id="cfg-font_name" value="UTM_Bebas.ttf"></div>
+      <div class="form-group"><label>Font Video</label><input id="cfg-font_name" value="UTM_Bebas.ttf"></div>
+      <div class="form-group"><label>Font Thumbnail</label><input id="cfg-font_name_thumb" value="FS Boom Boom.ttf"></div>
       <div class="form-group"><label>Font Size</label><input id="cfg-font_size" type="number" value="28"></div>
       <div class="form-group"><label>Margin V</label><input id="cfg-margin_v" type="number" value="16"></div>
       <div class="form-group"><label>Rotate (°)</label><input id="cfg-rotate_deg" type="number" step="0.1" value="0.5"></div>
       <div class="form-group"><label>Privacy</label><select id="cfg-privacy"><option>public</option><option>unlisted</option><option>private</option></select></div>
       <div class="form-group"><label>Projects Dir</label><input id="cfg-projects_dir" value="D:/anti-sub-projects"></div>
-      <div class="form-group"><label>Số URL chạy đồng thời</label><input id="cfg-batch_pipeline_concurrency" type="number" min="1" max="8" value="2"></div>
+      <div class="form-group"><label>Số pipeline chạy đồng thời</label><input id="cfg-batch_pipeline_concurrency" type="number" min="1" max="8" value="2"></div>
+      <div class="form-group"><label>Số URL download tối đa</label><input id="cfg-download_concurrency" type="number" min="1" max="4" value="2"></div>
       <div class="form-group"><label>Số tiến trình GPU tối đa</label><input id="cfg-gpu_heavy_concurrency" type="number" min="1" max="4" value="1"></div>
       <div class="form-group"><label>Retry tối đa / URL</label><input id="cfg-pipeline_retry_max" type="number" min="1" max="10" value="2"></div>
     </div>
@@ -869,7 +967,7 @@
       <h2 style="font-size: 1.45rem; color: #fff; margin-bottom: 6px; font-weight: 700; letter-spacing: -0.02em;">Authorize MiuBon Pipeline</h2>
       <p style="font-size: 0.88rem; color: var(--text-dim); line-height: 1.4;">The application requests authorization to connect your TikTok creator account.</p>
     </div>
-    
+
     <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 12px; padding: 18px; margin-bottom: 24px;">
       <h4 style="font-size: 0.92rem; color: #fff; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-weight: 600;">
         <span style="font-size: 1rem;">📋</span> Requested Scopes:
@@ -889,7 +987,7 @@
         </li>
       </ul>
     </div>
-    
+
     <p style="font-size: 0.78rem; color: rgba(255,255,255,0.4); margin-bottom: 24px; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; text-align: center;">
       🔒 Authorization occurs via secure simulated callback. No real credentials or sensitive data are stored.
     </p>
@@ -901,8 +999,7 @@
   </div>
 </div>
 
-<script src="/static/js/app.js?v=20260602-084327"></script>
+<script src="/static/js/app.js?v=20260606-113338"></script>
 
 </body>
 </html>
-
