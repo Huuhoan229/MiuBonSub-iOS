@@ -41,8 +41,8 @@
 <!-- ═══ PIPELINE TAB ═══ -->
 <div id="tab-pipeline" class="tab-content fade-in active-tab">
   <div class="segmented-control" style="margin-bottom:16px;">
-    <button class="segment active" onclick="switchSubTab('pipeline', 'pipeline-main')">Tạo mới</button>
-    <button class="segment" onclick="switchSubTab('pipeline', 'pipeline-running'); switchTab('running')">Đang chạy</button>
+    <button class="segment active" onclick="switchTab('pipeline')">Tạo mới</button>
+    <button class="segment" onclick="switchTab('running')">Đang chạy</button>
   </div>
   <!-- Status -->
   <div class="card">
@@ -259,8 +259,8 @@
 <!-- ═══ PROJECTS TAB ═══ -->
 <div id="tab-projects" class="tab-content hidden">
   <div class="segmented-control" style="margin-bottom:16px;">
-    <button class="segment active" onclick="switchSubTab('projects', 'projects-main')">Projects</button>
-    <button class="segment" onclick="switchSubTab('projects', 'projects-series'); switchTab('series')">Thư viện Series</button>
+    <button class="segment active" onclick="switchTab('projects')">Projects</button>
+    <button class="segment" onclick="switchTab('series')">Thư viện Series</button>
   </div>
   <!-- Resume Queue -->
   <div id="resume-queue-card" class="card hidden">
