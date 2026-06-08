@@ -479,7 +479,7 @@ function toast(msg, type = 'success') {
 // ── Tabs ──
 function switchTab(tab) {
   currentTab = tab;
-  document.querySelectorAll('.bottom-tabs .tab[data-tab]').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab[data-tab]').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('hidden', c.id !== `tab-${tab}`));
   if (tab === 'projects') loadProjects();
     if (tab === 'series') loadSeriesLibrary();
@@ -4699,236 +4699,189 @@ async function previewUrls() {
 /* =========================================
 
 /* =========================================
-   WATCH VIDEO UI LOGIC (Ported from MiuBonWatch-iOS)
+   WATCH VIDEO UI LOGIC
 ========================================= */
-
-let watchLibrary = { series: [], standalone: [] };
-let watchCurrentItem = null;
-let watchEpisodes = [];
-let watchCurrentIndex = 0;
-let watchProgressMap = {};
-let watchSaveTimer = null;
-
-const metadata = (ep) => ep?.metadata || ep?.meta || {};
-const seriesContext = (ep) => ep?.series_context || metadata(ep).series_context || {};
-const parseEpisodeFromText = (text) => {
-  const s = String(text || '');
-  const m = s.match(/(?:Tập|Tap|Ep|Episode|第)\s*(\d{1,5})/i);
-  return m ? Number(m[1]) : null;
-};
-const episodeNo = (ep, fallback) => {
-  const ctx = seriesContext(ep);
-  const raw = ep?._ep_no || ep?.episode_no || ep?.episode || ep?.ep || ep?.episode_number || ctx.episode_no || metadata(ep).episode_no || parseEpisodeFromText(ep?.title || metadata(ep).title || metadata(ep).episode_tag || ep?.douyin_meta?.douyin_title || '');
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : fallback + 1;
-};
-const folderKey = (item) => item?.series_folder || seriesContext(item).series_folder || item?.folder || item?.project_id || item?.project_name || item?.name || 'unknown';
-const driveFileId = (ep) => ep.gdrive_file_id || ep.drive_file_id || metadata(ep).gdrive_file_id || metadata(ep).drive_file_id || '';
-const finalExists = (ep) => ep.final_video || metadata(ep).final_video || ep.is_complete || ep.progress >= 100;
-
-async function loadProgress() {
-  try {
-    const data = await api('/api/user/progress');
-    watchProgressMap = data.progress || data.items || data || {};
-  } catch (e) {
-    console.warn("Could not load watch progress", e);
-  }
-}
+let currentWatchSeries = null;
+let watchLibraryData = null;
+let currentEpIndex = -1;
+let currentPlayableEps = [];
 
 async function loadWatchLibrary() {
-  document.getElementById('tab-watch').innerHTML = '<div id="watch-series-grid" class="library-grid" style="padding:16px;"></div>';
+  document.getElementById('watch-grid-view').classList.remove('hidden');
+  document.getElementById('watch-player-view').classList.add('hidden');
+
   const grid = document.getElementById('watch-series-grid');
-  grid.innerHTML = '<div style="color:var(--text-dim); padding:20px;">Đang tải dữ liệu...</div>';
-  await loadProgress();
+  grid.innerHTML = '<div style="color:var(--text-dim);">Đang tải dữ liệu...</div>';
 
   try {
-    const data = await api('/api/series');
-    const series = Array.isArray(data.series) ? data.series : [];
-    const renderedSeries = series.map((s) => {
-      const eps = (s.episodes || []).filter(finalExists).sort((a, b) => episodeNo(a, 0) - episodeNo(b, 0));
-      return Object.assign({}, s, { episodes: eps, rendered_count: eps.length });
-    }).filter((s) => s.episodes.length > 0);
+    let res = await api('/api/series');
+    let data = res; // api() already parses JSON
+    watchLibraryData = data.series || [];
 
-    let standalone = [];
+    // Fetch standalone projects
     try {
-      const pData = await api('/api/projects');
-      const all = Array.isArray(pData.projects) ? pData.projects : [];
-      standalone = all.filter((p) => {
-        const ctx = seriesContext(p);
-        return finalExists(p) && !ctx.series_folder && !p.series_name && !p.series_folder;
-      });
-    } catch (e) {}
+        let pRes = await api('/api/projects');
+        let pData = pRes;
+        let projects = pData.projects || [];
+        let standaloneEps = projects.filter(p => p.is_complete && !p.series_name);
+        for (let p of standaloneEps) {
+            let title = p.metadata && p.metadata.title ? p.metadata.title : p.project_name;
+            watchLibraryData.push({
+                series_name: title,
+                series_folder: 'standalone_' + p.project_name,
+                episode_max: 1,
+                rendered_count: 1,
+                episodes: [{
+                    _ep_no: 1,
+                    project_id: p.project_name,
+                    final_video: true,
+                    thumbnail: true
+                }]
+            });
+        }
+    } catch(e) {
+        console.error('Error fetching standalone projects for watch UI', e);
+    }
 
-    watchLibrary = { series: renderedSeries, standalone };
-    renderWatchGrid();
-  } catch (e) {
-    document.getElementById('watch-series-grid').innerHTML = '<div style="color:var(--error);">Lỗi: ' + e.message + '</div>';
+
+    if (watchLibraryData.length === 0) {
+      grid.innerHTML = '<div style="color:var(--text-dim);">Không có series nào có video.</div>';
+      return;
+    }
+
+    grid.innerHTML = '';
+    for (let s of watchLibraryData) {
+      let thumbUrl = 'static/placeholder.jpg';
+      let latestEp = s.episodes[0];
+      if (latestEp && latestEp.thumbnail) {
+        thumbUrl = backendUrl('/api/project/' + latestEp.project_id + '/stream/thumbnail.jpg');
+      } else if (latestEp && latestEp.youtube && latestEp.youtube.videoId) {
+        thumbUrl = 'https://img.youtube.com/vi/' + latestEp.youtube.videoId + '/maxresdefault.jpg';
+      }
+
+      let maxEp = s.episode_max ? s.episode_max : '??';
+      let rendered = s.rendered_count || 0;
+      let badgeText = rendered + '/' + maxEp;
+
+      let card = document.createElement('div');
+      card.className = 'watch-series-card';
+      card.onclick = () => openSeriesPlayer(s.series_folder);
+
+      card.innerHTML = `
+        <div class="watch-series-cover-wrapper">
+          <img class="watch-series-cover" src="${thumbUrl}" onerror="this.src='static/placeholder.jpg'">
+          <div class="watch-series-badge">${badgeText}</div>
+        </div>
+        <div class="watch-series-info">
+          <div class="watch-series-title" title="${s.series_name.replace(/"/g, '&quot;')}">${s.series_name}</div>
+        </div>
+      `;
+      grid.appendChild(card);
+    }
+
+  } catch (err) {
+    console.error(err);
+    grid.innerHTML = '<div style="color:var(--error);">Lỗi khi tải thư viện!</div>';
   }
 }
 
-function renderWatchGrid() {
-  const items = watchLibrary.series || [];
-  const grid = document.getElementById('watch-series-grid');
-  
-  if (items.length === 0) {
-    grid.innerHTML = '<div class="empty">Chưa có video nào.</div>';
-    return;
+function openSeriesPlayer(folder) {
+  if (!watchLibraryData) return;
+  let series = watchLibraryData.find(s => s.series_folder === folder);
+  if (!series) return;
+
+  currentWatchSeries = series;
+
+  document.getElementById('watch-grid-view').classList.add('hidden');
+  document.getElementById('watch-player-view').classList.remove('hidden');
+  document.getElementById('watch-player-title').innerText = series.series_name;
+
+  const epGrid = document.getElementById('watch-episodes-grid');
+  epGrid.innerHTML = '';
+  document.getElementById('watch-search-ep').value = '';
+
+  let sortedEps = [...series.episodes].sort((a,b) => (a._ep_no || 0) - (b._ep_no || 0));
+  currentPlayableEps = sortedEps.filter(ep => ep.final_video);
+
+  for (let i = 0; i < currentPlayableEps.length; i++) {
+    let ep = currentPlayableEps[i];
+    let btn = document.createElement('div');
+    btn.className = 'watch-ep-btn ep-item-btn';
+    let epNum = ep._ep_no || '?';
+    btn.innerText = epNum;
+    btn.setAttribute('data-index', i);
+    btn.onclick = () => playEpisodeByIndex(i);
+    epGrid.appendChild(btn);
   }
 
-  grid.innerHTML = items.map((item, idx) => {
-    const title = item.series_name || item.name || item.title || item.project_name || 'Phim';
-    const eps = item.episodes || [];
-    const first = eps[0] || item;
-    const thumb = backendUrl(`/api/project/${encodeURIComponent(first.project_id || first.project_name || first.name)}/stream/thumbnail.jpg`);
-    const key = folderKey(item);
-    const p = watchProgressMap[key] || {};
-    const watchedEp = p.ep_no || (p.ep_index != null && eps[p.ep_index] ? episodeNo(eps[p.ep_index], Number(p.ep_index)) : null);
-    const watched = watchedEp ? `Đã xem tập ${watchedEp}` : 'Chưa xem';
-    
-    return `<button class="card watch-series-card" onclick="openWatchPlayer(${idx})" style="padding:0; text-align:left; cursor:pointer; background:transparent; border:none; display:flex; flex-direction:column; gap:8px;">
-      <div style="position:relative; width:100%; aspect-ratio:16/9; overflow:hidden; border-radius:12px;">
-        <img src="${thumb}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='static/placeholder.jpg'" />
-        <div style="position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.7); color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold;">${eps.length} Tập</div>
-      </div>
-      <div style="padding: 4px 8px;">
-        <h3 style="font-size:15px; margin:0; line-height:1.3; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; color:var(--text);">${safeHtml(title)}</h3>
-        <p style="font-size:12px; color:var(--text-dim); margin:4px 0 0 0;">${safeHtml(watched)}</p>
-      </div>
-    </button>`;
-  }).join('');
-}
-
-function openWatchPlayer(index) {
-  const item = watchLibrary.series[index];
-  if (!item) return;
-  watchCurrentItem = item;
-  watchEpisodes = [...(item.episodes || [])];
-  watchEpisodes.sort((a, b) => episodeNo(a, 0) - episodeNo(b, 0));
-  
-  const p = watchProgressMap[folderKey(item)] || {};
-  watchCurrentIndex = Math.min(Math.max(Number(p.ep_index || 0), 0), watchEpisodes.length - 1);
-  
-  document.getElementById('watchPanel').classList.remove('hidden');
-  document.getElementById('watchKind').textContent = 'SERIES';
-  document.getElementById('watchTitle').textContent = item.series_name || item.name || 'Video';
-  document.getElementById('watchMeta').textContent = `${watchEpisodes.length} video render`;
-  
-  renderEpisodes();
-  playCurrent(Number(p.time || 0));
-}
-
-function episodeTitle(ep, idx) {
-  const title = ep.title || metadata(ep).title || watchCurrentItem?.series_name || 'Video';
-  const no = episodeNo(ep, idx);
-  return `Tập ${no} | ${title.replace(/^Tập\s*\d+\s*\|\s*/i, '')}`;
-}
-
-function renderEpisodes() {
-  const q = document.getElementById('episodeSearch').value.trim().toLowerCase();
-  document.getElementById('episodeGrid').innerHTML = watchEpisodes.map((ep, idx) => ({ ep, idx, title: episodeTitle(ep, idx) }))
-    .filter((x) => !q || x.title.toLowerCase().includes(q) || String(episodeNo(x.ep, x.idx)).includes(q))
-    .map((x) => `<button class="episode ${x.idx === watchCurrentIndex ? 'active' : ''}" data-index="${x.idx}" onclick="watchCurrentIndex=${x.idx}; playCurrent(0); renderEpisodes();">${safeHtml(episodeNo(x.ep, x.idx))}</button>`)
-    .join('');
-  
-  document.getElementById('prevBtn').disabled = watchCurrentIndex <= 0;
-  document.getElementById('nextBtn').disabled = watchCurrentIndex >= watchEpisodes.length - 1;
-}
-
-function selectedServer() {
-  return document.querySelector('input[name="serverMode"]:checked')?.value || 'cloudflare';
-}
-
-function videoSource(ep) {
-  const project = encodeURIComponent(ep.project_id || ep.project_name || ep.name);
-  if (selectedServer() === 'gdrive') {
-    const fileId = driveFileId(ep);
-    if (fileId) return backendUrl(`/api/gdrive/file/${encodeURIComponent(fileId)}/stream`);
-    document.getElementById('serverHint').textContent = 'Video chưa có file Google Drive, đang dùng Cloudflare.';
+  if (currentPlayableEps.length === 0) {
+    epGrid.innerHTML = '<div style="grid-column: 1/-1; color: var(--text-dim);">Chưa có tập nào được render video.</div>';
+    document.getElementById('watch-video-element').src = '';
+    updatePrevNextButtons();
   } else {
-    document.getElementById('serverHint').textContent = '';
+    playEpisodeByIndex(0);
   }
-  return backendUrl(`/api/project/${project}/stream/final_video.mp4?v=faststart`);
 }
 
-function playCurrent(seekTime = 0) {
-  const ep = watchEpisodes[watchCurrentIndex];
-  if (!ep) return;
-  const player = document.getElementById('videoPlayer');
-  document.getElementById('watchMeta').textContent = `${episodeTitle(ep, watchCurrentIndex)} | vị trí ${watchCurrentIndex + 1}/${watchEpisodes.length}`;
-  document.getElementById('serverHint').textContent = '';
-  
-  player.src = videoSource(ep);
-  player.load();
-  player.onloadedmetadata = () => {
-    if (seekTime > 0 && Number.isFinite(player.duration)) player.currentTime = Math.min(seekTime, Math.max(player.duration - 2, 0));
-    player.play().catch(e => console.warn('Auto-play blocked', e));
-  };
-  renderEpisodes();
-}
+function playEpisodeByIndex(index) {
+  if (index < 0 || index >= currentPlayableEps.length) return;
+  currentEpIndex = index;
+  let ep = currentPlayableEps[index];
 
-function playNextEpisode() {
-  if (watchCurrentIndex < watchEpisodes.length - 1) {
-    saveProgress(true);
-    watchCurrentIndex++;
-    playCurrent(0);
-  }
+  document.querySelectorAll('.watch-ep-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.getAttribute('data-index')) === index);
+  });
+
+  let videoEl = document.getElementById('watch-video-element');
+  videoEl.src = backendUrl('/api/project/' + ep.project_id + '/stream/final_video.mp4');
+  videoEl.play().catch(e => console.log('Auto-play blocked:', e));
+
+  updatePrevNextButtons();
 }
 
 function playPrevEpisode() {
-  if (watchCurrentIndex > 0) {
-    saveProgress(true);
-    watchCurrentIndex--;
-    playCurrent(0);
+  playEpisodeByIndex(currentEpIndex - 1);
+}
+
+function playNextEpisode() {
+  playEpisodeByIndex(currentEpIndex + 1);
+}
+
+function updatePrevNextButtons() {
+  const btnPrev = document.getElementById('watch-btn-prev');
+  const btnNext = document.getElementById('watch-btn-next');
+
+  if (!btnPrev || !btnNext) return;
+
+  if (currentEpIndex <= 0) {
+    btnPrev.disabled = true;
+  } else {
+    btnPrev.disabled = false;
   }
+
+  if (currentEpIndex >= currentPlayableEps.length - 1 || currentEpIndex === -1) {
+    btnNext.disabled = true;
+  } else {
+    btnNext.disabled = false;
+  }
+}
+
+function filterEpisodes() {
+  let q = document.getElementById('watch-search-ep').value.toLowerCase();
+  document.querySelectorAll('.ep-item-btn').forEach(b => {
+    let text = b.innerText.toLowerCase();
+    b.style.display = text.includes(q) ? 'block' : 'none';
+  });
 }
 
 function closeWatchPlayer() {
-  saveProgress(true);
-  const player = document.getElementById('videoPlayer');
-  if (player) player.pause();
-  document.getElementById('watchPanel').classList.add('hidden');
-}
+  let videoEl = document.getElementById('watch-video-element');
+  videoEl.pause();
+  videoEl.src = '';
+  currentWatchSeries = null;
+  currentPlayableEps = [];
+  currentEpIndex = -1;
 
-async function saveProgress(force = false) {
-  if (!watchCurrentItem || !watchEpisodes[watchCurrentIndex]) return;
-  const player = document.getElementById('videoPlayer');
-  if (!force && (!player.currentTime || player.currentTime < 2)) return;
-  
-  const key = folderKey(watchCurrentItem);
-  const epNo = episodeNo(watchEpisodes[watchCurrentIndex], watchCurrentIndex);
-  watchProgressMap[key] = { 
-    ep_index: watchCurrentIndex, 
-    ep_no: epNo, 
-    time: Math.floor(player.currentTime || 0), 
-    updated_at: new Date().toISOString() 
-  };
-  
-  try {
-    await api('/api/user/progress', {
-      method: 'POST',
-      body: { folder: key, ep_index: watchCurrentIndex, ep_no: epNo, time: Math.floor(player.currentTime || 0) }
-    });
-  } catch (e) {
-    console.warn('Lưu tiến độ lỗi', e);
-  }
+  document.getElementById('watch-player-view').classList.add('hidden');
+  document.getElementById('watch-grid-view').classList.remove('hidden');
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  const player = document.getElementById('videoPlayer');
-  if (player) {
-    player.addEventListener('timeupdate', () => { 
-      if (!watchSaveTimer) watchSaveTimer = setTimeout(() => { watchSaveTimer = null; saveProgress(false); }, 5000); 
-    });
-    player.addEventListener('pause', () => saveProgress(true));
-    player.addEventListener('ended', () => { 
-      saveProgress(true); 
-      playNextEpisode();
-    });
-  }
-  
-  // Load watch library when clicking the Watch tab
-  const watchTabBtn = document.querySelector('.bottom-tabs .tab[data-tab="watch"]');
-  if (watchTabBtn) {
-    watchTabBtn.addEventListener('click', loadWatchLibrary);
-  }
-});
