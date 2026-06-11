@@ -3,7 +3,7 @@ const IS_IOS_REMOTE_MODE = IS_CAPACITOR_APP || window.location.pathname.startsWi
 let API = IS_IOS_REMOTE_MODE ? (localStorage.getItem('MIUBON_API_BASE') || '') : '';
 if (IS_IOS_REMOTE_MODE && !API) {
     setTimeout(() => {
-        let input = prompt("Welcome to MiuBon Vietsub iOS App!\n\nPlease enter your Backend PC IP Address and Port (e.g. https://miubon-vsub-online.vercel.app):", "https://miubon-vsub-online.vercel.app");
+        let input = prompt("Welcome to MiuBon Vietsub iOS App!\n\nPlease enter your Backend PC IP Address and Port (e.g. http://192.168.1.10:2209):", "http://");
         if (input) {
             API = input.replace(/\/+$/, '');
             localStorage.setItem('MIUBON_API_BASE', API);
@@ -13,8 +13,8 @@ if (IS_IOS_REMOTE_MODE && !API) {
 }
 
 window.changeBackendUrl = function() {
-    let current = localStorage.getItem('MIUBON_API_BASE') || 'https://miubon-vsub-online.vercel.app';
-    let input = prompt("Nhập Backend PC IP/Port (ví dụ https://miubon-vsub-online.vercel.app):", current);
+    let current = localStorage.getItem('MIUBON_API_BASE') || 'http://';
+    let input = prompt("Change Backend PC IP Address:", current);
     if (input !== null) {
         localStorage.setItem('MIUBON_API_BASE', input.replace(/\/+$/, ''));
         window.location.reload();
@@ -22,13 +22,6 @@ window.changeBackendUrl = function() {
 };
 
 const safeStr = (s) => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-function backendUrl(path) {
-  const s = String(path || '');
-  if (/^https?:\/\//i.test(s)) return s;
-  const base = String(API || '').replace(/\/+$/, '');
-  return base ? `${base}${s.startsWith('/') ? s : `/${s}`}` : s;
-}
 
 let currentTab = 'pipeline';
 let pollTimer = null;
@@ -41,7 +34,7 @@ function safeHtml(str) {
 }
 
 // ═══ DEMO & SANDBOX STATE MANAGEMENT ═══
-let isDemoMode = (window.location.hostname === 'huuhoan229.github.io' ||
+let isDemoMode = (window.location.hostname === 'huuhoan229.github.io' || 
                   window.location.hostname.includes('github.io') ||
                   new URLSearchParams(window.location.search).get('demo') === 'true');
 
@@ -52,7 +45,7 @@ function getMockState() {
   if (state) {
     try { return JSON.parse(state); } catch (e) {}
   }
-
+  
   // Default sandbox state
   const defaultState = {
     config: {
@@ -123,7 +116,7 @@ function getMockState() {
     ],
     jobs: {}
   };
-
+  
   localStorage.setItem(MOCK_STATE_KEY, JSON.stringify(defaultState));
   return defaultState;
 }
@@ -171,7 +164,7 @@ window.resetDemoModeData = resetDemoModeData;
 // Simulated API routing logic
 function mockApi(path, opts = {}) {
   const state = getMockState();
-
+  
   if (path === '/api/health') {
     return Promise.resolve({
       has_api_key: true,
@@ -181,7 +174,7 @@ function mockApi(path, opts = {}) {
       facebook: { configured: state.config.facebook_page_access_token ? true : false, ok: state.config.facebook_page_access_token ? true : false }
     });
   }
-
+  
   if (path === '/api/config') {
     if (opts.method === 'POST') {
       const payload = typeof opts.body === 'string' ? JSON.parse(opts.body) : (opts.body || {});
@@ -191,11 +184,11 @@ function mockApi(path, opts = {}) {
     }
     return Promise.resolve(state.config);
   }
-
+  
   if (path === '/api/projects') {
     return Promise.resolve({ projects: state.projects });
   }
-
+  
   if (path === '/api/tiktok/auth') {
     return Promise.resolve({
       playwright_ok: true,
@@ -204,7 +197,7 @@ function mockApi(path, opts = {}) {
       storage_age_min: 5
     });
   }
-
+  
   if (path === '/api/tiktok/api/status') {
     return Promise.resolve({
       ok: state.tiktok.connected,
@@ -219,13 +212,13 @@ function mockApi(path, opts = {}) {
       open_id: "mock_open_id_666"
     });
   }
-
+  
   if (path === '/api/tiktok/api/disconnect') {
     state.tiktok.connected = false;
     saveMockState(state);
     return Promise.resolve({ ok: true });
   }
-
+  
   if (path === '/api/tiktok/oauth/start') {
     setTimeout(() => {
       const modal = document.getElementById('demo-oauth-modal');
@@ -233,7 +226,7 @@ function mockApi(path, opts = {}) {
     }, 100);
     return Promise.resolve({ ok: true, auth_url: '#' });
   }
-
+  
   if (path === '/api/tiktok/upload/start') {
     const jobId = 'tk_upload_sim_' + Date.now();
     state.jobs[jobId] = {
@@ -245,14 +238,14 @@ function mockApi(path, opts = {}) {
     saveMockState(state);
     return Promise.resolve({ ok: true, job_id: jobId });
   }
-
+  
   if (path.startsWith('/api/tiktok/upload/')) {
     const jobId = path.split('/').pop();
     const job = state.jobs[jobId];
     if (!job) {
       return Promise.resolve({ status: 'error', error: 'Job not found' });
     }
-
+    
     if (job.status === 'running') {
       job.pct += 25;
       if (job.pct === 25) {
@@ -272,7 +265,7 @@ function mockApi(path, opts = {}) {
       state.jobs[jobId] = job;
       saveMockState(state);
     }
-
+    
     return Promise.resolve({
       status: job.status,
       progress: { pct: job.pct, message: job.pct === 100 ? 'Done' : 'Uploading...' },
@@ -294,7 +287,7 @@ function mockApi(path, opts = {}) {
       results: [{ part: 1, ok: true, status: 'dry_run_success' }]
     });
   }
-
+  
   if (path.startsWith('/api/facebook/reels/status')) {
     return Promise.resolve({
       ok: true,
@@ -308,7 +301,7 @@ function mockApi(path, opts = {}) {
       } : null
     });
   }
-
+  
   if (path === '/api/facebook/reels/fetch-pages-with-token') {
     return Promise.resolve({
       ok: true,
@@ -328,7 +321,7 @@ function mockApi(path, opts = {}) {
       long_lived_token: "mock_long_lived_user_token_abc"
     });
   }
-
+  
   if (path === '/api/facebook/reels/upload/start') {
     const jobId = 'fb_upload_sim_' + Date.now();
     state.jobs[jobId] = {
@@ -340,14 +333,14 @@ function mockApi(path, opts = {}) {
     saveMockState(state);
     return Promise.resolve({ ok: true, job_id: jobId });
   }
-
+  
   if (path.startsWith('/api/facebook/reels/upload/')) {
     const jobId = path.split('/').pop();
     const job = state.jobs[jobId];
     if (!job) {
       return Promise.resolve({ status: 'error', error: 'Job not found' });
     }
-
+    
     if (job.status === 'running') {
       job.pct += 25;
       if (job.pct === 25) {
@@ -367,7 +360,7 @@ function mockApi(path, opts = {}) {
       state.jobs[jobId] = job;
       saveMockState(state);
     }
-
+    
     return Promise.resolve({
       status: job.status,
       progress: { pct: job.pct, message: job.pct === 100 ? 'Done' : 'Uploading...' },
@@ -389,7 +382,7 @@ function mockApi(path, opts = {}) {
       results: [{ part: 1, ok: true, video_id: 'fb_reel_sim_4567', status: 'dry_run_success' }]
     });
   }
-
+  
   return Promise.resolve({ ok: true, message: 'Simulated response' });
 }
 
@@ -430,13 +423,17 @@ async function api(path, opts = {}) {
   if (isDemoMode) {
     return mockApi(path, opts);
   }
-
+  
   const { timeoutMs = 45000, ...fetchOpts } = opts;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = localStorage.getItem('miubon_token');
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    
     const r = await fetch(API + path, {
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       signal: controller.signal,
       ...fetchOpts,
       body: fetchOpts.body ? JSON.stringify(fetchOpts.body) : undefined
@@ -502,7 +499,7 @@ function switchTab(tab) {
       runningItemLogTimer = null;
     }
   }
-
+  
   if (tab === 'ytqueue') {
     loadYTQueue();
     if (typeof ytQueuePollTimer !== 'undefined' && !ytQueuePollTimer) ytQueuePollTimer = setInterval(loadYTQueue, 5000);
@@ -591,7 +588,7 @@ async function checkHealth() {
       const activeQueues = [];
       let activeQueueId = null;
       let activePipelineId = null;
-
+      
       for (const jid of jobIds) {
         if (d.active_jobs[jid].queue) {
           const q = d.active_jobs[jid].queue || {};
@@ -735,8 +732,8 @@ function renderActiveQueues(queues) {
       : 'No series context';
     const skipAction = `<button class="btn btn-outline btn-sm" onclick="skipPipelineQueueItem('${q.id}')">Bỏ qua URL</button>`;
     const action = q.status === 'paused'
-      ? `<button class="btn btn-primary btn-sm" onclick="resumePipelineQueue('${q.id}')">&#9654; Resume</button> ${skipAction} <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">&#10006; Hủy Queue</button>`
-      : `<button class="btn btn-outline btn-sm" onclick="pauseQueue('${q.id}')">&#9208; Pause</button> ${skipAction} <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">&#10006; Hủy Queue</button>`;
+      ? `<button class="btn btn-primary btn-sm" onclick="resumePipelineQueue('${q.id}')">&#9654; Resume</button> ${skipAction} <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">&#10006; H?y Queue</button>`
+      : `<button class="btn btn-outline btn-sm" onclick="pauseQueue('${q.id}')">&#9208; Pause</button> ${skipAction} <button class=\"btn btn-error btn-sm\" onclick=\"cancelQueue('${q.id}')\">&#10006; H?y Queue</button>`;
     return `
       <div class="queue-item active-queue-row ${q.id === selectedQueueId ? 'active' : ''}">
         <span class="queue-idx">${safeHtml(q.id)}</span>
@@ -1240,7 +1237,7 @@ function showResult(r) {
     </div>
     <div class="btn-group">
       ${r.final_video ? `<a href="/api/project/${r.project_id}/file/final_video.mp4" class="btn btn-primary btn-sm">⬇ Download Video</a>` : ''}
-      ${r.youtube?.url ? `<a href="${r.youtube.url}" target="_blank" class="btn btn-accent btn-sm">▶ Watch on YouTube</a>` : ''}
+      ${r.youtube?.url ? `<a href="${r.youtube.url}" target="_blank" class="btn btn-accent btn-sm">â–¶ Watch on YouTube</a>` : ''}
     </div>
   `;
 }
@@ -1359,13 +1356,13 @@ function updateProjectsSelectedCount() {
   const cbs = document.querySelectorAll('.project-cb');
   let count = 0;
   cbs.forEach(cb => { if (cb.checked) count++; });
-
+  
   const infoEl = document.getElementById('projects-selected-info');
   const countEl = document.getElementById('batch-resume-count');
   const deleteCountEl = document.getElementById('batch-delete-count');
   const btnResume = document.getElementById('btn-batch-resume');
   const btnDelete = document.getElementById('btn-batch-delete');
-
+  
   if (infoEl) infoEl.textContent = `${count} đã chọn`;
   if (countEl) countEl.textContent = count;
   if (deleteCountEl) deleteCountEl.textContent = count;
@@ -1432,12 +1429,12 @@ async function batchDeleteProjects() {
       body: { projects: selected }
     });
     if (d.error) { toast(d.error, 'error'); return; }
-
+    
     toast(`Đã xoá ${d.deleted.length} project thành công.`);
     if (d.errors?.length) {
       toast(`Có ${d.errors.length} lỗi khi xoá.`, 'error');
     }
-
+    
     // Clear selection and refresh
     const selectAllCb = document.getElementById('projects-select-all-cb');
     if (selectAllCb) selectAllCb.checked = false;
@@ -1452,12 +1449,12 @@ async function scanDuplicates() {
   try {
     const d = await api('/api/projects/duplicates');
     if (d.error) { toast(d.error, 'error'); return; }
-
+    
     if (!d.duplicates || !d.duplicates.length) {
       toast('Không tìm thấy project nào bị trùng URL.');
       return;
     }
-
+    
     // Render duplicates modal
     const list = document.getElementById('duplicates-list');
     list.innerHTML = d.duplicates.map((group, gIdx) => {
@@ -1484,7 +1481,7 @@ async function scanDuplicates() {
         </div>
       </div>`;
     }).join('');
-
+    
     document.getElementById('duplicates-modal').classList.remove('hidden');
   } catch (e) { toast('Error: ' + e.message, 'error'); }
   btn.disabled = false;
@@ -1500,20 +1497,20 @@ async function deleteSelectedDuplicates() {
   document.querySelectorAll('.dup-cb:checked').forEach(cb => {
     selected.push(cb.dataset.project);
   });
-
+  
   if (!selected.length) return toast('Chọn ít nhất 1 project để xoá', 'error');
   if (!confirm(`Xoá vĩnh viễn ${selected.length} project đã chọn?`)) return;
-
+  
   const btn = document.getElementById('btn-delete-duplicates');
   btn.disabled = true;
   btn.textContent = '⏳ Đang xoá...';
-
+  
   try {
     const d = await api('/api/projects/bulk-delete', {
       method: 'POST',
       body: { projects: selected }
     });
-
+    
     if (d.error) { toast(d.error, 'error'); }
     else {
       toast(`Đã xoá ${d.deleted.length} project.`);
@@ -1521,7 +1518,7 @@ async function deleteSelectedDuplicates() {
       loadProjects();
     }
   } catch (e) { toast('Error: ' + e.message, 'error'); }
-
+  
   btn.disabled = false;
   btn.textContent = '🗑 Xoá các mục đã chọn';
 }
@@ -1598,7 +1595,7 @@ function closeProjectModal() {
 function watchProjectVideo() {
   if (!currentProjectName) return;
   // Assume final_video.mp4 is the main output. If not, open any video.
-  const url = backendUrl(`/api/project/${currentProjectName}/stream/final_video.mp4`);
+  const url = `/api/project/${currentProjectName}/stream/preview`;
   window.open(url, '_blank');
 }
 
@@ -1652,7 +1649,7 @@ function addToResumeQueue() {
   }
   resumeQueue.push(currentProjectName);
   renderResumeQueue();
-  toast(`➕ ${currentProjectName} added to resume queue`);
+  toast(`âž• ${currentProjectName} added to resume queue`);
   closeProjectModal();
 }
 
@@ -1699,7 +1696,7 @@ async function startResumeQueue() {
       method: 'POST',
       body: { projects: resumeQueue }
     });
-    if (d.error) { toast(d.error, 'error'); btn.disabled = false; btn.textContent = '▶ Start Resume Queue'; return; }
+    if (d.error) { toast(d.error, 'error'); btn.disabled = false; btn.textContent = 'â–¶ Start Resume Queue'; return; }
 
     toast(`Resume queue started: ${d.total} projects`);
 
@@ -1730,7 +1727,7 @@ async function startResumeQueue() {
     renderResumeQueue();
   } catch (e) { toast('Error: ' + e.message, 'error'); }
   btn.disabled = false;
-  btn.textContent = '▶ Start Resume Queue';
+  btn.textContent = 'â–¶ Start Resume Queue';
 }
 
 async function pollResumeQueue(queueId, projects) {
@@ -1813,19 +1810,17 @@ async function pollResumeQueue(queueId, projects) {
 async function loadConfig() {
   try {
     const d = await api('/api/config');
-    const fields = ['api_key','channel_name','youtube_title_mode','youtube_series_name','youtube_title_suffix','gemini_model','whisper_model','source_lang',
+    const fields = ['channel_name','youtube_title_mode','youtube_upload_strategy','whisper_model','source_lang',
       'target_lang','translation_style','translation_provider','translation_provider_order',
-      'local_translation_model','local_translation_api_url','local_translation_timeout',
-      'azure_translator_key','azure_translator_endpoint','azure_translator_region',
-      'deepl_api_key','deepl_api_url',
       'ninerouter_url','ninerouter_key','ninerouter_model','ninerouter_timeout',
+      'webai_url','webai_model',
       'tiktok_upload_provider','tiktok_api_client_key','tiktok_api_client_secret','tiktok_api_redirect_uri',
       'tiktok_api_scopes','tiktok_api_pkce_challenge_format','tiktok_api_privacy_level','tiktok_api_poll_timeout_sec','tiktok_api_poll_interval_sec',
       'facebook_app_id','facebook_app_secret',
       'facebook_page_access_token','facebook_reels_actor_id','facebook_graph_version','facebook_reels_video_state',
       'facebook_reels_poll_timeout_sec','facebook_reels_poll_interval_sec','facebook_reels_request_timeout_sec',
       'facebook_api_proxy','facebook_upload_mode','facebook_reels_short_threshold_sec','facebook_reels_max_minutes','facebook_reels_auto_split',
-      'tts_engine','tts_voice','vieneu_voice','vieneu_mode','vieneu_ref_voice','xtts_ref_voice','capcut_voice','tts_speed','tts_pitch','tts_volume','demucs_model',
+      'tts_engine','vieneu_voice','vieneu_mode','vieneu_ref_voice','capcut_voice','capcut_tts_workers','tts_speed','tts_pitch','tts_volume','demucs_model',
       'tiktok_max_minutes','tiktok_caption_max_chars','tiktok_upload_timeout_sec',
       'blur_sigma','mask_h','mask_y_pct',
       'thumbnail_mode','ai_thumbnail_provider','ai_thumbnail_model','ai_thumbnail_timeout_sec','ai_thumbnail_style','ai_thumbnail_api_key','ai_thumbnail_cloudflare_account_id','ai_thumbnail_cloudflare_api_token','ai_thumbnail_cloudflare_mode','ai_thumbnail_img2img_strength','ai_thumbnail_steps',
@@ -1834,7 +1829,7 @@ async function loadConfig() {
     fields.forEach(f => {
       const el = document.getElementById('cfg-' + f);
       if (el) {
-        if ((f === 'vieneu_ref_voice' || f === 'xtts_ref_voice') && !d[f]) {
+        if (f === 'vieneu_ref_voice' && !d[f]) {
           el.value = 'sample.WAV';
         } else if (f === 'youtube_title_mode' && !d[f]) {
           el.value = 'ai';
@@ -1855,7 +1850,7 @@ async function loadConfig() {
         }
       }
     });
-    const cb = ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless','upload_fifo_strict','pipeline_skip_after_retry_exhausted'];
+    const cb = ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless','upload_fifo_strict','pipeline_skip_after_retry_exhausted','enable_webai_fallback'];
     cb.forEach(f => {
       const el = document.getElementById('cfg-' + f);
       if (el) el.checked = !!d[f];
@@ -1866,29 +1861,23 @@ async function loadConfig() {
       warpCb.checked = !!d.douyin_warp_enabled;
       _updateWarpUI(!!d.douyin_warp_enabled);
     }
-    // Load api_keys array
-    const keysEl = document.getElementById('cfg-api_keys');
-    if (keysEl && d.api_keys) {
-      keysEl.value = Array.isArray(d.api_keys) ? d.api_keys.join('\n') : d.api_keys;
-    }
+
     toggleTtsOptions();
   } catch (e) { console.error(e); }
 }
 
 async function saveConfig() {
-  const fields = ['api_key','channel_name','youtube_title_mode','youtube_series_name','youtube_title_suffix','youtube_upload_strategy','gemini_model','whisper_model','source_lang',
+  const fields = ['channel_name','youtube_title_mode','youtube_upload_strategy','whisper_model','source_lang',
     'target_lang','translation_style','translation_provider','translation_provider_order',
-    'local_translation_model','local_translation_api_url','local_translation_timeout',
-    'azure_translator_key','azure_translator_endpoint','azure_translator_region',
-    'deepl_api_key','deepl_api_url',
     'ninerouter_url','ninerouter_key','ninerouter_model','ninerouter_timeout',
+    'webai_url','webai_model',
     'tiktok_upload_provider','tiktok_api_client_key','tiktok_api_client_secret','tiktok_api_redirect_uri',
     'tiktok_api_scopes','tiktok_api_pkce_challenge_format','tiktok_api_privacy_level','tiktok_api_poll_timeout_sec','tiktok_api_poll_interval_sec',
     'facebook_app_id','facebook_app_secret',
     'facebook_page_access_token','facebook_reels_actor_id','facebook_graph_version','facebook_reels_video_state',
     'facebook_reels_poll_timeout_sec','facebook_reels_poll_interval_sec','facebook_reels_request_timeout_sec',
     'facebook_api_proxy','facebook_upload_mode','facebook_reels_short_threshold_sec','facebook_reels_max_minutes','facebook_reels_auto_split',
-    'tts_engine','tts_voice','vieneu_voice','vieneu_mode','vieneu_ref_voice','xtts_ref_voice','capcut_voice','tts_speed','tts_pitch','tts_volume','demucs_model',
+    'tts_engine','vieneu_voice','vieneu_mode','vieneu_ref_voice','capcut_voice','capcut_tts_workers','tts_speed','tts_pitch','tts_volume','demucs_model',
     'tiktok_max_minutes','tiktok_caption_max_chars','tiktok_upload_timeout_sec',
     'ffmpeg_encoder','blur_sigma','mask_h','mask_y_pct',
     'thumbnail_mode','ai_thumbnail_provider','ai_thumbnail_model','ai_thumbnail_timeout_sec','ai_thumbnail_style','ai_thumbnail_api_key','ai_thumbnail_cloudflare_account_id','ai_thumbnail_cloudflare_api_token','ai_thumbnail_cloudflare_mode','ai_thumbnail_img2img_strength','ai_thumbnail_steps',
@@ -1901,42 +1890,38 @@ async function saveConfig() {
       const v = el.value;
       if (f === 'ai_thumbnail_api_key' && !String(v || '').trim()) return;
       if (f === 'ai_thumbnail_cloudflare_api_token' && !String(v || '').trim()) return;
-      cfg[f] = ['blur_sigma','mask_h','font_size','margin_v','local_translation_timeout','ninerouter_timeout','tiktok_max_minutes','tiktok_caption_max_chars','tiktok_upload_timeout_sec','tiktok_api_poll_timeout_sec','tiktok_api_poll_interval_sec','facebook_reels_poll_timeout_sec','facebook_reels_poll_interval_sec','facebook_reels_request_timeout_sec','facebook_reels_short_threshold_sec','facebook_reels_max_minutes', 'batch_pipeline_concurrency', 'download_concurrency', 'gpu_heavy_concurrency', 'pipeline_retry_max','ai_thumbnail_timeout_sec','ai_thumbnail_steps'].includes(f) ? parseInt(v) || 0
+      cfg[f] = ['blur_sigma','mask_h','font_size','margin_v','ninerouter_timeout','tiktok_max_minutes','tiktok_caption_max_chars','tiktok_upload_timeout_sec','tiktok_api_poll_timeout_sec','tiktok_api_poll_interval_sec','facebook_reels_poll_timeout_sec','facebook_reels_poll_interval_sec','facebook_reels_request_timeout_sec','facebook_reels_short_threshold_sec','facebook_reels_max_minutes', 'batch_pipeline_concurrency', 'download_concurrency', 'gpu_heavy_concurrency', 'pipeline_retry_max','ai_thumbnail_timeout_sec','ai_thumbnail_steps'].includes(f) ? parseInt(v) || 0
         : ['mask_y_pct','rotate_deg','tts_speed','tts_pitch','tts_volume','ai_thumbnail_img2img_strength'].includes(f) ? parseFloat(v) || 0 : v;
       if (f === 'facebook_reels_auto_split') cfg[f] = String(v) === 'true';
     }
   });
-  ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless','upload_fifo_strict','pipeline_skip_after_retry_exhausted'].forEach(f => {
+  ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless','upload_fifo_strict','pipeline_skip_after_retry_exhausted','enable_webai_fallback'].forEach(f => {
     const el = document.getElementById('cfg-' + f);
     if (el) cfg[f] = el.checked;
   });
   // WARP boolean
   const warpEl = document.getElementById('cfg-douyin_warp_enabled');
   if (warpEl) cfg.douyin_warp_enabled = warpEl.checked;
-  // Save api_keys as array
-  const keysEl = document.getElementById('cfg-api_keys');
-  if (keysEl) {
-    cfg.api_keys = keysEl.value.split('\n').map(k => k.trim()).filter(k => k.length > 0);
-  }
+
   await api('/api/config', { method: 'POST', body: cfg });
   toast('Settings saved!');
 }
 
 function toggleTtsOptions() {
-  const engine = document.getElementById('cfg-tts_engine')?.value || 'gemini';
+  const engine = document.getElementById('cfg-tts_engine')?.value || 'vieneu';
   const mode = document.getElementById('cfg-vieneu_mode')?.value || 'preset';
-
+  
   const vieneuModeGroup = document.getElementById('vieneu-mode-group');
   const vieneuVoiceGroup = document.getElementById('vieneu-voice-group');
   const vnRef = document.getElementById('vieneu-ref-group');
-  const xttsRef = document.getElementById('xtts-ref-group');
   const capcutGroup = document.getElementById('capcut-voice-group');
-
+  const capcutWorkersGroup = document.getElementById('capcut-workers-group');
+  
   if (vieneuModeGroup) vieneuModeGroup.style.display = engine === 'vieneu' ? '' : 'none';
   if (vieneuVoiceGroup) vieneuVoiceGroup.style.display = (engine === 'vieneu' && mode === 'preset') ? '' : 'none';
   if (vnRef) vnRef.style.display = (engine === 'vieneu' && mode === 'clone') ? '' : 'none';
-  if (xttsRef) xttsRef.style.display = engine === 'xtts' ? '' : 'none';
-  if (capcutGroup) capcutGroup.style.display = engine === 'capcut' ? '' : 'none';
+  if (capcutGroup) capcutGroup.style.display = (engine === 'capcut' || engine === 'capcut_native') ? '' : 'none';
+  if (capcutWorkersGroup) capcutWorkersGroup.style.display = (engine === 'capcut' || engine === 'capcut_native') ? '' : 'none';
 }
 
 // ── WARP Proxy UI ──
@@ -1946,7 +1931,7 @@ function _updateWarpUI(enabled) {
     const fLabel = document.getElementById('floating-warp-label');
     const fToggle = document.getElementById('floating-warp-toggle');
     const mToggle = document.getElementById('cfg-douyin_warp_enabled');
-
+    
     if (badge) {
       badge.textContent = enabled ? 'Bật' : 'Tắt';
       badge.style.background = enabled ? 'rgba(255,127,0,.2)' : 'rgba(136,136,168,.12)';
@@ -2143,6 +2128,30 @@ async function syncProjectsFromGDrive() {
   }
 }
 
+async function massUploadVideosGDrive() {
+  const el = document.getElementById('gdrive-sync-status');
+  if (el) el.textContent = 'Starting Mass Upload to Drive...';
+  try {
+    const d = await api('/api/gdrive/mass_upload_videos', { method: 'POST', timeoutMs: 15000 });
+    if (!d.ok) {
+      if (el) el.textContent = 'Mass upload failed: ' + (d.error || 'unknown error');
+      toast(d.error || 'Mass upload failed', 'error');
+      return;
+    }
+    if (el) el.textContent = `Mass upload started: ${d.job_id}`;
+    pollGDriveJob(d.job_id, (payload) => {
+      const r = payload || {};
+      const msg = `Drive Mass Upload done: ${r.uploaded_projects || 0} projects uploaded.`;
+      if (el) el.textContent = msg;
+      toast(msg);
+      if (typeof loadProjects === 'function') loadProjects();
+    }, el);
+  } catch (e) {
+    if (el) el.textContent = 'Mass upload start error: ' + e.message;
+    toast('Mass upload start error: ' + e.message, 'error');
+  }
+}
+
 async function uploadProjectGDrive() {
   if (!currentProjectName) return;
   const btn = document.getElementById('btn-gdrive-upload');
@@ -2184,24 +2193,17 @@ async function testTranslationApi() {
   if (!btn || !statusEl) return;
 
   const payload = {
-    api_key: document.getElementById('cfg-api_key')?.value?.trim() || '',
-    gemini_model: document.getElementById('cfg-gemini_model')?.value || 'gemini-2.5-flash',
     source_lang: document.getElementById('cfg-source_lang')?.value?.trim() || 'zh',
     target_lang: document.getElementById('cfg-target_lang')?.value?.trim() || 'vi',
     translation_provider: document.getElementById('cfg-translation_provider')?.value || '9router',
     translation_provider_order: document.getElementById('cfg-translation_provider_order')?.value || '',
-    local_translation_model: document.getElementById('cfg-local_translation_model')?.value || 'qwen3:8b',
-    local_translation_api_url: document.getElementById('cfg-local_translation_api_url')?.value || 'http://127.0.0.1:11434/api/chat',
-    local_translation_timeout: parseInt(document.getElementById('cfg-local_translation_timeout')?.value || '60', 10) || 60,
-    azure_translator_key: document.getElementById('cfg-azure_translator_key')?.value || '',
-    azure_translator_endpoint: document.getElementById('cfg-azure_translator_endpoint')?.value || 'https://api.cognitive.microsofttranslator.com',
-    azure_translator_region: document.getElementById('cfg-azure_translator_region')?.value || '',
-    deepl_api_key: document.getElementById('cfg-deepl_api_key')?.value || '',
-    deepl_api_url: document.getElementById('cfg-deepl_api_url')?.value || 'https://api-free.deepl.com/v2/translate',
     ninerouter_url: document.getElementById('cfg-ninerouter_url')?.value || 'http://127.0.0.1:20128',
     ninerouter_key: document.getElementById('cfg-ninerouter_key')?.value || '',
     ninerouter_model: document.getElementById('cfg-ninerouter_model')?.value || '',
-    ninerouter_timeout: parseInt(document.getElementById('cfg-ninerouter_timeout')?.value || '60', 10) || 60
+    ninerouter_timeout: parseInt(document.getElementById('cfg-ninerouter_timeout')?.value || '60', 10) || 60,
+    webai_url: document.getElementById('cfg-webai_url')?.value || 'http://127.0.0.1:6969',
+    webai_model: document.getElementById('cfg-webai_model')?.value || 'gemini-3-flash',
+    enable_webai_fallback: !!document.getElementById('cfg-enable_webai_fallback')?.checked
   };
 
   btn.disabled = true;
@@ -2508,7 +2510,7 @@ async function scanYoutubeVideoMatch() {
     const rows = d.rows || [];
     renderYoutubeVideos(rows, 'match');
     if (matchStatus) {
-      matchStatus.textContent = `Matched ${d.matched || 0}/${d.total_videos || rows.length} video(s) với project local (pages=${d.pages || 1}).`;
+      matchStatus.textContent = `Matched ${d.matched || 0}/${d.total_videos || rows.length} video(s) v?i project local (pages=${d.pages || 1}).`;
     }
     toast(`Scan done: matched ${d.matched || 0}/${d.total_videos || rows.length}`);
   } catch (e) {
@@ -2699,17 +2701,17 @@ async function loadTikTokQuickConfig() {
 
 async function saveTikTokTabConfig() {
   const payload = {};
-
+  
   const mm = document.getElementById('tk-max-minutes');
   const split = document.getElementById('tk-auto-split');
   const headless = document.getElementById('tk-headless');
   const provider = document.getElementById('tk-provider');
-
+  
   if (mm) payload.tiktok_max_minutes = parseInt(mm.value || '10', 10);
   if (split) payload.tiktok_auto_split = split.checked;
   if (headless) payload.tiktok_headless = headless.checked;
   if (provider) payload.tiktok_upload_provider = provider.value;
-
+  
   try {
     const d = await api('/api/config', { method: 'POST', body: payload });
     if (d.ok) toast('✅ Đã lưu cấu hình mặc định (Max phút, Auto split, Headless) !');
@@ -3618,10 +3620,10 @@ async function startScrape() {
         if (s.result) {
           scrapeVideos = s.result.videos || [];
           renderScrapeResults(s.result);
-
+          
           // AUTO-GROUP SERIES AFTER RENDER
-          setTimeout(() => {
-            groupSeriesByAI();
+          setTimeout(() => { 
+            groupSeriesByAI(); 
           }, 1500);
         }
         toast(`Found ${scrapeVideos.length} videos! Grouping series...`);
@@ -3671,7 +3673,7 @@ function renderScrapeResults(result) {
         ${isDone && localProject ? `<div class="video-local-project">Local: <a href="javascript:void(0)" onclick="jumpToProject('${localProject}')" style="color: #64ffda; text-decoration: underline; font-weight: bold;">${localProject}</a></div>` : ''}
         <div class="video-translation" id="vt-${i}"></div>
         <div class="video-meta">
-          ${plays ? `<span>▶ ${plays}</span>` : ''}
+          ${plays ? `<span>â–¶ ${plays}</span>` : ''}
           ${v.digg_count ? `<span>❤ ${v.digg_count}</span>` : ''}
           ${date ? `<span>📅 ${date}</span>` : ''}
         </div>
@@ -3809,7 +3811,7 @@ async function renderSeriesGroups(payload) {
   const coverLine = coverMeta.covered
     ? `Cover clusters: ${coverMeta.clusters || 0} from ${coverMeta.covered} covers`
     : 'Cover clusters: unavailable';
-
+    
   // FETCH COMPLETED URLS
   scrapeCompletedUrls = new Set();
   try {
@@ -3853,7 +3855,7 @@ async function renderSeriesGroups(payload) {
         <button class="btn btn-outline btn-sm" onclick="selectAllSeriesGroups(false)">☐ Clear</button>
         <button class="btn btn-primary btn-sm" onclick="addSelectedSeriesToQueue(false)">+ Add Selected (All)</button>
         <button class="btn btn-primary btn-sm" onclick="addSelectedSeriesToQueue(true)">+ Add Selected (New)</button>
-        <button class="btn btn-primary btn-sm" onclick="startSelectedSeriesQueue()">▶ Start Selected (New Only)</button>
+        <button class="btn btn-primary btn-sm" onclick="startSelectedSeriesQueue()">â–¶ Start Selected (New Only)</button>
         <span id="series-selected-count" class="badge badge-default">0 selected</span>
       </div>
       <div class="queue-items">
@@ -4025,20 +4027,20 @@ function addSeriesUniqueEpisodesToQueue(idx) {
     return;
   }
   let urls = Array.isArray(group.unique_episode_urls) ? group.unique_episode_urls.filter(Boolean) : [];
-
+  
   if (scrapeCompletedUrls instanceof Set) {
     urls = urls.filter(u => !scrapeCompletedUrls.has(u));
   }
-
+  
   if (!urls.length) {
     toast('No remaining unique URLs in this series', 'error');
     return;
   }
-
+  
   const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
   const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
   group.folder = finalFolder;
-
+  
   const groupContexts = buildSeriesContextMap(group, urls);
   urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
 
@@ -4103,20 +4105,20 @@ async function runDouyinWatchdogNow() {
 
 // ── TTS Engine Toggle ──
 function toggleTtsOptions() {
-  const engine = document.getElementById('cfg-tts_engine')?.value || 'gemini';
+  const engine = document.getElementById('cfg-tts_engine')?.value || 'vieneu';
   const mode = document.getElementById('cfg-vieneu_mode')?.value || 'preset';
-
+  
   const vieneuModeGroup = document.getElementById('vieneu-mode-group');
   const vieneuVoiceGroup = document.getElementById('vieneu-voice-group');
   const vnRef = document.getElementById('vieneu-ref-group');
-  const xttsRef = document.getElementById('xtts-ref-group');
   const capcutGroup = document.getElementById('capcut-voice-group');
-
+  const capcutWorkersGroup = document.getElementById('capcut-workers-group');
+  
   if (vieneuModeGroup) vieneuModeGroup.style.display = engine === 'vieneu' ? '' : 'none';
   if (vieneuVoiceGroup) vieneuVoiceGroup.style.display = (engine === 'vieneu' && mode === 'preset') ? '' : 'none';
   if (vnRef) vnRef.style.display = (engine === 'vieneu' && mode === 'clone') ? '' : 'none';
-  if (xttsRef) xttsRef.style.display = engine === 'xtts' ? '' : 'none';
-  if (capcutGroup) capcutGroup.style.display = engine === 'capcut' ? '' : 'none';
+  if (capcutGroup) capcutGroup.style.display = (engine === 'capcut' || engine === 'capcut_native') ? '' : 'none';
+  if (capcutWorkersGroup) capcutWorkersGroup.style.display = (engine === 'capcut' || engine === 'capcut_native') ? '' : 'none';
 }
 
 // ── TTS Test ──
@@ -4127,33 +4129,31 @@ async function testTts() {
   btn.disabled = true;
   status.textContent = '⏳ Generating...';
   audio.style.display = 'none';
-
+  
   try {
-    const engine = document.getElementById('cfg-tts_engine')?.value || 'gemini';
-    let refVoice = (engine === 'xtts')
-      ? document.getElementById('cfg-xtts_ref_voice')?.value
-      : document.getElementById('cfg-vieneu_ref_voice')?.value;
+    const engine = document.getElementById('cfg-tts_engine')?.value || 'vieneu';
+    let refVoice = document.getElementById('cfg-vieneu_ref_voice')?.value;
     if (!refVoice) refVoice = 'sample.WAV';
-
+    
     const reqBody = {
       engine: engine,
       ref_voice: refVoice,
       vieneu_voice: document.getElementById('cfg-vieneu_voice')?.value,
       vieneu_mode: document.getElementById('cfg-vieneu_mode')?.value,
       capcut_voice: document.getElementById('cfg-capcut_voice')?.value,
+      capcut_tts_workers: parseInt(document.getElementById('cfg-capcut_tts_workers')?.value) || 2,
       auto_adjust_tts_speed: !!document.getElementById('cfg-auto_adjust_tts_speed')?.checked,
-      api_key: document.getElementById('cfg-api_key')?.value,
       tts_speed: parseFloat(document.getElementById('cfg-tts_speed')?.value || '1') || 1,
       tts_pitch: parseFloat(document.getElementById('cfg-tts_pitch')?.value || '1') || 1,
       tts_volume: parseFloat(document.getElementById('cfg-tts_volume')?.value || '1') || 1,
     };
-
+    
     const res = await fetch('/api/tts/test', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(reqBody)
     });
-
+    
     if (res.ok) {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -4355,7 +4355,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(checkHealth, 30000);
   activeQueuesTimer = setInterval(refreshActiveQueues, 5000);
   setInterval(loadDouyinWatchdogState, 45000);
-  document.querySelectorAll('.tab[data-tab]').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
+  document.querySelectorAll('.bottom-tabs .tab[data-tab]').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
   toggleTtsOptions();
 });
 
@@ -4417,19 +4417,19 @@ async function _queueSeriesGroups(indices, newOnly) {
             if (h.ok && Array.isArray(h.completed)) completedUrls = new Set(h.completed);
         } catch(e) {}
     }
-
+    
     let totalAdded = 0;
-
+    
     for (const idx of indices) {
         const g = scrapeSeriesGroups[idx];
         if (!g) continue;
-
+        
         let urlsToQueue = g.urls || [];
         if (newOnly) {
             urlsToQueue = urlsToQueue.filter(u => !completedUrls.has(u));
         }
-        if (urlsToQueue.length === 0) continue;
-
+        if (urlsToQueue.length === 0) continue; 
+        
         const payload = {
             urls: urlsToQueue,
             settings: window.currentScrapeSettings || {},
@@ -4457,34 +4457,34 @@ async function loadSeriesLibrary() {
     const listSeries = document.getElementById('series-list');
     const listStandalones = document.getElementById('standalone-list');
     if (!listSeries || !listStandalones) return;
-
+    
     listSeries.innerHTML = '<div style="color:var(--text-dim)">Loading series...</div>';
     listStandalones.innerHTML = '<div style="color:var(--text-dim)">Loading standalones...</div>';
-
+    
     try {
         const res = await api('/api/series');
         if (!res || res.error) throw new Error(res?.error || 'Failed to load series');
-
+        
         const series = res.series || [];
         const standalones = res.standalones || [];
-
+        
         const badgeSeries = document.getElementById('series-count-badge');
         const badgeStandalone = document.getElementById('standalone-count-badge');
         if (badgeSeries) badgeSeries.innerText = series.length;
         if (badgeStandalone) badgeStandalone.innerText = standalones.length;
-
+        
         if (series.length === 0) {
             listSeries.innerHTML = '<div style="color:var(--text-dim)">No series found.</div>';
         } else {
             listSeries.innerHTML = series.map(s => renderSeriesCard(s)).join('');
         }
-
+        
         if (standalones.length === 0) {
             listStandalones.innerHTML = '<div style="color:var(--text-dim)">No standalone movies found.</div>';
         } else {
             listStandalones.innerHTML = standalones.map(p => renderStandaloneCard(p)).join('');
         }
-
+        
     } catch (e) {
         listSeries.innerHTML = `<div style="color:var(--error)">Error: ${e.message}</div>`;
         listStandalones.innerHTML = `<div style="color:var(--error)">Error: ${e.message}</div>`;
@@ -4495,16 +4495,16 @@ function renderSeriesCard(s) {
     const total = s.total_downloaded || 0;
     const rendered = s.rendered_count || 0;
     const uploaded = s.uploaded_count || 0;
-
+    
     const ep_min = s.episode_min || '?';
     const ep_max = s.episode_max || '?';
-
+    
     const latest = s.latest_episode || {};
     const thumb = latest.thumbnail ? `/api/project/${encodeURIComponent(latest.project_name)}/file/thumbnail.jpg` : '';
-
+    
     const renderPct = total > 0 ? Math.round((rendered / total) * 100) : 0;
     const uploadPct = total > 0 ? Math.round((uploaded / total) * 100) : 0;
-
+    
     return `
     <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
       <div style="display:flex; gap:12px; margin-bottom:12px;">
@@ -4518,19 +4518,22 @@ function renderSeriesCard(s) {
             <div style="font-size:0.8rem; color:var(--text-dim);">Latest update: ${safeStr(latest.created_at || '')}</div>
         </div>
       </div>
-
+      
       <div>
           <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
               <span>Rendered: ${rendered}/${total}</span>
               <span>${renderPct}%</span>
           </div>
           <div class="progress-bar" style="height:6px; margin-bottom:8px;"><div class="progress-fill" style="width:${renderPct}%; background:var(--accent);"></div></div>
-
+          
           <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
               <span>Uploaded: ${uploaded}/${total}</span>
               <span>${uploadPct}%</span>
           </div>
           <div class="progress-bar" style="height:6px;"><div class="progress-fill" style="width:${uploadPct}%; background:var(--primary);"></div></div>
+          <div style="margin-top: 12px; text-align: right;">
+             <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openSeriesGlossaryModal('${safeStr(s.series_folder)}', '${safeStr(s.series_name).replace(/'/g, "\\'")}')">📖 Từ Điển (Glossary)</button>
+          </div>
       </div>
     </div>
     `;
@@ -4540,12 +4543,12 @@ function renderStandaloneCard(p) {
     const meta = p.metadata || {};
     const title = meta.title || p.douyin_meta?.douyin_title || p.project_name;
     const thumb = p.thumbnail ? `/api/project/${encodeURIComponent(p.project_name)}/file/thumbnail.jpg` : '';
-
+    
     let statusText = 'Downloaded';
     let statusColor = 'var(--text-dim)';
     if (p.final_video) { statusText = 'Rendered'; statusColor = 'var(--accent)'; }
     if (p.youtube?.videoId || p.facebook_reels?.results) { statusText = 'Uploaded'; statusColor = 'var(--primary)'; }
-
+    
     return `
     <div class="project-card" style="cursor:pointer; display:flex; gap:12px; align-items:center;" onclick="openSeriesInProjects('${safeStr(p.project_name)}')">
         <div style="width:80px; height:80px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
@@ -4564,7 +4567,7 @@ function openSeriesInProjects(filterText) {
     // Switch to projects tab
     const tabProjects = document.querySelector('[data-tab="projects"]');
     if (tabProjects) tabProjects.click();
-
+    
     // Set custom filter
     setTimeout(() => {
         const filterSelect = document.getElementById('project-filter');
@@ -4598,11 +4601,11 @@ function addSeriesToQueue(idx, newOnly = false) {
     toast('No remaining URLs to add for this series', 'error');
     return;
   }
-
+  
   const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
   const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
   group.folder = finalFolder;
-
+  
   const groupContexts = buildSeriesContextMap(group, urls);
   urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
 
@@ -4636,11 +4639,11 @@ function addSelectedSeriesToQueueLocal(newOnly = false) {
       urls = urls.filter(u => !scrapeCompletedUrls.has(u));
     }
     if (!urls.length) return;
-
+    
     const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
     const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
     group.folder = finalFolder;
-
+    
     const groupContexts = buildSeriesContextMap(group, urls);
     urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
 
@@ -4665,6 +4668,142 @@ async function startSelectedSeriesQueueLocal() {
   await startBatchPipeline();
 }
 
+// --- MiuBon Watch Progress ---
+let miubonWatchProgress = {};
+
+async function miubonLogin() {
+  const user = document.getElementById('miubon-username').value;
+  const pass = document.getElementById('miubon-password').value;
+  if (!user || !pass) return alert('Vui lòng nhập Username và Password!');
+  try {
+    const r = await api('/api/auth/login', { method: 'POST', body: { username: user, password: pass } });
+    if (!r.ok) return alert(r.error || 'Login failed');
+    localStorage.setItem('miubon_token', r.token);
+    localStorage.setItem('miubon_user', r.username);
+    miubonCheckAuth();
+    miubonLoadProgress();
+    alert('Đăng nhập thành công!');
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+function miubonLogout() {
+  localStorage.removeItem('miubon_token');
+  localStorage.removeItem('miubon_user');
+  miubonWatchProgress = {};
+  miubonCheckAuth();
+}
+
+let isLoginMode = true;
+function switchLoginTab(mode) {
+  isLoginMode = mode === 'login';
+  document.getElementById('btn-tab-login').className = isLoginMode ? 'btn btn-primary' : 'btn btn-outline';
+  document.getElementById('btn-tab-login').style.border = isLoginMode ? '' : 'none';
+  document.getElementById('btn-tab-login').style.background = isLoginMode ? '' : 'transparent';
+  
+  document.getElementById('btn-tab-register').className = !isLoginMode ? 'btn btn-primary' : 'btn btn-outline';
+  document.getElementById('btn-tab-register').style.border = !isLoginMode ? '' : 'none';
+  document.getElementById('btn-tab-register').style.background = !isLoginMode ? '' : 'transparent';
+
+  document.getElementById('btn-wall-action').innerText = isLoginMode ? 'Đăng Nhập' : 'Đăng Ký';
+  document.getElementById('wall-error').innerText = '';
+}
+
+async function wallAction() {
+  const user = document.getElementById('wall-username').value;
+  const pass = document.getElementById('wall-password').value;
+  const errEl = document.getElementById('wall-error');
+  if (!user || !pass) {
+    errEl.innerText = 'Vui lòng nhập Username và Password!';
+    return;
+  }
+  
+  errEl.innerText = 'Đang xử lý...';
+  try {
+    const endpoint = isLoginMode ? '/api/auth/login' : '/api/auth/register';
+    const r = await api(endpoint, { method: 'POST', body: { username: user, password: pass } });
+    if (!r.ok) {
+      errEl.innerText = r.error || 'Có lỗi xảy ra!';
+      return;
+    }
+    
+    localStorage.setItem('miubon_token', r.token);
+    localStorage.setItem('miubon_user', r.username);
+    miubonCheckAuth();
+    miubonLoadProgress();
+  } catch(e) {
+    errEl.innerText = e.message;
+  }
+}
+
+function miubonCheckAuth() {
+  const u = localStorage.getItem('miubon_user');
+  const token = localStorage.getItem('miubon_token');
+  const el = document.getElementById('miubon-auth-status');
+  if (el) {
+    el.innerText = u ? `Xin chào, ${u}` : 'Chưa đăng nhập.';
+  }
+  
+  const wall = document.getElementById('login-wall');
+  const main = document.getElementById('main-app-content');
+  if (wall && main) {
+    if (token) {
+      wall.style.display = 'none';
+      main.style.display = 'block';
+    } else {
+      wall.style.display = 'flex';
+      main.style.display = 'none';
+    }
+  }
+}
+
+async function miubonLoadProgress() {
+  const token = localStorage.getItem('miubon_token');
+  if (!token) return;
+  try {
+    const r = await api('/api/user/progress');
+    if (r.ok) {
+      miubonWatchProgress = r.progress || {};
+    }
+  } catch (e) {
+    console.warn('Failed to load watch progress', e);
+  }
+}
+
+function miubonSaveProgress(folder, epIndex, timeSec) {
+  const token = localStorage.getItem('miubon_token');
+  if (!token || !folder) return;
+  if (!miubonWatchProgress[folder]) miubonWatchProgress[folder] = {};
+  miubonWatchProgress[folder] = { ep_index: epIndex, time: timeSec };
+  
+  api('/api/user/progress', {
+    method: 'POST',
+    body: { folder, ep_index: epIndex, time: timeSec }
+  }).catch(e => console.warn('Failed to save progress', e));
+}
+
+// Hooks
+document.addEventListener('DOMContentLoaded', () => {
+  miubonCheckAuth();
+  miubonLoadProgress();
+  
+  let lastSaveTime = 0;
+  const vid = document.getElementById('watch-video-element');
+  if (!vid) return;
+  vid.addEventListener('timeupdate', () => {
+    if (!currentWatchSeries) return;
+    const now = Date.now();
+    if (now - lastSaveTime > 5000) { // save every 5s
+      lastSaveTime = now;
+      let folder = currentWatchSeries.series_folder;
+      if (currentEpIndex >= 0) {
+        miubonSaveProgress(folder, currentEpIndex, vid.currentTime);
+      }
+    }
+  });
+});
+
 async function previewUrls() {
     const el = document.getElementById('pipeline-preview');
     const input = document.getElementById('input-url');
@@ -4677,6 +4816,9 @@ async function previewUrls() {
     try {
         const res = await api('/api/douyin/preview', { method: 'POST', body: { urls } });
         if (res.error) throw new Error(res.error);
+        
+
+
         const found = res.previews || [];
         if (!found.length) {
             el.innerHTML = '<div class="url-preview-empty">❌ No valid Douyin URLs recognized</div>';
@@ -4697,6 +4839,443 @@ async function previewUrls() {
 
 
 /* =========================================
+
+/* =========================================
+   WATCH VIDEO UI LOGIC
+========================================= */
+let currentWatchSeries = null;
+let watchLibraryData = null;
+let currentEpIndex = -1;
+let currentPlayableEps = [];
+
+async function loadWatchLibrary() {
+  document.getElementById('watch-grid-view').classList.remove('hidden');
+  document.getElementById('watch-player-view').classList.add('hidden');
+  
+  const seriesGrid = document.getElementById('watch-series-grid');
+  const standaloneGrid = document.getElementById('watch-standalone-grid');
+  seriesGrid.innerHTML = '<div style="color:var(--text-dim);">Đang tải dữ liệu...</div>';
+  if(standaloneGrid) standaloneGrid.innerHTML = '';
+  
+  try {
+    let res = await api('/api/series');
+    watchLibraryData = res.series || [];
+    
+    let standaloneEps = [];
+    try {
+        let pRes = await api('/api/projects');
+        let projects = pRes.projects || [];
+        standaloneEps = projects.filter(p => (p.final_video || (p.steps_completed && p.steps_completed.includes('render'))) && !p.series_name);
+    } catch(e) {
+        console.error('Error fetching standalone projects for watch UI', e);
+    }
+
+    if(document.getElementById('watch-series-count')) document.getElementById('watch-series-count').innerText = watchLibraryData.length;
+    if(document.getElementById('watch-standalone-count')) document.getElementById('watch-standalone-count').innerText = standaloneEps.length;
+    
+    if (watchLibraryData.length === 0) {
+      seriesGrid.innerHTML = '<div style="color:var(--text-dim);">Không có Phim Bộ nào.</div>';
+    } else {
+      seriesGrid.innerHTML = '';
+      for (let s of watchLibraryData) {
+        let thumbUrl = '/static/placeholder.jpg';
+        let latestEp = s.episodes[0];
+        if (latestEp && latestEp.thumbnail) {
+          thumbUrl = '/api/project/' + latestEp.project_id + '/stream/thumbnail.jpg';
+        } else if (latestEp && latestEp.youtube && latestEp.youtube.videoId) {
+          thumbUrl = 'https://img.youtube.com/vi/' + latestEp.youtube.videoId + '/maxresdefault.jpg';
+        }
+        
+        let maxEp = s.episode_max ? s.episode_max : '??';
+        let rendered = s.rendered_count || 0;
+        let badgeText = rendered + '/' + maxEp;
+        
+        let card = document.createElement('div');
+        card.className = 'watch-series-card';
+        card.onclick = () => openSeriesPlayer(s.series_folder);
+        
+        card.innerHTML = `<div class="watch-series-cover-wrapper">
+            <img class="watch-series-cover" src="${thumbUrl}" onerror="this.src='/static/placeholder.jpg'">
+            <div class="watch-series-badge">${badgeText}</div>
+          </div>
+          <div class="watch-series-info">
+            <div class="watch-series-title" title="${s.series_name.replace(/"/g, '&quot;')}">${s.series_name}</div>
+          </div>`;
+        seriesGrid.appendChild(card);
+      }
+    }
+
+    if(standaloneGrid) {
+      if (standaloneEps.length === 0) {
+        standaloneGrid.innerHTML = '<div style="color:var(--text-dim);">Không có Phim Lẻ nào.</div>';
+      } else {
+        standaloneGrid.innerHTML = '';
+        standaloneEps.forEach((p, index) => {
+          let thumbUrl = '/api/project/' + p.project_name + '/stream/thumbnail.jpg';
+          let title = p.metadata && p.metadata.title ? p.metadata.title : p.project_name;
+          
+          let card = document.createElement('div');
+          card.className = 'watch-series-card';
+          // We can treat standalone eps directly in openSeriesPlayer by passing a mock series_folder
+          // or we can reuse openSeriesPlayer by adding them dynamically to watchLibraryData, BUT ONLY for the player!
+          // Actually, openSeriesPlayer looks up watchLibraryData by series_folder.
+          let mockSeriesFolder = 'standalone_' + p.project_name;
+          let mockSeries = {
+              series_name: title,
+              series_folder: mockSeriesFolder,
+              episode_max: 1,
+              rendered_count: 1,
+              episodes: [{
+                  _ep_no: 1,
+                  project_id: p.project_name,
+                  final_video: true,
+                  thumbnail: true,
+                  title: title
+              }]
+          };
+          // Push it so openSeriesPlayer works!
+          watchLibraryData.push(mockSeries);
+          
+          card.onclick = () => openSeriesPlayer(mockSeriesFolder);
+          
+          card.innerHTML = `<div class="watch-series-cover-wrapper">
+              <img class="watch-series-cover" src="${thumbUrl}" onerror="this.src='/static/placeholder.jpg'">
+              <div class="watch-series-badge">1/1</div>
+            </div>
+            <div class="watch-series-info">
+              <div class="watch-series-title" title="${title.replace(/"/g, '&quot;')}">${title}</div>
+            </div>`;
+          standaloneGrid.appendChild(card);
+        });
+      }
+    }
+    
+  } catch (err) {
+    console.error(err);
+    seriesGrid.innerHTML = '<div style="color:var(--error);">Lỗi khi tải thư viện: ' + err.message + '</div>';
+  }
+}
+
+function openSeriesPlayer(folder) {
+  if (!watchLibraryData) return;
+  let series = watchLibraryData.find(s => s.series_folder === folder);
+  if (!series) return;
+  
+  currentWatchSeries = series;
+  
+  document.getElementById('watch-grid-view').classList.add('hidden');
+  document.getElementById('watch-player-view').classList.remove('hidden');
+  document.getElementById('watch-player-title').innerText = series.series_name;
+  
+  const epGrid = document.getElementById('watch-episodes-grid');
+  epGrid.innerHTML = '';
+  document.getElementById('watch-search-ep').value = '';
+  
+  let sortedEps = [...series.episodes].sort((a,b) => (a._ep_no || 0) - (b._ep_no || 0));
+  currentPlayableEps = sortedEps.filter(ep => ep.final_video);
+  
+  for (let i = 0; i < currentPlayableEps.length; i++) {
+    let ep = currentPlayableEps[i];
+    let btn = document.createElement('div');
+    btn.className = 'watch-ep-btn ep-item-btn';
+    let epNum = ep._ep_no || '?';
+    btn.innerText = epNum;
+    btn.setAttribute('data-index', i);
+    btn.onclick = () => playEpisodeByIndex(i);
+    epGrid.appendChild(btn);
+  }
+  
+  if (currentPlayableEps.length === 0) {
+    epGrid.innerHTML = '<div style="grid-column: 1/-1; color: var(--text-dim);">Chưa có tập nào được render video.</div>';
+    document.getElementById('watch-video-element').src = '';
+    updatePrevNextButtons();
+  } else {
+    let targetIndex = 0;
+    if (miubonWatchProgress && miubonWatchProgress[folder]) {
+      let savedIndex = miubonWatchProgress[folder].ep_index;
+      if (savedIndex !== undefined && savedIndex < currentPlayableEps.length) {
+        targetIndex = savedIndex;
+      }
+    }
+    playEpisodeByIndex(targetIndex);
+  }
+}
+
+function playEpisodeByIndex(index) {
+  if (index < 0 || index >= currentPlayableEps.length) return;
+  currentEpIndex = index;
+  let ep = currentPlayableEps[index];
+  
+  document.querySelectorAll('.watch-ep-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.getAttribute('data-index')) === index);
+  });
+  
+  let videoEl = document.getElementById('watch-video-element');
+  videoEl.src = '/api/project/' + ep.project_id + '/stream/preview?v=faststart';
+  
+  // Seek to saved time if applicable
+  videoEl.onloadedmetadata = () => {
+    if (miubonWatchProgress && currentWatchSeries) {
+      let folder = currentWatchSeries.series_folder;
+      if (miubonWatchProgress[folder] && miubonWatchProgress[folder].ep_index === index) {
+        let st = miubonWatchProgress[folder].time;
+        if (st && st > 0) {
+          videoEl.currentTime = st;
+        }
+      }
+    }
+    videoEl.onloadedmetadata = null; // Clear handler
+  };
+
+  videoEl.play().catch(e => console.log('Auto-play blocked:', e));
+
+  updatePrevNextButtons();
+}
+
+function playPrevEpisode() {
+  playEpisodeByIndex(currentEpIndex - 1);
+}
+
+function playNextEpisode() {
+  playEpisodeByIndex(currentEpIndex + 1);
+}
+
+function updatePrevNextButtons() {
+  const btnPrev = document.getElementById('watch-btn-prev');
+  const btnNext = document.getElementById('watch-btn-next');
+  
+  if (!btnPrev || !btnNext) return;
+  
+  if (currentEpIndex <= 0) {
+    btnPrev.disabled = true;
+  } else {
+    btnPrev.disabled = false;
+  }
+  
+  if (currentEpIndex >= currentPlayableEps.length - 1 || currentEpIndex === -1) {
+    btnNext.disabled = true;
+  } else {
+    btnNext.disabled = false;
+  }
+}
+
+function filterEpisodes() {
+  let q = document.getElementById('watch-search-ep').value.toLowerCase();
+  document.querySelectorAll('.ep-item-btn').forEach(b => {
+    let text = b.innerText.toLowerCase();
+    b.style.display = text.includes(q) ? 'block' : 'none';
+  });
+}
+
+function closeWatchPlayer() {
+  let videoEl = document.getElementById('watch-video-element');
+  videoEl.pause();
+  videoEl.src = '';
+  currentWatchSeries = null;
+  currentPlayableEps = [];
+  currentEpIndex = -1;
+  
+  document.getElementById('watch-player-view').classList.add('hidden');
+  document.getElementById('watch-grid-view').classList.remove('hidden');
+} 
+
+function switchWatchSubTab(tabId) {
+  document.querySelectorAll('.watch-sub-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.watch-sub-tab[data-subtab="' + tabId + '"]').classList.add('active');
+  document.querySelectorAll('.watch-sub-content').forEach(c => c.classList.add('hidden'));
+  document.getElementById(tabId).classList.remove('hidden');
+}
+
+
+
+// Global GDrive Watchdog
+setInterval(async () => {
+  try {
+    const d = await api('/api/gdrive/status');
+    const el = document.getElementById('gdrive-sync-status');
+    if (d && d.active && d.job) {
+      if (el && !el.textContent.includes('Starting')) {
+        el.textContent = `[GDrive Watchdog] ${d.job.kind} (${d.job.status}): ${d.job.message || ''}`;
+      }
+    } else {
+      if (el && el.textContent.includes('[GDrive Watchdog]')) {
+        el.textContent = '';
+      }
+    }
+  } catch (e) {}
+}, 5000);
+
+async function fetchWebAIModels() {
+  const urlBase = document.getElementById('cfg-webai_url')?.value || '';
+  if (!urlBase) {
+    toast('Vui lòng nhập WebAI URL trước!', 'warning');
+    return;
+  }
+  const btn = event.currentTarget;
+  const oldText = btn.textContent;
+  btn.textContent = '⏳...';
+  btn.disabled = true;
+  try {
+    const res = await api(`/api/proxy/models?url=${encodeURIComponent(urlBase)}`);
+    if (res.error) throw new Error(res.error);
+    const models = res.data || [];
+    const list = document.getElementById('webai-model-list');
+    list.innerHTML = '';
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      list.appendChild(opt);
+    });
+    toast(`Lấy thành công ${models.length} models từ WebAI`);
+    const input = document.getElementById('cfg-webai_model');
+    if (models.length > 0) input.focus();
+  } catch (e) {
+    toast('Lỗi khi lấy models: ' + e.message, 'error');
+  } finally {
+    btn.textContent = oldText;
+    btn.disabled = false;
+  }
+}
+
+// ═══ SERIES GLOSSARY LOGIC ═══
+let currentGlossaryFolder = '';
+
+async function openSeriesGlossaryModal(folder, name) {
+  currentGlossaryFolder = folder;
+  document.getElementById('glossary-series-name').innerText = name || folder;
+  const tbody = document.getElementById('glossary-table-body');
+  tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim)">Đang tải...</td></tr>';
+  document.getElementById('series-glossary-modal').classList.remove('hidden');
+
+  try {
+    const res = await api(`/api/series/${encodeURIComponent(folder)}/glossary`);
+    const glossary = res.glossary || {};
+    tbody.innerHTML = '';
+    
+    let count = 0;
+    for (const [orig, trans] of Object.entries(glossary)) {
+      addGlossaryRow(orig, trans);
+      count++;
+    }
+    
+    if (count === 0) {
+      addGlossaryRow('', '');
+    }
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="3" style="color:var(--error);text-align:center">Lỗi: ${e.message}</td></tr>`;
+  }
+}
+
+function closeSeriesGlossaryModal() {
+  document.getElementById('series-glossary-modal').classList.add('hidden');
+  currentGlossaryFolder = '';
+}
+
+function addGlossaryRow(orig = '', trans = '', isAiSuggested = false) {
+  const tbody = document.getElementById('glossary-table-body');
+  const tr = document.createElement('tr');
+  if (isAiSuggested) {
+    tr.style.backgroundColor = 'rgba(255, 215, 0, 0.1)';
+  }
+  tr.innerHTML = `
+    <td style="padding: 4px;"><input type="text" class="glossary-orig" value="${safeStr(orig)}" placeholder="Ví dụ: Xiaosuke" style="width: 100%;"></td>
+    <td style="padding: 4px;"><input type="text" class="glossary-trans" value="${safeStr(trans)}" placeholder="Ví dụ: Tiểu Túc" style="width: 100%;"></td>
+    <td style="padding: 4px; text-align: center;"><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()" style="padding: 4px 8px;">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+async function saveSeriesGlossary() {
+  if (!currentGlossaryFolder) return;
+  
+  const rows = document.querySelectorAll('#glossary-table-body tr');
+  const newGlossary = {};
+  
+  rows.forEach(tr => {
+    const orig = tr.querySelector('.glossary-orig')?.value?.trim();
+    const trans = tr.querySelector('.glossary-trans')?.value?.trim();
+    if (orig && trans) {
+      newGlossary[orig] = trans;
+    }
+  });
+
+  try {
+    const res = await api(`/api/series/${encodeURIComponent(currentGlossaryFolder)}/glossary`, {
+      method: 'POST',
+      body: { glossary: newGlossary }
+    });
+    
+    if (res.ok) {
+      toast(`Đã lưu ${Object.keys(newGlossary).length} từ vựng!`, 'success');
+      closeSeriesGlossaryModal();
+    } else {
+      toast(res.error || 'Lỗi lưu từ điển', 'error');
+    }
+  } catch (e) {
+    toast(`Lỗi: ${e.message}`, 'error');
+  }
+}
+
+async function extractGlossaryAI() {
+  if (!currentGlossaryFolder) return;
+  
+  const btn = document.getElementById('btn-extract-glossary');
+  const oldText = btn.innerText;
+  btn.innerText = '⏳ Đang nhờ AI quét phụ đề...';
+  btn.disabled = true;
+  
+  try {
+    const res = await api(`/api/series/${encodeURIComponent(currentGlossaryFolder)}/glossary/extract`, {
+      method: 'POST',
+      timeoutMs: 300000 // 5 mins max
+    });
+    
+    if (res.ok) {
+      const extracted = res.extracted || [];
+      if (extracted.length === 0) {
+        toast('AI không tìm thấy tên riêng nào mới.', 'info');
+      } else {
+        // Collect current origins to avoid duplicates
+        const currentOrigs = Array.from(document.querySelectorAll('.glossary-orig')).map(i => i.value.trim());
+        let addedCount = 0;
+        
+        extracted.forEach(item => {
+            if (item.orig && item.trans && !currentOrigs.includes(item.orig)) {
+                addGlossaryRow(item.orig, item.trans, true);
+                currentOrigs.push(item.orig);
+                addedCount++;
+            }
+        });
+        
+        if (addedCount > 0) {
+            toast(`AI đã gợi ý thêm ${addedCount} từ vựng! (Tô màu vàng)`, 'success');
+            // Remove empty row if any
+            const firstOrig = document.querySelector('.glossary-orig');
+            if (firstOrig && !firstOrig.value) {
+                firstOrig.closest('tr').remove();
+            }
+        } else {
+            toast('Các từ AI gợi ý đều đã có sẵn trong bảng.', 'info');
+        }
+      }
+    } else {
+      toast(res.error || 'Lỗi trích xuất từ vựng', 'error');
+    }
+  } catch (e) {
+    toast(`Lỗi: ${e.message}`, 'error');
+  } finally {
+    btn.innerText = oldText;
+    btn.disabled = false;
+  }
+}
+
+
+function backendUrl(path) {
+  const s = String(path || '');
+  if (/^https?:\/\//i.test(s)) return s;
+  const base = String(API || '').replace(/\/+$/, '');
+  return base ? `${base}${s.startsWith('/') ? s : `/${s}`}` : s;
+}
 
 /* =========================================
    WATCH VIDEO UI LOGIC (Ported from MiuBonWatch-iOS)
@@ -4791,8 +5370,8 @@ function renderWatchGrid() {
         <div style="position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.7); color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold;">${eps.length} Tập</div>
       </div>
       <div style="padding: 4px 8px;">
-        <h3 style="font-size:15px; margin:0; line-height:1.3; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; color:var(--text);">${safeHtml(title)}</h3>
-        <p style="font-size:12px; color:var(--text-dim); margin:4px 0 0 0;">${safeHtml(watched)}</p>
+        <h3 style="font-size:15px; margin:0; line-height:1.3; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; color:var(--text);">${title}</h3>
+        <p style="font-size:12px; color:var(--text-dim); margin:4px 0 0 0;">${watched}</p>
       </div>
     </button>`;
   }).join('');
@@ -4827,7 +5406,7 @@ function renderEpisodes() {
   const q = document.getElementById('episodeSearch').value.trim().toLowerCase();
   document.getElementById('episodeGrid').innerHTML = watchEpisodes.map((ep, idx) => ({ ep, idx, title: episodeTitle(ep, idx) }))
     .filter((x) => !q || x.title.toLowerCase().includes(q) || String(episodeNo(x.ep, x.idx)).includes(q))
-    .map((x) => `<button class="episode ${x.idx === watchCurrentIndex ? 'active' : ''}" data-index="${x.idx}" onclick="watchCurrentIndex=${x.idx}; playCurrent(0); renderEpisodes();">${safeHtml(episodeNo(x.ep, x.idx))}</button>`)
+    .map((x) => `<button class="episode ${x.idx === watchCurrentIndex ? 'active' : ''}" data-index="${x.idx}" onclick="watchCurrentIndex=${x.idx}; playCurrent(0); renderEpisodes();">${episodeNo(x.ep, x.idx)}</button>`)
     .join('');
   
   document.getElementById('prevBtn').disabled = watchCurrentIndex <= 0;
@@ -4924,11 +5503,5 @@ document.addEventListener('DOMContentLoaded', () => {
       saveProgress(true); 
       playNextEpisode();
     });
-  }
-  
-  // Load watch library when clicking the Watch tab
-  const watchTabBtn = document.querySelector('.bottom-tabs .tab[data-tab="watch"]');
-  if (watchTabBtn) {
-    watchTabBtn.addEventListener('click', loadWatchLibrary);
   }
 });

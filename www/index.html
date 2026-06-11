@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
@@ -14,6 +14,31 @@
 <div class="glow-orb glow-1"></div>
 <div class="glow-orb glow-2"></div>
 
+<div id="login-wall" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-app); z-index:9999; align-items:center; justify-content:center; flex-direction:column; padding:20px;">
+  <div class="glow-orb glow-1"></div>
+  <div class="glow-orb glow-2"></div>
+  <div class="card" style="width:100%; max-width:400px; text-align:center; position:relative; z-index:10;">
+    <h2 style="margin-bottom:5px; font-size:1.8rem; background:linear-gradient(90deg, #fff, var(--primary)); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">MiuBon Tool</h2>
+    <p style="color:var(--text-dim); margin-bottom:20px; font-size:0.9rem;">Vui lòng đăng nhập để sử dụng phần mềm</p>
+    
+    <div style="display:flex; gap:10px; margin-bottom:20px; background:rgba(255,255,255,0.05); padding:5px; border-radius:12px;">
+      <button id="btn-tab-login" class="btn btn-primary" style="flex:1; border-radius:8px;" onclick="switchLoginTab('login')">Đăng Nhập</button>
+      <button id="btn-tab-register" class="btn btn-outline" style="flex:1; border-radius:8px; border:none; background:transparent;" onclick="switchLoginTab('register')">Đăng Ký</button>
+    </div>
+
+    <div class="form-group" style="text-align:left;">
+      <label>Tên đăng nhập</label>
+      <input id="wall-username" placeholder="Nhập username..." />
+    </div>
+    <div class="form-group" style="text-align:left;">
+      <label>Mật khẩu</label>
+      <input id="wall-password" type="password" placeholder="Nhập mật khẩu..." />
+    </div>
+    
+    <button id="btn-wall-action" class="btn btn-primary" style="width:100%; margin-top:10px; font-size:1rem; padding:12px;" onclick="wallAction()">Đăng Nhập</button>
+    <div id="wall-error" style="color:var(--error); margin-top:15px; font-size:0.85rem; min-height:20px;"></div>
+  </div>
+<div id="main-app-content" style="display:none; height:100%; overflow:hidden;">
 <div class="app">
   <!-- Backend Button moved to Settings -->
   <!-- Demo Sandbox Banner -->
@@ -1105,5 +1130,6 @@
 </main> <!-- /app-content-area -->
 
 <script src="/static/js/app.js?v=20260606-113338"></script>
+</div>
 </body>
 </html>
