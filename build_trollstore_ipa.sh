@@ -14,7 +14,7 @@ mkdir -p "$OUT_DIR"
 
 xcodebuild \
   -project "$PROJECT" \
-  -target App \
+  -scheme App \
   -configuration Release \
   -sdk iphoneos \
   -derivedDataPath "$DERIVED" \
