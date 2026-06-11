@@ -1,4 +1,5 @@
 import Foundation
+import AVKit
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -32,6 +33,7 @@ enum MainTab: String, CaseIterable, Identifiable {
     case running
     case scraper
     case projects
+    case videos
     case uploads
     case settings
 
@@ -43,6 +45,7 @@ enum MainTab: String, CaseIterable, Identifiable {
         case .running: return "Running"
         case .scraper: return "Scrape"
         case .projects: return "Projects"
+        case .videos: return "Videos"
         case .uploads: return "Tools"
         case .settings: return "Settings"
         }
@@ -54,6 +57,7 @@ enum MainTab: String, CaseIterable, Identifiable {
         case .running: return "chart.line.uptrend.xyaxis"
         case .scraper: return "magnifyingglass.circle.fill"
         case .projects: return "rectangle.stack.fill"
+        case .videos: return "play.square.fill"
         case .uploads: return "wrench.and.screwdriver.fill"
         case .settings: return "slider.horizontal.3"
         }
@@ -127,6 +131,16 @@ struct SeriesRow: Identifiable {
     var total: Int
     var rendered: Int
     var uploaded: Int
+}
+
+struct VideoSelection: Identifiable {
+    let id = UUID()
+    var title: String
+    var subtitle: String
+    var folderName: String
+    var url: URL
+    var previewURL: URL
+    var finalURL: URL
 }
 
 struct StatusLine: Identifiable {
@@ -240,6 +254,7 @@ final class AppModel: ObservableObject {
     @Published var selectedRuntimeItemIndex: Int?
     @Published var toolStatuses: [StatusLine] = []
     @Published var toolMessage = "San sang"
+    @Published var selectedVideo: VideoSelection?
 
     private var pollTask: Task<Void, Never>?
     private var runtimeLogOffset = 0
@@ -256,6 +271,10 @@ final class AppModel: ObservableObject {
     var theme: AppTheme {
         get { AppTheme(rawValue: themeRaw) ?? .system }
         set { themeRaw = newValue.rawValue }
+    }
+
+    var renderedProjects: [ProjectRow] {
+        projects.filter { $0.rendered }
     }
 
     func startPolling() {
@@ -660,8 +679,51 @@ final class AppModel: ObservableObject {
     }
 
     func openBackendPath(_ path: String) {
+        guard let url = backendURLFor(path) else { return }
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+    }
+
+    func backendURLFor(_ path: String) -> URL? {
         let cleanBase = backendURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: cleanBase + path) else { return }
+        guard !cleanBase.isEmpty else { return nil }
+        return URL(string: cleanBase + path)
+    }
+
+    func projectMediaURL(_ project: ProjectRow, file: String = "preview") -> URL? {
+        guard !project.folderName.isEmpty else { return nil }
+        let encodedProject = project.folderName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? project.folderName
+        let encodedFile = file.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? file
+        return backendURLFor("/api/project/\(encodedProject)/stream/\(encodedFile)")
+    }
+
+    func playProject(_ project: ProjectRow, file: String = "preview") {
+        guard project.rendered else {
+            statusMessage = "Project chua render xong nen chua xem duoc video"
+            return
+        }
+        guard
+            let previewURL = projectMediaURL(project, file: "preview"),
+            let finalURL = projectMediaURL(project, file: "final_video.mp4"),
+            let url = projectMediaURL(project, file: file)
+        else {
+            statusMessage = "Khong tao duoc URL video"
+            return
+        }
+        selectedVideo = VideoSelection(
+            title: project.displayName,
+            subtitle: project.subtitle,
+            folderName: project.folderName,
+            url: url,
+            previewURL: previewURL,
+            finalURL: finalURL
+        )
+    }
+
+    func openProjectVideo(_ project: ProjectRow, file: String = "preview") {
+        guard let url = projectMediaURL(project, file: file) else {
+            statusMessage = "Khong tao duoc URL video"
+            return
+        }
         UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
 
@@ -702,6 +764,7 @@ struct MiuBonRootView: View {
                     RunningView().tag(MainTab.running)
                     ScraperView().tag(MainTab.scraper)
                     ProjectsView().tag(MainTab.projects)
+                    VideosView().tag(MainTab.videos)
                     UploadsView().tag(MainTab.uploads)
                     SettingsView().tag(MainTab.settings)
                 }
@@ -713,6 +776,9 @@ struct MiuBonRootView: View {
         }
         .environmentObject(model)
         .preferredColorScheme(model.theme.colorScheme)
+        .sheet(item: $model.selectedVideo) { selection in
+            VideoPlayerSheet(selection: selection)
+        }
         .task {
             await model.refreshAll()
             await model.refreshToolStatuses()
@@ -994,9 +1060,46 @@ struct ProjectsView: View {
                     EmptyState(text: "Chua load duoc project tu backend")
                 }
                 ForEach(model.projects) { project in
-                    ProjectCard(project: project) {
-                        Task { await model.resumeProject(project.folderName) }
+                    ProjectCard(
+                        project: project,
+                        onResume: { Task { await model.resumeProject(project.folderName) } },
+                        onPlay: { model.playProject(project) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+struct VideosView: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        ScreenScroll {
+            SectionCard(title: "Video da render", symbol: "play.square.stack.fill") {
+                HStack {
+                    Text("\(model.renderedProjects.count) video san sang")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    SmallButton(title: "Refresh", symbol: "arrow.clockwise") {
+                        Task { await model.refreshProjects() }
                     }
+                    .frame(width: 120)
+                }
+
+                if model.renderedProjects.isEmpty {
+                    EmptyState(text: "Chua co project nao render xong de xem video.")
+                }
+
+                ForEach(model.renderedProjects) { project in
+                    VideoLibraryCard(
+                        project: project,
+                        thumbnailURL: model.projectMediaURL(project, file: "thumbnail.jpg"),
+                        onPreview: { model.playProject(project, file: "preview") },
+                        onFull: { model.playProject(project, file: "final_video.mp4") },
+                        onOpen: { model.openProjectVideo(project, file: "preview") }
+                    )
                 }
             }
         }
@@ -1276,6 +1379,7 @@ struct LogConsole: View {
 struct ProjectCard: View {
     var project: ProjectRow
     var onResume: (() -> Void)? = nil
+    var onPlay: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1306,13 +1410,158 @@ struct ProjectCard: View {
                 StatusPill(text: project.tiktok ? "TT" : "TT wait", tone: project.tiktok ? .pink : .gray)
                 StatusPill(text: project.facebook ? "FB" : "FB wait", tone: project.facebook ? .blue : .gray)
             }
-            if let onResume = onResume {
-                SmallButton(title: "Resume", symbol: "arrow.clockwise", action: onResume)
+            if onPlay != nil || onResume != nil {
+                HStack(spacing: 10) {
+                    if let onPlay = onPlay, project.rendered {
+                        SmallButton(title: "Xem", symbol: "play.rectangle.fill", action: onPlay)
+                    }
+                    if let onResume = onResume {
+                        SmallButton(title: "Resume", symbol: "arrow.clockwise", action: onResume)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+struct VideoLibraryCard: View {
+    var project: ProjectRow
+    var thumbnailURL: URL?
+    var onPreview: () -> Void
+    var onFull: () -> Void
+    var onOpen: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button(action: onPreview) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [.black.opacity(0.84), .black.opacity(0.54), .accentColor.opacity(0.28)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    if let thumbnailURL = thumbnailURL {
+                        AsyncImage(url: thumbnailURL) { phase in
+                            if let image = phase.image {
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            } else {
+                                Color.clear
+                            }
+                        }
+                    }
+                    VStack(spacing: 8) {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 44, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .shadow(radius: 12)
+                        Text("Tap de xem preview")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white.opacity(0.88))
+                    }
+                }
+                .frame(height: 190)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(project.displayName)
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
+                    .lineLimit(2)
+                Text(project.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            HStack(spacing: 10) {
+                SmallButton(title: "Preview", symbol: "play.fill", action: onPreview)
+                SmallButton(title: "Full", symbol: "film.fill", action: onFull)
+                SmallButton(title: "Open", symbol: "safari.fill", action: onOpen)
+            }
+        }
+        .padding(12)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+}
+
+struct VideoPlayerSheet: View {
+    var selection: VideoSelection
+    @Environment(\.dismiss) private var dismiss
+    @State private var player: AVPlayer
+    @State private var currentURL: URL
+
+    init(selection: VideoSelection) {
+        self.selection = selection
+        _currentURL = State(initialValue: selection.url)
+        _player = State(initialValue: AVPlayer(url: selection.url))
+    }
+
+    var body: some View {
+        NavigationView {
+            VStack(alignment: .leading, spacing: 14) {
+                VideoPlayer(player: player)
+                    .frame(height: 260)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.white.opacity(0.18)))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(selection.title)
+                        .font(.system(.headline, design: .rounded).weight(.black))
+                        .lineLimit(2)
+                    Text(selection.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                    Text(currentURL.absoluteString)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                HStack(spacing: 10) {
+                    SmallButton(title: "Preview", symbol: "bolt.fill") {
+                        switchTo(selection.previewURL)
+                    }
+                    SmallButton(title: "Full", symbol: "film.fill") {
+                        switchTo(selection.finalURL)
+                    }
+                    SmallButton(title: "Open", symbol: "safari.fill") {
+                        UIApplication.shared.open(currentURL, options: [:], completionHandler: nil)
+                    }
+                }
+
+                Text("Preview dung final_video_preview.mp4 neu backend da tao, neu khong co se fallback sang final_video.mp4.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+            }
+            .padding(16)
+            .background(AppBackground())
+            .navigationBarTitle("Xem video", displayMode: .inline)
+            .navigationBarItems(trailing: Button("Dong") { dismiss() })
+        }
+        .onAppear { player.play() }
+        .onDisappear { player.pause() }
+    }
+
+    private func switchTo(_ url: URL) {
+        currentURL = url
+        player.pause()
+        player.replaceCurrentItem(with: AVPlayerItem(url: url))
+        player.play()
     }
 }
 
