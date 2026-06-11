@@ -662,7 +662,7 @@ final class AppModel: ObservableObject {
     func openBackendPath(_ path: String) {
         let cleanBase = backendURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: cleanBase + path) else { return }
-        UIApplication.shared.open(url)
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
 
     func openURLFromEndpoint(title: String, path: String, key: String = "auth_url") async {
@@ -673,7 +673,7 @@ final class AppModel: ObservableObject {
                 toolMessage = "\(title): backend khong tra URL"
                 return
             }
-            UIApplication.shared.open(url)
+            UIApplication.shared.open(url, options: [:], completionHandler: nil)
             toolMessage = "\(title): opened auth URL"
         } catch {
             toolMessage = "\(title): \(error.localizedDescription)"
