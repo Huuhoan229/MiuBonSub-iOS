@@ -43,3 +43,7 @@ The backend must be reachable from the iPhone on the same Wi-Fi or through your 
 - Light, dark and auto theme.
 - Local iOS notifications when pipeline, queue, upload or scrape jobs finish or fail.
 - Bottom tab shell for Pipeline, Running, Scraper, Projects, Uploads and Settings.
+
+## Notification limits
+
+The app keeps polling briefly when it goes to the background and can still deliver local notifications while iOS allows that background task to run. If the user force-kills the app from the app switcher, iOS stops the app completely; guaranteed notifications after that require backend push delivery such as APNs or another server-side notifier.

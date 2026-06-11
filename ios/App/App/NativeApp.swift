@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 import UserNotifications
 
 enum AppTheme: String, CaseIterable, Identifiable {
@@ -42,7 +43,7 @@ enum MainTab: String, CaseIterable, Identifiable {
         case .running: return "Running"
         case .scraper: return "Scrape"
         case .projects: return "Projects"
-        case .uploads: return "Uploads"
+        case .uploads: return "Tools"
         case .settings: return "Settings"
         }
     }
@@ -53,7 +54,7 @@ enum MainTab: String, CaseIterable, Identifiable {
         case .running: return "chart.line.uptrend.xyaxis"
         case .scraper: return "magnifyingglass.circle.fill"
         case .projects: return "rectangle.stack.fill"
-        case .uploads: return "arrow.up.circle.fill"
+        case .uploads: return "wrench.and.screwdriver.fill"
         case .settings: return "slider.horizontal.3"
         }
     }
@@ -88,9 +89,14 @@ struct QueueSnapshot {
 
 struct ProjectRow: Identifiable {
     let id = UUID()
-    var name: String
+    var folderName: String
+    var displayName: String
+    var subtitle: String
     var created: String
     var series: String
+    var episodeNo: Int?
+    var progress: Int
+    var steps: [String]
     var rendered: Bool
     var youtube: Bool
     var tiktok: Bool
@@ -111,6 +117,23 @@ struct ScrapeVideo: Identifiable {
     var caption: String
     var duration: String
     var done: Bool
+}
+
+struct SeriesRow: Identifiable {
+    let id = UUID()
+    var folder: String
+    var name: String
+    var episodeRange: String
+    var total: Int
+    var rendered: Int
+    var uploaded: Int
+}
+
+struct StatusLine: Identifiable {
+    let id = UUID()
+    var title: String
+    var value: String
+    var tone: Color
 }
 
 final class NotificationCenterBridge: NSObject, UNUserNotificationCenterDelegate {
@@ -201,16 +224,26 @@ final class AppModel: ObservableObject {
     @Published var queue = QueueSnapshot()
     @Published var runningQueues: [QueueSnapshot] = []
     @Published var projects: [ProjectRow] = []
+    @Published var seriesRows: [SeriesRow] = []
     @Published var uploadRows: [UploadQueueRow] = []
     @Published var scrapeURL = ""
     @Published var scrapeMinDuration = "60"
     @Published var scrapeOldestFirst = true
     @Published var scrapeStatus = "Idle"
+    @Published var scrapeLogLines: [String] = []
     @Published var scrapeVideos: [ScrapeVideo] = []
     @Published var selectedProject = ""
     @Published var uploadStatus = "Idle"
+    @Published var runtimeLogLines: [String] = []
+    @Published var runtimeLogTitle = "Chon item dang chay de xem log runtime"
+    @Published var selectedRuntimeQueueId = ""
+    @Published var selectedRuntimeItemIndex: Int?
+    @Published var toolStatuses: [StatusLine] = []
+    @Published var toolMessage = "San sang"
 
     private var pollTask: Task<Void, Never>?
+    private var runtimeLogOffset = 0
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var api: MiuBonAPI { MiuBonAPI(baseURL: backendURL) }
 
     init() {
@@ -241,13 +274,31 @@ final class AppModel: ObservableObject {
         pollTask = nil
     }
 
+    func enterBackgroundMode() {
+        startPolling()
+        guard backgroundTask == .invalid else { return }
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "MiuBonRuntimeMonitor") { [weak self] in
+            Task { @MainActor in
+                self?.endBackgroundMode()
+            }
+        }
+    }
+
+    func endBackgroundMode() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
+    }
+
     func refreshAll(silent: Bool = false) async {
         await refreshHealth(silent: silent)
         await refreshRunning()
         await refreshProjects()
+        await refreshSeries()
         await refreshUploadQueue()
         if !activeQueueId.isEmpty { await pollQueue(activeQueueId) }
         if !activeJobId.isEmpty { await pollJob(activeJobId) }
+        await pollSelectedRuntimeLogs()
     }
 
     func refreshHealth(silent: Bool = false) async {
@@ -369,16 +420,53 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func selectRuntimeItem(queueId: String, itemIndex: Int) async {
+        selectedRuntimeQueueId = queueId
+        selectedRuntimeItemIndex = itemIndex
+        runtimeLogOffset = 0
+        runtimeLogLines = []
+        runtimeLogTitle = "Queue \(queueId) | item #\(itemIndex + 1)"
+        await pollSelectedRuntimeLogs()
+    }
+
+    func pollSelectedRuntimeLogs() async {
+        guard !selectedRuntimeQueueId.isEmpty, let itemIndex = selectedRuntimeItemIndex else { return }
+        do {
+            let path = "/api/pipeline/queue/\(selectedRuntimeQueueId)/item/\(itemIndex)/logs?offset=\(runtimeLogOffset)"
+            let result = try await api.request(path)
+            let status = string(result["status"])
+            let jobId = string(result["job_id"])
+            runtimeLogTitle = "Queue \(selectedRuntimeQueueId) | item #\(itemIndex + 1)" + (status.isEmpty ? "" : " | \(status)") + (jobId.isEmpty ? "" : " | job \(jobId)")
+            if let lines = result["lines"] as? [String], !lines.isEmpty {
+                runtimeLogLines.append(contentsOf: lines)
+                runtimeLogLines = Array(runtimeLogLines.suffix(400))
+            }
+            runtimeLogOffset = int(result["total"], fallback: runtimeLogOffset)
+        } catch {
+            runtimeLogTitle = "Runtime log error: \(error.localizedDescription)"
+        }
+    }
+
     func refreshProjects() async {
         do {
             let result = try await api.request("/api/projects")
             let rows = (result["projects"] as? [[String: Any]]) ?? []
             projects = rows.map(parseProject)
             if selectedProject.isEmpty, let first = projects.first {
-                selectedProject = first.name
+                selectedProject = first.folderName
             }
         } catch {
             projects = []
+        }
+    }
+
+    func refreshSeries() async {
+        do {
+            let result = try await api.request("/api/series")
+            let rows = (result["series"] as? [[String: Any]]) ?? []
+            seriesRows = rows.map(parseSeries)
+        } catch {
+            seriesRows = []
         }
     }
 
@@ -406,6 +494,7 @@ final class AppModel: ObservableObject {
         }
         scrapeStatus = "Starting"
         scrapeVideos = []
+        scrapeLogLines = []
         do {
             let result = try await api.request(
                 "/api/douyin/scrape",
@@ -432,6 +521,9 @@ final class AppModel: ObservableObject {
                 let result = try await api.request("/api/douyin/scrape/\(jobId)")
                 let status = string(result["status"], fallback: "running")
                 scrapeStatus = status.capitalized
+                if let logs = result["logs"] as? [String] {
+                    scrapeLogLines = Array(logs.suffix(220))
+                }
                 if status == "done" {
                     let payload = (result["result"] as? [String: Any]) ?? [:]
                     let videos = (payload["videos"] as? [[String: Any]]) ?? []
@@ -534,10 +626,70 @@ final class AppModel: ObservableObject {
             try? await Task.sleep(nanoseconds: UInt64(max(1, pollSeconds)) * 1_000_000_000)
         }
     }
+
+    func refreshToolStatuses() async {
+        var rows: [StatusLine] = []
+        if let youtube = try? await api.request("/api/youtube/auth") {
+            rows.append(StatusLine(title: "YouTube", value: bool(youtube["ok"]) ? "OK" : string(youtube["status"], fallback: "Need login"), tone: bool(youtube["ok"]) ? .green : .orange))
+        }
+        if let tiktok = try? await api.request("/api/tiktok/api/status") {
+            rows.append(StatusLine(title: "TikTok API", value: bool(tiktok["ok"]) ? "OK" : string(tiktok["error"], fallback: "Need auth"), tone: bool(tiktok["ok"]) ? .green : .orange))
+        }
+        if let facebook = try? await api.request("/api/facebook/reels/status") {
+            rows.append(StatusLine(title: "Facebook", value: bool(facebook["ok"]) || bool(facebook["configured"]) ? "Configured" : "Need token", tone: bool(facebook["ok"]) ? .green : .orange))
+        }
+        if let drive = try? await api.request("/api/gdrive/status") {
+            rows.append(StatusLine(title: "Google Drive", value: bool(drive["ok"]) || bool(drive["logged_in"]) ? "OK" : "Need login", tone: bool(drive["ok"]) || bool(drive["logged_in"]) ? .green : .orange))
+        }
+        if let douyin = try? await api.request("/api/douyin/watchdog/state") {
+            rows.append(StatusLine(title: "Douyin Watchdog", value: bool(douyin["enabled"]) ? "ON" : "OFF", tone: bool(douyin["enabled"]) ? .green : .gray))
+        }
+        toolStatuses = rows
+    }
+
+    func runToolAction(title: String, path: String, method: String = "POST", body: [String: Any]? = nil) async {
+        do {
+            let result = try await api.request(path, method: method, body: body)
+            toolMessage = string(result["message"], fallback: string(result["status"], fallback: string(result["ok"], fallback: "\(title) done")))
+            NotificationCenterBridge.shared.notifyOnce(key: "tool-\(title)-\(Date().timeIntervalSince1970)", title: title, body: toolMessage)
+            await refreshAll(silent: true)
+            await refreshToolStatuses()
+        } catch {
+            toolMessage = "\(title): \(error.localizedDescription)"
+        }
+    }
+
+    func openBackendPath(_ path: String) {
+        let cleanBase = backendURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: cleanBase + path) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    func openURLFromEndpoint(title: String, path: String, key: String = "auth_url") async {
+        do {
+            let result = try await api.request(path)
+            let raw = string(result[key], fallback: string(result["url"], fallback: string(result["login_url"])))
+            guard let url = URL(string: raw) else {
+                toolMessage = "\(title): backend khong tra URL"
+                return
+            }
+            UIApplication.shared.open(url)
+            toolMessage = "\(title): opened auth URL"
+        } catch {
+            toolMessage = "\(title): \(error.localizedDescription)"
+        }
+    }
+
+    func resumeProject(_ folderName: String) async {
+        guard !folderName.isEmpty else { return }
+        let encoded = folderName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? folderName
+        await runToolAction(title: "Resume project", path: "/api/project/\(encoded)/resume")
+    }
 }
 
 struct MiuBonRootView: View {
     @StateObject private var model = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -563,7 +715,20 @@ struct MiuBonRootView: View {
         .preferredColorScheme(model.theme.colorScheme)
         .task {
             await model.refreshAll()
+            await model.refreshToolStatuses()
             model.startPolling()
+        }
+        .onChange(of: scenePhase) { phase in
+            switch phase {
+            case .active:
+                model.endBackgroundMode()
+                model.startPolling()
+                Task { await model.refreshAll() }
+            case .background:
+                model.enterBackgroundMode()
+            default:
+                break
+            }
         }
         .onDisappear { model.stopPolling() }
     }
@@ -724,13 +889,17 @@ struct RunningView: View {
         ScreenScroll {
             SectionCard(title: "Queue dang chay", symbol: "waveform.path.ecg") {
                 if !model.queue.id.isEmpty {
-                    QueueCard(queue: model.queue)
+                    QueueCard(queue: model.queue) { item in
+                        Task { await model.selectRuntimeItem(queueId: model.queue.id, itemIndex: item.index) }
+                    }
                 }
                 if model.runningQueues.isEmpty && model.queue.id.isEmpty {
                     EmptyState(text: "Chua co queue dang chay")
                 }
                 ForEach(model.runningQueues, id: \.id) { queue in
-                    QueueCard(queue: queue)
+                    QueueCard(queue: queue) { item in
+                        Task { await model.selectRuntimeItem(queueId: queue.id, itemIndex: item.index) }
+                    }
                     HStack {
                         SmallButton(title: "Pause", symbol: "pause.fill") {
                             Task { await model.queueAction("pause", id: queue.id) }
@@ -742,6 +911,18 @@ struct RunningView: View {
                             Task { await model.queueAction("skip", id: queue.id) }
                         }
                     }
+                }
+            }
+
+            SectionCard(title: "Runtime logs", symbol: "terminal.fill") {
+                Text(model.runtimeLogTitle)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                if model.runtimeLogLines.isEmpty {
+                    EmptyState(text: "Cham vao mot item dang chay de xem log truc tiep.")
+                } else {
+                    LogConsole(lines: model.runtimeLogLines, maxHeight: 360)
                 }
             }
         }
@@ -774,6 +955,12 @@ struct ScraperView: View {
 
             ProgressCard(title: model.scrapeStatus, message: "\(model.scrapeVideos.count) video", progress: model.scrapeStatus == "Done" ? 1 : 0.15)
 
+            if !model.scrapeLogLines.isEmpty {
+                SectionCard(title: "Scrape logs", symbol: "terminal") {
+                    LogConsole(lines: model.scrapeLogLines, maxHeight: 220)
+                }
+            }
+
             if !model.scrapeVideos.isEmpty {
                 SectionCard(title: "Ket qua scrape", symbol: "film.stack") {
                     PrimaryAction(title: "Add video moi vao Pipeline", symbol: "plus.circle.fill") {
@@ -793,12 +980,23 @@ struct ProjectsView: View {
 
     var body: some View {
         ScreenScroll {
+            SectionCard(title: "Series library", symbol: "play.square.stack.fill") {
+                if model.seriesRows.isEmpty {
+                    EmptyState(text: "Chua co series hoac backend chua tra /api/series")
+                }
+                ForEach(model.seriesRows) { series in
+                    SeriesCard(series: series)
+                }
+            }
+
             SectionCard(title: "Projects", symbol: "rectangle.stack") {
                 if model.projects.isEmpty {
                     EmptyState(text: "Chua load duoc project tu backend")
                 }
                 ForEach(model.projects) { project in
-                    ProjectCard(project: project)
+                    ProjectCard(project: project) {
+                        Task { await model.resumeProject(project.folderName) }
+                    }
                 }
             }
         }
@@ -810,10 +1008,34 @@ struct UploadsView: View {
 
     var body: some View {
         ScreenScroll {
+            SectionCard(title: "Tai khoan & trang thai", symbol: "person.crop.circle.badge.checkmark") {
+                if model.toolStatuses.isEmpty {
+                    EmptyState(text: "Cham Refresh de kiem tra YouTube, TikTok, Facebook, Drive, Watchdog.")
+                }
+                ForEach(model.toolStatuses) { row in
+                    HStack {
+                        Text(row.title).font(.subheadline.weight(.semibold))
+                        Spacer()
+                        StatusPill(text: row.value, tone: row.tone)
+                    }
+                    .padding(10)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                Text(model.toolMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    SmallButton(title: "Refresh", symbol: "arrow.clockwise") { Task { await model.refreshToolStatuses() } }
+                    SmallButton(title: "YouTube login", symbol: "play.tv") { Task { await model.runToolAction(title: "YouTube login", path: "/api/youtube/login") } }
+                    SmallButton(title: "TikTok OAuth", symbol: "music.note") { Task { await model.openURLFromEndpoint(title: "TikTok OAuth", path: "/api/tiktok/oauth/start") } }
+                    SmallButton(title: "Drive login", symbol: "externaldrive") { model.openBackendPath("/api/gdrive/login") }
+                }
+            }
+
             SectionCard(title: "Upload nhanh", symbol: "arrow.up.circle") {
                 Picker("Project", selection: $model.selectedProject) {
                     ForEach(model.projects) { project in
-                        Text(project.name).tag(project.name)
+                        Text(project.displayName).tag(project.folderName)
                     }
                 }
                 .pickerStyle(.menu)
@@ -834,6 +1056,14 @@ struct UploadsView: View {
             }
 
             SectionCard(title: "YouTube queue", symbol: "list.bullet.clipboard") {
+                HStack {
+                    SmallButton(title: "Sort tap", symbol: "arrow.up.arrow.down") {
+                        Task { await model.runToolAction(title: "Sort YouTube queue", path: "/api/youtube/queue/sort", body: ["mode": "episode_asc"]) }
+                    }
+                    SmallButton(title: "Watchdog", symbol: "shield.lefthalf.filled") {
+                        Task { await model.runToolAction(title: "YouTube watchdog", path: "/api/youtube/watchdog/run-once") }
+                    }
+                }
                 if model.uploadRows.isEmpty {
                     EmptyState(text: "Queue upload YouTube dang trong")
                 }
@@ -841,7 +1071,25 @@ struct UploadsView: View {
                     UploadRowView(row: row)
                 }
             }
+
+            SectionCard(title: "Dong bo & watchdog", symbol: "antenna.radiowaves.left.and.right") {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    SmallButton(title: "Drive sync", symbol: "arrow.triangle.2.circlepath") {
+                        Task { await model.runToolAction(title: "Drive sync", path: "/api/gdrive/sync_projects_async") }
+                    }
+                    SmallButton(title: "Mass upload Drive", symbol: "icloud.and.arrow.up") {
+                        Task { await model.runToolAction(title: "Drive mass upload", path: "/api/gdrive/mass_upload_videos") }
+                    }
+                    SmallButton(title: "Douyin watchdog", symbol: "magnifyingglass.circle") {
+                        Task { await model.runToolAction(title: "Douyin watchdog", path: "/api/douyin/watchdog/run-once") }
+                    }
+                    SmallButton(title: "FB pages", symbol: "f.circle") {
+                        Task { await model.runToolAction(title: "Facebook status", path: "/api/facebook/reels/status", method: "GET") }
+                    }
+                }
+            }
         }
+        .task { await model.refreshToolStatuses() }
     }
 }
 
@@ -873,7 +1121,7 @@ struct SettingsView: View {
             }
 
             SectionCard(title: "Ghi chu build", symbol: "shippingbox.fill") {
-                Text("App native nay goi backend MBVietSub qua API. Render, Playwright scrape, ffmpeg va upload van chay tren PC/server; iPhone dung de dieu khien va nhan thong bao.")
+                Text("App native nay goi backend MBVietSub qua API. Render, Playwright scrape, ffmpeg va upload van chay tren PC/server. Khi app vao nen, iOS cho poll tiep trong mot khoang thoi gian de gui local notification; neu user kill app han thi can push notification/APNs tu backend moi bao dam van bao.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -943,6 +1191,7 @@ struct ProgressCard: View {
 
 struct QueueCard: View {
     var queue: QueueSnapshot
+    var onSelect: ((QueueItem) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -959,24 +1208,30 @@ struct QueueCard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
 
-            ForEach(queue.items.prefix(12)) { item in
-                HStack(alignment: .top, spacing: 8) {
-                    Text("#\(item.index + 1)")
-                        .font(.caption.monospacedDigit().weight(.bold))
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(item.url)
-                            .font(.caption)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Text(item.message.isEmpty ? item.status : item.message)
-                            .font(.caption2)
+            ForEach(queue.items.prefix(18)) { item in
+                Button {
+                    onSelect?(item)
+                } label: {
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("#\(item.index + 1)")
+                            .font(.caption.monospacedDigit().weight(.bold))
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.url.isEmpty ? item.message : item.url)
+                                .font(.caption)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Text(item.message.isEmpty ? item.status : item.message)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                        Spacer()
+                        StatusPill(text: item.status, tone: item.status.contains("done") ? .green : item.status.contains("error") || item.status.contains("failed") ? .red : .orange)
                     }
-                    Spacer()
-                    StatusPill(text: item.status, tone: item.status.contains("done") ? .green : item.status.contains("error") || item.status.contains("failed") ? .red : .orange)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(12)
@@ -989,7 +1244,18 @@ struct LogCard: View {
 
     var body: some View {
         SectionCard(title: "Logs", symbol: "terminal.fill") {
-            ScrollView(.horizontal, showsIndicators: true) {
+            LogConsole(lines: lines, maxHeight: 280)
+        }
+    }
+}
+
+struct LogConsole: View {
+    var lines: [String]
+    var maxHeight: CGFloat
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: true) {
+            ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 5) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                         Text(line)
@@ -1001,30 +1267,74 @@ struct LogCard: View {
                 .padding(12)
                 .frame(minWidth: UIScreen.main.bounds.width - 64, alignment: .leading)
             }
-            .frame(maxHeight: 280)
-            .background(Color.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frame(maxHeight: maxHeight)
         }
+        .background(Color.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
 struct ProjectCard: View {
     var project: ProjectRow
+    var onResume: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(project.name)
-                .font(.system(.subheadline, design: .rounded).weight(.bold))
-                .lineLimit(2)
-            Text([project.series, project.created].filter { !$0.isEmpty }.joined(separator: " - "))
+            HStack(alignment: .top) {
+                Text(project.displayName)
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
+                    .lineLimit(2)
+                Spacer()
+                StatusPill(text: "\(project.progress)%", tone: project.progress >= 100 ? .green : .orange)
+            }
+            Text(project.subtitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Text([project.series, project.created].filter { !$0.isEmpty }.joined(separator: " - "))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
+            ProgressView(value: Double(project.progress) / 100.0)
+                .tint(project.progress >= 100 ? .green : .orange)
+            Text(project.steps.joined(separator: " -> "))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
             HStack {
                 StatusPill(text: project.rendered ? "Render" : "No render", tone: project.rendered ? .green : .orange)
                 StatusPill(text: project.youtube ? "YT" : "YT wait", tone: project.youtube ? .green : .gray)
                 StatusPill(text: project.tiktok ? "TT" : "TT wait", tone: project.tiktok ? .pink : .gray)
                 StatusPill(text: project.facebook ? "FB" : "FB wait", tone: project.facebook ? .blue : .gray)
             }
+            if let onResume = onResume {
+                SmallButton(title: "Resume", symbol: "arrow.clockwise", action: onResume)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+struct SeriesCard: View {
+    var series: SeriesRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(series.name)
+                .font(.system(.subheadline, design: .rounded).weight(.bold))
+                .lineLimit(2)
+            Text("Folder: \(series.folder)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            HStack {
+                StatusPill(text: series.episodeRange, tone: .blue)
+                StatusPill(text: "\(series.rendered)/\(series.total) render", tone: series.rendered == series.total ? .green : .orange)
+                StatusPill(text: "\(series.uploaded) uploaded", tone: series.uploaded > 0 ? .green : .gray)
+            }
+            ProgressView(value: series.total > 0 ? Double(series.rendered) / Double(series.total) : 0)
+                .tint(.green)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
@@ -1243,15 +1553,54 @@ func parseProject(_ data: [String: Any]) -> ProjectRow {
     let youtube = data["youtube"] as? [String: Any]
     let tiktok = data["tiktok"] as? [String: Any]
     let facebook = data["facebook_reels"] as? [String: Any]
+    let metadata = data["metadata"] as? [String: Any] ?? [:]
+    let douyin = data["douyin_meta"] as? [String: Any] ?? [:]
+    let ctx = (data["series_context"] as? [String: Any]) ?? (metadata["series_context"] as? [String: Any]) ?? [:]
+    let folder = string(data["project_name"], fallback: string(data["name"], fallback: string(data["folder"])))
+    let metaTitle = string(metadata["title"])
+    let douyinTitle = string(douyin["douyin_title"], fallback: string(douyin["title"]))
+    let seriesName = string(ctx["series_name_vi"], fallback: string(ctx["series_name"], fallback: string(data["series_name"])))
+    let epNo = intOptional(ctx["episode_no"]) ?? intOptional(data["episode_no"]) ?? extractEpisodeNo(metaTitle) ?? extractEpisodeNo(douyinTitle)
+    let display: String
+    if let episode = epNo, !seriesName.isEmpty {
+        display = "Tap \(episode) | \(seriesName) | MiuBonVietSub"
+    } else if !metaTitle.isEmpty {
+        display = metaTitle
+    } else if !douyinTitle.isEmpty {
+        display = douyinTitle
+    } else {
+        display = folder
+    }
+    let allSteps = ["download", "separate", "stt", "translate", "tts", "render", "metadata", "upload"]
+    let progress = min(100, Int(round(Double(steps.count) / Double(allSteps.count) * 100)))
 
     return ProjectRow(
-        name: string(data["project_name"], fallback: string(data["name"], fallback: string(data["folder"]))),
+        folderName: folder,
+        displayName: display,
+        subtitle: folder.isEmpty ? douyinTitle : folder,
         created: string(data["created_at"], fallback: string(data["updated_at"])),
-        series: string(data["series"], fallback: string(data["series_name"])),
+        series: seriesName,
+        episodeNo: epNo,
+        progress: progress,
+        steps: steps,
         rendered: steps.contains("render") || !string(data["final_video"]).isEmpty,
         youtube: !(string(youtube?["videoId"]).isEmpty && string(youtube?["url"]).isEmpty),
         tiktok: !(tiktok?.isEmpty ?? true),
         facebook: !(facebook?.isEmpty ?? true)
+    )
+}
+
+func parseSeries(_ data: [String: Any]) -> SeriesRow {
+    let minEp = intOptional(data["episode_min"])
+    let maxEp = intOptional(data["episode_max"])
+    let range = (minEp != nil || maxEp != nil) ? "Tap \(minEp.map(String.init) ?? "?")-\(maxEp.map(String.init) ?? "?")" : "Series"
+    return SeriesRow(
+        folder: string(data["series_folder"], fallback: string(data["folder"])),
+        name: string(data["series_name"], fallback: string(data["name"], fallback: string(data["series_name_vi"], fallback: "Series"))),
+        episodeRange: range,
+        total: int(data["total_downloaded"], fallback: int(data["total"], fallback: (data["episodes"] as? [Any])?.count ?? 0)),
+        rendered: int(data["rendered_count"]),
+        uploaded: int(data["uploaded_count"])
     )
 }
 
@@ -1266,6 +1615,25 @@ func int(_ value: Any?, fallback: Int = 0) -> Int {
     if let value = value as? Double { return Int(value) }
     if let value = value as? String, let parsed = Int(value) { return parsed }
     return fallback
+}
+
+func intOptional(_ value: Any?) -> Int? {
+    if let value = value as? Int { return value }
+    if let value = value as? Double { return Int(value) }
+    if let value = value as? String, let parsed = Int(value) { return parsed }
+    return nil
+}
+
+func extractEpisodeNo(_ text: String) -> Int? {
+    let pattern = #"(?i)(?:tap|tập|ep|episode|第)\s*\.?\s*(\d{1,5})"#
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+    let nsrange = NSRange(text.startIndex..<text.endIndex, in: text)
+    guard let match = regex.firstMatch(in: text, range: nsrange),
+          match.numberOfRanges > 1,
+          let range = Range(match.range(at: 1), in: text) else {
+        return nil
+    }
+    return Int(text[range])
 }
 
 func double(_ value: Any?, fallback: Double = 0) -> Double {
