@@ -4749,11 +4749,11 @@ function miubonCheckAuth() {
   const main = document.getElementById('main-app-content');
   if (wall && main) {
     if (token) {
-      wall.style.display = 'none';
-      main.style.display = 'block';
+      wall.classList.add('hidden-fade');
+      main.classList.add('visible');
     } else {
-      wall.style.display = 'flex';
-      main.style.display = 'none';
+      wall.classList.remove('hidden-fade');
+      main.classList.remove('visible');
     }
   }
 }
