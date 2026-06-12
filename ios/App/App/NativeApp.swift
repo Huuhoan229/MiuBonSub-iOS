@@ -102,6 +102,7 @@ struct ProjectRow: Identifiable {
     var subtitle: String
     var created: String
     var series: String
+    var seriesFolder: String
     var episodeNo: Int?
     var progress: Int
     var steps: [String]
@@ -125,6 +126,7 @@ struct ScrapeVideo: Identifiable {
     var caption: String
     var duration: String
     var done: Bool
+    var translation: String = ""
 }
 
 struct SeriesRow: Identifiable {
@@ -150,6 +152,31 @@ struct SeriesEpisode: Identifiable {
 struct WatchProgress {
     var episodeIndex: Int
     var time: Double
+}
+
+struct AISeriesGroup: Identifiable {
+    let id = UUID()
+    var folder: String
+    var name: String
+    var originalName: String
+    var reason: String
+    var confidence: Double
+    var urls: [String]
+    var uniqueURLs: [String]
+    var episodeMin: Int?
+    var episodeMax: Int?
+    var duplicateCount: Int
+    var videos: [[String: Any]]
+}
+
+struct DouyinWatchdogState {
+    var enabled = false
+    var userURLs = ""
+    var intervalMin = "15"
+    var minDurationSec = "60"
+    var running = false
+    var lastRun = "N/A"
+    var summary = "Chua load watchdog"
 }
 
 struct GlossaryEntry: Identifiable {
@@ -236,7 +263,7 @@ final class MiuBonAPI {
         self.baseURL = baseURL
     }
 
-    func request(_ path: String, method: String = "GET", body: Any? = nil, authToken: String? = nil) async throws -> [String: Any] {
+    func request(_ path: String, method: String = "GET", body: Any? = nil, authToken: String? = nil, timeout: TimeInterval = 30) async throws -> [String: Any] {
         let cleanBase = baseURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !cleanBase.isEmpty, let url = URL(string: cleanBase + path) else {
             throw NSError(domain: "MiuBonAPI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Backend URL chua hop le"])
@@ -244,7 +271,7 @@ final class MiuBonAPI {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
-        request.timeoutInterval = 30
+        request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let authToken, !authToken.isEmpty {
             request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
@@ -330,6 +357,8 @@ final class AppModel: ObservableObject {
     @Published var toolStatuses: [StatusLine] = []
     @Published var toolMessage = "San sang"
     @Published var selectedVideo: VideoSelection?
+    @Published var selectedVideoSeriesFolder = ""
+    @Published var videoEpisodeSearch = ""
     @Published var configValues: [String: String] = [:]
     @Published var configRows: [ConfigRow] = []
     @Published var configMessage = "Chua load settings"
@@ -349,10 +378,17 @@ final class AppModel: ObservableObject {
     @Published var glossarySourceInput = ""
     @Published var glossaryTargetInput = ""
     @Published var glossaryMessage = "Chon series de sua tu dien"
+    @Published var selectedScrapeURLs: Set<String> = []
+    @Published var aiSeriesGroups: [AISeriesGroup] = []
+    @Published var selectedAIGroupIDs: Set<UUID> = []
+    @Published var aiGroupMessage = "Chua AI group series"
+    @Published var completedScrapeURLs: Set<String> = []
+    @Published var douyinWatchdog = DouyinWatchdogState()
 
     private var pollTask: Task<Void, Never>?
     private var runtimeLogOffset = 0
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var pipelineURLContexts: [String: [String: Any]] = [:]
     private var api: MiuBonAPI { MiuBonAPI(baseURL: backendURL) }
 
     init() {
@@ -373,7 +409,39 @@ final class AppModel: ObservableObject {
     }
 
     var standaloneProjects: [ProjectRow] {
-        renderedProjects.filter { $0.series.isEmpty }
+        renderedProjects.filter { $0.series.isEmpty && $0.seriesFolder.isEmpty }
+    }
+
+    var effectiveSeriesRows: [SeriesRow] {
+        if !seriesRows.isEmpty { return seriesRows }
+        let grouped = Dictionary(grouping: renderedProjects.filter { !$0.series.isEmpty || !$0.seriesFolder.isEmpty }) { project in
+            project.seriesFolder.isEmpty ? project.series : project.seriesFolder
+        }
+        return grouped.map { key, rows in
+            let sorted = rows.sorted { ($0.episodeNo ?? 0) < ($1.episodeNo ?? 0) }
+            let episodeNumbers = sorted.compactMap(\.episodeNo)
+            let minEp = episodeNumbers.min()
+            let maxEp = episodeNumbers.max()
+            let episodes = sorted.map { project in
+                SeriesEpisode(
+                    projectName: project.folderName,
+                    title: project.displayName,
+                    episodeNo: project.episodeNo ?? 1,
+                    rendered: project.rendered,
+                    created: project.created
+                )
+            }
+            return SeriesRow(
+                folder: key,
+                name: rows.first?.series.isEmpty == false ? rows.first?.series ?? key : key,
+                episodeRange: (minEp != nil || maxEp != nil) ? "Tap \(minEp.map(String.init) ?? "?")-\(maxEp.map(String.init) ?? "?")" : "Series",
+                total: rows.count,
+                rendered: rows.filter(\.rendered).count,
+                uploaded: rows.filter { $0.youtube || $0.tiktok || $0.facebook }.count,
+                episodes: episodes
+            )
+        }
+        .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     func startPolling() {
@@ -447,7 +515,14 @@ final class AppModel: ObservableObject {
                 pipelineMessage = "Pipeline da bat dau"
                 pipelineProgress = 0.02
             } else {
-                let result = try await api.request("/api/pipeline/batch", method: "POST", body: ["urls": urls.joined(separator: "\n")])
+                let contexts = urls.reduce(into: [String: [String: Any]]()) { out, url in
+                    if let context = pipelineURLContexts[url] { out[url] = context }
+                }
+                let result = try await api.request(
+                    "/api/pipeline/batch",
+                    method: "POST",
+                    body: ["urls": urls.joined(separator: "\n"), "contexts": contexts]
+                )
                 activeQueueId = string(result["queue_id"])
                 queue.id = activeQueueId
                 pipelineStatus = "Queue running"
@@ -613,6 +688,9 @@ final class AppModel: ObservableObject {
         }
         scrapeStatus = "Starting"
         scrapeVideos = []
+        selectedScrapeURLs = []
+        aiSeriesGroups = []
+        selectedAIGroupIDs = []
         scrapeLogLines = []
         do {
             let result = try await api.request(
@@ -1052,6 +1130,235 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func toggleScrapeSelection(_ video: ScrapeVideo) {
+        if selectedScrapeURLs.contains(video.url) {
+            selectedScrapeURLs.remove(video.url)
+        } else if !video.url.isEmpty {
+            selectedScrapeURLs.insert(video.url)
+        }
+    }
+
+    func setScrapeSelection(all: Bool, newOnly: Bool = false) {
+        selectedScrapeURLs = all
+            ? Set(scrapeVideos.filter { !newOnly || !$0.done }.map(\.url).filter { !$0.isEmpty })
+            : []
+    }
+
+    func addSelectedScrapedToPipeline(newOnly: Bool) {
+        let urls = scrapeVideos
+            .filter { selectedScrapeURLs.contains($0.url) && (!newOnly || !$0.done) }
+            .map(\.url)
+            .filter { !$0.isEmpty }
+        guard !urls.isEmpty else {
+            aiGroupMessage = "Chua chon video hop le"
+            return
+        }
+        appendURLsToPipeline(urls)
+        selectedTab = .pipeline
+        aiGroupMessage = "Da them \(urls.count) URL vao Pipeline"
+    }
+
+    func translateScrapeCaptions() async {
+        let captions = scrapeVideos.map(\.caption)
+        guard !captions.isEmpty else {
+            aiGroupMessage = "Chua co caption de dich"
+            return
+        }
+        aiGroupMessage = "Dang dich caption bang 9Router..."
+        do {
+            let result = try await api.request(
+                "/api/douyin/translate-captions",
+                method: "POST",
+                body: ["captions": captions],
+                timeout: 300
+            )
+            let translations = (result["translations"] as? [String]) ?? []
+            for index in scrapeVideos.indices {
+                if let translated = translations[safe: index] {
+                    scrapeVideos[index].translation = translated
+                }
+            }
+            aiGroupMessage = "Da dich \(translations.count) caption"
+        } catch {
+            aiGroupMessage = "Dich caption loi: \(error.localizedDescription)"
+        }
+    }
+
+    func groupScrapeSeriesAI(loadSaved: Bool = false) async {
+        aiGroupMessage = loadSaved ? "Dang load AI group da luu..." : "Dang AI group series bang 9Router..."
+        do {
+            let result: [String: Any]
+            if loadSaved {
+                result = try await api.request("/api/douyin/load-group")
+            } else {
+                guard !scrapeVideos.isEmpty else {
+                    aiGroupMessage = "Chua co video scrape de group"
+                    return
+                }
+                result = try await api.request(
+                    "/api/douyin/group-series",
+                    method: "POST",
+                    body: ["videos": scrapeVideos.map(scrapeVideoPayload)],
+                    timeout: 600
+                )
+            }
+            aiSeriesGroups = parseAISeriesGroups(result)
+            selectedAIGroupIDs = Set(aiSeriesGroups.filter { !$0.urls.isEmpty }.map(\.id))
+            aiGroupMessage = "AI group: \(aiSeriesGroups.count) series | standalone \(int(result["standalone_count"]))"
+            await loadCompletedScrapeURLs()
+        } catch {
+            aiGroupMessage = "AI group loi: \(error.localizedDescription)"
+        }
+    }
+
+    func loadCompletedScrapeURLs() async {
+        do {
+            let result = try await api.request("/api/projects/completed-urls")
+            completedScrapeURLs = Set((result["completed"] as? [String]) ?? [])
+        } catch {
+            completedScrapeURLs = []
+        }
+    }
+
+    func toggleAIGroup(_ group: AISeriesGroup) {
+        if selectedAIGroupIDs.contains(group.id) {
+            selectedAIGroupIDs.remove(group.id)
+        } else {
+            selectedAIGroupIDs.insert(group.id)
+        }
+    }
+
+    func setAIGroupSelection(all: Bool) {
+        selectedAIGroupIDs = all ? Set(aiSeriesGroups.map(\.id)) : []
+    }
+
+    func addSelectedAIGroupToPipeline(newOnly: Bool) {
+        let prepared = preparedSelectedAIGroupURLs(newOnly: newOnly)
+        guard !prepared.urls.isEmpty else {
+            aiGroupMessage = "Khong co URL moi trong group da chon"
+            return
+        }
+        appendURLsToPipeline(prepared.urls, contexts: prepared.contexts)
+        selectedTab = .pipeline
+        aiGroupMessage = "Da them \(prepared.urls.count) URL series vao Pipeline"
+    }
+
+    func startSelectedAIGroupQueue(newOnly: Bool = true) async {
+        let prepared = preparedSelectedAIGroupURLs(newOnly: newOnly)
+        guard !prepared.urls.isEmpty else {
+            aiGroupMessage = "Khong co URL de start queue"
+            return
+        }
+        do {
+            let result = try await api.request(
+                "/api/pipeline/batch",
+                method: "POST",
+                body: [
+                    "urls": prepared.urls.joined(separator: "\n"),
+                    "contexts": prepared.contexts
+                ]
+            )
+            activeQueueId = string(result["queue_id"])
+            queue.id = activeQueueId
+            pipelineStatus = "Queue running"
+            pipelineMessage = "Started selected series queue: \(prepared.urls.count) URL"
+            aiGroupMessage = pipelineMessage
+            selectedTab = .running
+            await refreshAll(silent: true)
+        } catch {
+            aiGroupMessage = "Start selected queue loi: \(error.localizedDescription)"
+        }
+    }
+
+    func preparedSelectedAIGroupURLs(newOnly: Bool) -> (urls: [String], contexts: [String: [String: Any]]) {
+        var urls: [String] = []
+        var contexts: [String: [String: Any]] = [:]
+        for group in aiSeriesGroups where selectedAIGroupIDs.contains(group.id) {
+            let sourceURLs = group.uniqueURLs.isEmpty ? group.urls : group.uniqueURLs
+            let filtered = sourceURLs.filter { url in
+                !url.isEmpty && (!newOnly || !completedScrapeURLs.contains(url))
+            }
+            let groupContexts = buildSeriesContextMap(group: group, urls: filtered)
+            for url in filtered where !urls.contains(url) {
+                urls.append(url)
+                if let context = groupContexts[url] {
+                    contexts[url] = context
+                }
+            }
+        }
+        return (urls, contexts)
+    }
+
+    func appendURLsToPipeline(_ urls: [String], contexts: [String: [String: Any]] = [:]) {
+        let clean = urls.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        for (url, context) in contexts {
+            pipelineURLContexts[url] = context
+        }
+        let existing = urlInput
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        var seen = Set<String>()
+        let merged = (existing + clean).filter { seen.insert($0).inserted }
+        urlInput = merged.joined(separator: "\n")
+    }
+
+    func loadDouyinWatchdogState() async {
+        do {
+            let result = try await api.request("/api/douyin/watchdog/state")
+            let userURLs = (result["user_urls"] as? [String]) ?? []
+            douyinWatchdog = DouyinWatchdogState(
+                enabled: bool(result["enabled"]),
+                userURLs: userURLs.isEmpty ? string(result["user_url"]) : userURLs.joined(separator: "\n"),
+                intervalMin: string(result["interval_min"], fallback: "15"),
+                minDurationSec: string(result["min_duration_sec"], fallback: "60"),
+                running: bool(result["running"]),
+                lastRun: string(result["last_run_at"], fallback: "N/A"),
+                summary: string(result["last_summary"], fallback: "Watchdog loaded")
+            )
+        } catch {
+            douyinWatchdog.summary = "Load watchdog loi: \(error.localizedDescription)"
+        }
+    }
+
+    func saveDouyinWatchdog() async {
+        let urls = douyinWatchdog.userURLs
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        do {
+            _ = try await api.request(
+                "/api/douyin/watchdog/config",
+                method: "POST",
+                body: [
+                    "enabled": douyinWatchdog.enabled,
+                    "user_urls": urls,
+                    "user_url": urls.first ?? "",
+                    "interval_min": int(douyinWatchdog.intervalMin, fallback: 15),
+                    "min_duration_sec": double(douyinWatchdog.minDurationSec, fallback: 60)
+                ]
+            )
+            await loadDouyinWatchdogState()
+            aiGroupMessage = "Da luu Douyin watchdog"
+        } catch {
+            aiGroupMessage = "Save watchdog loi: \(error.localizedDescription)"
+        }
+    }
+
+    func runDouyinWatchdogOnce() async {
+        aiGroupMessage = "Dang chay Douyin watchdog..."
+        do {
+            let result = try await api.request("/api/douyin/watchdog/run-once", method: "POST", body: [:], timeout: 600)
+            let output = (result["result"] as? [String: Any]) ?? [:]
+            aiGroupMessage = "Watchdog done: new \(int(output["new_count"])) | queued \(int(output["queued"]))"
+            await loadDouyinWatchdogState()
+            await refreshRunning()
+        } catch {
+            aiGroupMessage = "Run watchdog loi: \(error.localizedDescription)"
+            await loadDouyinWatchdogState()
+        }
+    }
+
     func runToolAction(title: String, path: String, method: String = "POST", body: [String: Any]? = nil) async {
         do {
             let result = try await api.request(path, method: method, body: body)
@@ -1103,6 +1410,8 @@ final class AppModel: ObservableObject {
             statusMessage = "Khong tao duoc URL video"
             return
         }
+        let watchFolder = videoWatchFolder(for: project)
+        let episodeIndex = resolvedEpisodeIndex(project: project, watchFolder: watchFolder)
         selectedVideo = VideoSelection(
             title: project.displayName,
             subtitle: project.subtitle,
@@ -1110,10 +1419,12 @@ final class AppModel: ObservableObject {
             url: url,
             previewURL: previewURL,
             finalURL: finalURL,
-            watchFolder: project.series.isEmpty ? project.folderName : project.series,
-            episodeIndex: max(0, (project.episodeNo ?? 1) - 1),
-            resumeTime: watchProgress[project.series.isEmpty ? project.folderName : project.series]?.time ?? 0
+            watchFolder: watchFolder,
+            episodeIndex: episodeIndex,
+            resumeTime: watchProgress[watchFolder]?.time ?? 0
         )
+        selectedVideoSeriesFolder = project.seriesFolder.isEmpty ? project.series : project.seriesFolder
+        selectedTab = .videos
     }
 
     func playEpisode(_ episode: SeriesEpisode, in series: SeriesRow, index: Int) {
@@ -1127,6 +1438,7 @@ final class AppModel: ObservableObject {
             subtitle: episode.projectName,
             created: episode.created,
             series: series.folder,
+            seriesFolder: series.folder,
             episodeNo: episode.episodeNo,
             progress: 100,
             steps: ["render"],
@@ -1154,6 +1466,144 @@ final class AppModel: ObservableObject {
             episodeIndex: index,
             resumeTime: progress?.episodeIndex == index ? progress?.time ?? 0 : 0
         )
+        selectedVideoSeriesFolder = series.folder
+        selectedTab = .videos
+    }
+
+    func selectSeriesForWatching(_ series: SeriesRow) {
+        selectedVideoSeriesFolder = series.folder
+        let renderedEpisodes = renderedEpisodes(in: series)
+        let saved = watchProgress[series.folder]
+        let index = min(max(saved?.episodeIndex ?? 0, 0), max(renderedEpisodes.count - 1, 0))
+        if let episode = renderedEpisodes[safe: index] {
+            playEpisode(episode, in: series, index: index)
+        }
+    }
+
+    func renderedEpisodes(in series: SeriesRow) -> [SeriesEpisode] {
+        series.episodes
+            .filter(\.rendered)
+            .sorted { lhs, rhs in
+                if lhs.episodeNo == rhs.episodeNo { return lhs.created < rhs.created }
+                return lhs.episodeNo < rhs.episodeNo
+            }
+    }
+
+    func filteredEpisodes(in series: SeriesRow) -> [SeriesEpisode] {
+        let episodes = renderedEpisodes(in: series)
+        let query = videoEpisodeSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return episodes }
+        return episodes.filter { episode in
+            String(episode.episodeNo).contains(query)
+                || episode.title.lowercased().contains(query)
+                || episode.projectName.lowercased().contains(query)
+        }
+    }
+
+    func selectedVideoSeries() -> SeriesRow? {
+        let rows = effectiveSeriesRows
+        if let selected = rows.first(where: { $0.folder == selectedVideoSeriesFolder }) {
+            return selected
+        }
+        return rows.first
+    }
+
+    func canPlayNext(after selection: VideoSelection) -> Bool {
+        nextSelection(after: selection) != nil
+    }
+
+    func playNextVideo(after selection: VideoSelection? = nil) {
+        guard let next = nextSelection(after: selection ?? selectedVideo) else {
+            statusMessage = "Het tap de xem"
+            return
+        }
+        selectedVideo = next
+        selectedVideoSeriesFolder = next.watchFolder
+    }
+
+    func nextSelection(after selection: VideoSelection?) -> VideoSelection? {
+        guard let selection = selection else { return nil }
+        if let series = effectiveSeriesRows.first(where: { $0.folder == selection.watchFolder }) {
+            let episodes = renderedEpisodes(in: series)
+            let nextIndex = selection.episodeIndex + 1
+            guard let nextEpisode = episodes[safe: nextIndex] else { return nil }
+            return makeVideoSelection(episode: nextEpisode, series: series, index: nextIndex, resume: false)
+        }
+        let standalone = standaloneProjects
+        guard let current = standalone.firstIndex(where: { $0.folderName == selection.folderName }),
+              let nextProject = standalone[safe: current + 1] else {
+            return nil
+        }
+        return makeVideoSelection(project: nextProject, resume: false)
+    }
+
+    func makeVideoSelection(project: ProjectRow, file: String = "preview", resume: Bool = true) -> VideoSelection? {
+        guard
+            let previewURL = projectMediaURL(project, file: "preview"),
+            let finalURL = projectMediaURL(project, file: "final_video.mp4"),
+            let url = projectMediaURL(project, file: file)
+        else { return nil }
+        let folder = videoWatchFolder(for: project)
+        let episodeIndex = resolvedEpisodeIndex(project: project, watchFolder: folder)
+        return VideoSelection(
+            title: project.displayName,
+            subtitle: project.subtitle,
+            folderName: project.folderName,
+            url: url,
+            previewURL: previewURL,
+            finalURL: finalURL,
+            watchFolder: folder,
+            episodeIndex: episodeIndex,
+            resumeTime: resume ? watchProgress[folder]?.time ?? 0 : 0
+        )
+    }
+
+    func makeVideoSelection(episode: SeriesEpisode, series: SeriesRow, index: Int, resume: Bool = true) -> VideoSelection? {
+        let pseudoProject = ProjectRow(
+            folderName: episode.projectName,
+            displayName: episode.title,
+            subtitle: episode.projectName,
+            created: episode.created,
+            series: series.name,
+            seriesFolder: series.folder,
+            episodeNo: episode.episodeNo,
+            progress: 100,
+            steps: ["render"],
+            rendered: true,
+            youtube: false,
+            tiktok: false,
+            facebook: false
+        )
+        guard
+            let previewURL = projectMediaURL(pseudoProject, file: "preview"),
+            let finalURL = projectMediaURL(pseudoProject, file: "final_video.mp4")
+        else { return nil }
+        let progress = watchProgress[series.folder]
+        return VideoSelection(
+            title: episode.title,
+            subtitle: "\(series.name) - Tap \(episode.episodeNo)",
+            folderName: episode.projectName,
+            url: previewURL,
+            previewURL: previewURL,
+            finalURL: finalURL,
+            watchFolder: series.folder,
+            episodeIndex: index,
+            resumeTime: resume && progress?.episodeIndex == index ? progress?.time ?? 0 : 0
+        )
+    }
+
+    func videoWatchFolder(for project: ProjectRow) -> String {
+        if !project.seriesFolder.isEmpty { return project.seriesFolder }
+        if !project.series.isEmpty { return project.series }
+        return project.folderName
+    }
+
+    func resolvedEpisodeIndex(project: ProjectRow, watchFolder: String) -> Int {
+        guard let series = effectiveSeriesRows.first(where: { $0.folder == watchFolder }) else {
+            return max(0, (project.episodeNo ?? 1) - 1)
+        }
+        return renderedEpisodes(in: series).firstIndex(where: { $0.projectName == project.folderName })
+            ?? max(0, (project.episodeNo ?? 1) - 1)
     }
 
     func openProjectVideo(_ project: ProjectRow, file: String = "preview") {
@@ -1214,10 +1664,6 @@ struct MiuBonRootView: View {
         }
         .environmentObject(model)
         .preferredColorScheme(model.theme.colorScheme)
-        .sheet(item: $model.selectedVideo) { selection in
-            VideoPlayerSheet(selection: selection)
-                .environmentObject(model)
-        }
         .task {
             await model.refreshAll()
             await model.refreshToolStatuses()
@@ -1460,6 +1906,12 @@ struct ScraperView: View {
 
             ProgressCard(title: model.scrapeStatus, message: "\(model.scrapeVideos.count) video", progress: model.scrapeStatus == "Done" ? 1 : 0.15)
 
+            ScrapeAIToolsView()
+                .environmentObject(model)
+
+            DouyinWatchdogCard()
+                .environmentObject(model)
+
             if !model.scrapeLogLines.isEmpty {
                 SectionCard(title: "Scrape logs", symbol: "terminal") {
                     LogConsole(lines: model.scrapeLogLines, maxHeight: 220)
@@ -1468,15 +1920,146 @@ struct ScraperView: View {
 
             if !model.scrapeVideos.isEmpty {
                 SectionCard(title: "Ket qua scrape", symbol: "film.stack") {
-                    PrimaryAction(title: "Add video moi vao Pipeline", symbol: "plus.circle.fill") {
-                        model.addScrapedNewVideosToPipeline()
+                    HStack(spacing: 10) {
+                        SmallButton(title: "Select All", symbol: "checkmark.square") {
+                            model.setScrapeSelection(all: true)
+                        }
+                        SmallButton(title: "New Only", symbol: "sparkles") {
+                            model.setScrapeSelection(all: true, newOnly: true)
+                        }
+                        SmallButton(title: "Clear", symbol: "square") {
+                            model.setScrapeSelection(all: false)
+                        }
+                    }
+                    PrimaryAction(title: "Add selected/new vao Pipeline", symbol: "plus.circle.fill") {
+                        model.addSelectedScrapedToPipeline(newOnly: true)
                     }
                     ForEach(model.scrapeVideos) { video in
-                        ScrapeVideoCard(video: video)
+                        ScrapeVideoSelectableCard(video: video)
+                            .environmentObject(model)
                     }
                 }
             }
         }
+    }
+}
+
+struct ScrapeAIToolsView: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        SectionCard(title: "AI group series", symbol: "sparkles.tv.fill") {
+            Text("Group video scrape thanh series bang 9Router, giu context series_folder/episode_no khi start queue.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                SmallButton(title: "Translate Captions", symbol: "captions.bubble.fill") {
+                    Task { await model.translateScrapeCaptions() }
+                }
+                SmallButton(title: "AI Group", symbol: "sparkles") {
+                    Task { await model.groupScrapeSeriesAI() }
+                }
+                SmallButton(title: "Load Saved", symbol: "tray.and.arrow.down.fill") {
+                    Task { await model.groupScrapeSeriesAI(loadSaved: true) }
+                }
+                SmallButton(title: "Refresh Done", symbol: "checkmark.seal.fill") {
+                    Task { await model.loadCompletedScrapeURLs() }
+                }
+            }
+
+            HStack(spacing: 10) {
+                SmallButton(title: "Select All", symbol: "checkmark.square") {
+                    model.setAIGroupSelection(all: true)
+                }
+                SmallButton(title: "Clear", symbol: "square") {
+                    model.setAIGroupSelection(all: false)
+                }
+            }
+
+            HStack(spacing: 10) {
+                PrimaryAction(title: "Add New", symbol: "plus.circle.fill") {
+                    model.addSelectedAIGroupToPipeline(newOnly: true)
+                }
+                PrimaryAction(title: "Start Queue", symbol: "play.fill") {
+                    Task { await model.startSelectedAIGroupQueue(newOnly: true) }
+                }
+            }
+
+            Text(model.aiGroupMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(4)
+
+            if model.aiSeriesGroups.isEmpty {
+                EmptyState(text: "Chua co AI group. Bam AI Group sau khi scrape, hoac Load Saved.")
+            } else {
+                ForEach(model.aiSeriesGroups) { group in
+                    AISeriesGroupCard(group: group)
+                        .environmentObject(model)
+                }
+            }
+        }
+    }
+}
+
+struct DouyinWatchdogCard: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        SectionCard(title: "Douyin User Watchdog", symbol: "dog.fill") {
+            Text("Tu scan user theo chu ky, neu co video moi thi backend group series va add vao queue.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextEditor(text: $model.douyinWatchdog.userURLs)
+                .frame(minHeight: 82)
+                .padding(10)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(alignment: .topLeading) {
+                    if model.douyinWatchdog.userURLs.isEmpty {
+                        Text("User URLs, moi dong mot link...")
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 18)
+                    }
+                }
+
+            HStack {
+                TextField("Interval min", text: $model.douyinWatchdog.intervalMin)
+                    .keyboardType(.numberPad)
+                    .inputShell()
+                TextField("Min sec", text: $model.douyinWatchdog.minDurationSec)
+                    .keyboardType(.numberPad)
+                    .inputShell()
+            }
+
+            Toggle("Enable Watchdog", isOn: $model.douyinWatchdog.enabled)
+                .toggleStyle(.switch)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                SmallButton(title: "Load", symbol: "arrow.clockwise") {
+                    Task { await model.loadDouyinWatchdogState() }
+                }
+                SmallButton(title: "Save", symbol: "square.and.arrow.down.fill") {
+                    Task { await model.saveDouyinWatchdog() }
+                }
+                SmallButton(title: "Run Once", symbol: "play.circle.fill") {
+                    Task { await model.runDouyinWatchdogOnce() }
+                }
+                StatusPill(text: model.douyinWatchdog.running ? "Running" : "Idle", tone: model.douyinWatchdog.running ? .orange : .green)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+
+            Text("Last: \(model.douyinWatchdog.lastRun) | \(model.douyinWatchdog.summary)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(4)
+        }
+        .task { await model.loadDouyinWatchdogState() }
     }
 }
 
@@ -1512,7 +2095,6 @@ struct ProjectsView: View {
 
 struct VideosView: View {
     @EnvironmentObject private var model: AppModel
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
         ScreenScroll {
@@ -1547,54 +2129,236 @@ struct VideosView: View {
                     .lineLimit(2)
             }
 
-            SectionCard(title: "Thu vien video", symbol: "play.square.stack.fill") {
-                HStack {
-                    Text("\(model.seriesRows.count) series | \(model.standaloneProjects.count) phim le")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    SmallButton(title: "Refresh", symbol: "arrow.clockwise") {
-                        Task {
-                            await model.refreshSeries()
-                            await model.refreshProjects()
-                            await model.loadWatchProgress()
-                        }
-                    }
-                    .frame(width: 120)
-                }
+            VideoNowPlayingSection()
+                .environmentObject(model)
 
-                Picker("Loai", selection: $model.videoLibraryMode) {
-                    Text("Phim series").tag("series")
-                    Text("Standalone").tag("standalone")
-                }
-                .pickerStyle(.segmented)
-
-                if model.videoLibraryMode == "series" {
-                    if model.seriesRows.isEmpty {
-                        EmptyState(text: "Chua co series nao render.")
-                    }
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(model.seriesRows) { series in
-                            SeriesPosterCard(series: series)
-                        }
-                    }
-                } else {
-                    if model.standaloneProjects.isEmpty {
-                        EmptyState(text: "Chua co phim le nao render.")
-                    }
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(model.standaloneProjects) { project in
-                            StandalonePosterCard(project: project)
-                        }
-                    }
-                }
-            }
+            VideoLibrarySection()
+                .environmentObject(model)
         }
         .task {
             if !model.authToken.isEmpty {
                 await model.loadWatchProgress()
             }
+            if model.selectedVideo == nil, let series = model.effectiveSeriesRows.first {
+                model.selectSeriesForWatching(series)
+            }
         }
+    }
+}
+
+struct VideoNowPlayingSection: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        SectionCard(title: "Dang xem", symbol: "play.tv.fill") {
+            if let selection = model.selectedVideo {
+                InlineVideoPlayer(selection: selection)
+                    .environmentObject(model)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "play.rectangle.on.rectangle.fill")
+                        .font(.system(size: 44, weight: .black))
+                        .foregroundStyle(.secondary)
+                    Text("Chon series hoac phim le ben duoi de xem.")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            }
+        }
+    }
+}
+
+struct VideoLibrarySection: View {
+    @EnvironmentObject private var model: AppModel
+    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+
+    var body: some View {
+        SectionCard(title: "Thu vien video", symbol: "play.square.stack.fill") {
+            HStack {
+                Text("\(model.effectiveSeriesRows.count) series | \(model.standaloneProjects.count) phim le")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                SmallButton(title: "Refresh", symbol: "arrow.clockwise") {
+                    Task {
+                        await model.refreshSeries()
+                        await model.refreshProjects()
+                        await model.loadWatchProgress()
+                    }
+                }
+                .frame(width: 116)
+            }
+
+            Picker("Loai", selection: $model.videoLibraryMode) {
+                Text("Phim series").tag("series")
+                Text("Standalone").tag("standalone")
+            }
+            .pickerStyle(.segmented)
+
+            if model.videoLibraryMode == "series" {
+                SeriesWatchLibrary()
+                    .environmentObject(model)
+            } else {
+                TextField("Tim phim le...", text: $model.videoEpisodeSearch)
+                    .textInputAutocapitalization(.never)
+                    .inputShell()
+                let projects = filteredStandalone
+                if projects.isEmpty {
+                    EmptyState(text: "Chua co phim le render.")
+                }
+                LazyVGrid(columns: columns, spacing: 14) {
+                    ForEach(projects) { project in
+                        StandalonePosterCard(project: project)
+                    }
+                }
+            }
+        }
+    }
+
+    private var filteredStandalone: [ProjectRow] {
+        let query = model.videoEpisodeSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return model.standaloneProjects }
+        return model.standaloneProjects.filter {
+            $0.displayName.lowercased().contains(query)
+                || $0.folderName.lowercased().contains(query)
+        }
+    }
+}
+
+struct SeriesWatchLibrary: View {
+    @EnvironmentObject private var model: AppModel
+    private let posterColumns = [GridItem(.flexible()), GridItem(.flexible())]
+
+    var body: some View {
+        if model.effectiveSeriesRows.isEmpty {
+            EmptyState(text: "Chua co series nao render.")
+        } else {
+            LazyVGrid(columns: posterColumns, spacing: 12) {
+                ForEach(model.effectiveSeriesRows) { series in
+                    SeriesMiniPosterCard(
+                        series: series,
+                        selected: model.selectedVideoSeriesFolder == series.folder
+                    ) {
+                        model.selectSeriesForWatching(series)
+                    }
+                    .environmentObject(model)
+                }
+            }
+
+            if let series = model.selectedVideoSeries() {
+                EpisodeListPanel(series: series)
+                    .environmentObject(model)
+            }
+        }
+    }
+}
+
+struct SeriesMiniPosterCard: View {
+    var series: SeriesRow
+    var selected: Bool
+    var action: () -> Void
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .bottomLeading) {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(LinearGradient(colors: [.pink.opacity(0.36), .black.opacity(0.82)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    if let first = model.renderedEpisodes(in: series).first,
+                       let url = model.projectMediaURL(projectName: first.projectName, file: "thumbnail.jpg") {
+                        AsyncImage(url: url) { phase in
+                            if let image = phase.image {
+                                image.resizable().scaledToFill()
+                            } else {
+                                Color.clear
+                            }
+                        }
+                    }
+                    LinearGradient(colors: [.clear, .black.opacity(0.82)], startPoint: .top, endPoint: .bottom)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(series.name)
+                            .font(.system(.caption, design: .rounded).weight(.black))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                        Text("\(series.rendered)/\(series.total) tap")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white.opacity(0.82))
+                    }
+                    .padding(10)
+                }
+                .frame(height: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(selected ? Color.accentColor : Color.clear, lineWidth: 3))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct EpisodeListPanel: View {
+    var series: SeriesRow
+    @EnvironmentObject private var model: AppModel
+    private let columns = Array(repeating: GridItem(.flexible()), count: 5)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(series.name)
+                        .font(.system(.headline, design: .rounded).weight(.black))
+                        .lineLimit(2)
+                    Text(series.episodeRange)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                SmallButton(title: "Next", symbol: "forward.fill") {
+                    model.playNextVideo()
+                }
+                .frame(width: 92)
+            }
+
+            TextField("Tim tap: 42, ten tap, project...", text: $model.videoEpisodeSearch)
+                .textInputAutocapitalization(.never)
+                .inputShell()
+
+            let episodes = model.filteredEpisodes(in: series)
+            if episodes.isEmpty {
+                EmptyState(text: "Khong co tap khop tim kiem.")
+            } else {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(Array(episodes.enumerated()), id: \.element.id) { _, episode in
+                        let absoluteIndex = model.renderedEpisodes(in: series).firstIndex(where: { $0.projectName == episode.projectName }) ?? 0
+                        Button {
+                            model.playEpisode(episode, in: series, index: absoluteIndex)
+                        } label: {
+                            VStack(spacing: 2) {
+                                Text("\(episode.episodeNo)")
+                                    .font(.caption.weight(.black))
+                                if model.watchProgress[series.folder]?.episodeIndex == absoluteIndex {
+                                    Circle().fill(Color.white).frame(width: 4, height: 4)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(isCurrent(absoluteIndex) ? Color.accentColor : Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .foregroundStyle(isCurrent(absoluteIndex) ? .white : .primary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func isCurrent(_ index: Int) -> Bool {
+        model.selectedVideo?.watchFolder == series.folder && model.selectedVideo?.episodeIndex == index
     }
 }
 
@@ -2418,6 +3182,125 @@ struct VideoLibraryCard: View {
     }
 }
 
+struct InlineVideoPlayer: View {
+    var selection: VideoSelection
+    @EnvironmentObject private var model: AppModel
+    @State private var player = AVPlayer()
+    @State private var currentURL: URL?
+    @State private var endObserver: NSObjectProtocol?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VideoPlayer(player: player)
+                .frame(height: 238)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.white.opacity(0.16)))
+                .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(selection.title)
+                    .font(.system(.headline, design: .rounded).weight(.black))
+                    .lineLimit(2)
+                Text(selection.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                if selection.resumeTime > 2 {
+                    Text("Resume: \(formatWatchTime(selection.resumeTime))")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 8) {
+                SmallButton(title: "Preview", symbol: "bolt.fill") {
+                    switchTo(selection.previewURL)
+                }
+                SmallButton(title: "Full", symbol: "film.fill") {
+                    switchTo(selection.finalURL)
+                }
+                SmallButton(title: "Next", symbol: "forward.fill") {
+                    Task {
+                        await saveCurrentProgress()
+                        model.playNextVideo(after: selection)
+                    }
+                }
+                .opacity(model.canPlayNext(after: selection) ? 1 : 0.42)
+                SmallButton(title: "Open", symbol: "safari.fill") {
+                    UIApplication.shared.open(currentURL ?? selection.url, options: [:], completionHandler: nil)
+                }
+            }
+
+            Text("Player nam cung trang voi danh sach tap. Het tap se tu chuyen tap tiep theo neu con video rendered.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .onAppear { configurePlayer(for: selection, autoplay: true) }
+        .onChange(of: selection.id) { _ in
+            Task { await saveCurrentProgress() }
+            configurePlayer(for: selection, autoplay: true)
+        }
+        .onDisappear {
+            Task { await saveCurrentProgress() }
+            removeEndObserver()
+            player.pause()
+        }
+    }
+
+    private func configurePlayer(for selection: VideoSelection, autoplay: Bool) {
+        removeEndObserver()
+        currentURL = selection.url
+        let item = AVPlayerItem(url: selection.url)
+        player.replaceCurrentItem(with: item)
+        if selection.resumeTime > 2 {
+            player.seek(to: CMTime(seconds: selection.resumeTime, preferredTimescale: 600))
+        }
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { _ in
+            Task {
+                await saveCurrentProgress()
+                model.playNextVideo(after: selection)
+            }
+        }
+        if autoplay { player.play() }
+    }
+
+    private func switchTo(_ url: URL) {
+        currentURL = url
+        removeEndObserver()
+        let item = AVPlayerItem(url: url)
+        player.replaceCurrentItem(with: item)
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { _ in
+            Task {
+                await saveCurrentProgress()
+                model.playNextVideo(after: selection)
+            }
+        }
+        player.play()
+    }
+
+    private func saveCurrentProgress() async {
+        let seconds = player.currentTime().seconds
+        guard seconds.isFinite else { return }
+        await model.saveWatchProgress(folder: selection.watchFolder, episodeIndex: selection.episodeIndex, time: seconds)
+    }
+
+    private func removeEndObserver() {
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+            self.endObserver = nil
+        }
+    }
+}
+
 struct VideoPlayerSheet: View {
     var selection: VideoSelection
     @Environment(\.dismiss) private var dismiss
@@ -2529,6 +3412,101 @@ struct SeriesCard: View {
     }
 }
 
+struct AISeriesGroupCard: View {
+    var group: AISeriesGroup
+    @EnvironmentObject private var model: AppModel
+
+    var isSelected: Bool {
+        model.selectedAIGroupIDs.contains(group.id)
+    }
+
+    var newCount: Int {
+        group.urls.filter { !model.completedScrapeURLs.contains($0) }.count
+    }
+
+    var body: some View {
+        Button {
+            model.toggleAIGroup(group)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top) {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(group.name)
+                            .font(.system(.subheadline, design: .rounded).weight(.black))
+                            .lineLimit(2)
+                        Text(group.folder.isEmpty ? "Folder chua co" : group.folder)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    StatusPill(text: "\(newCount) new", tone: newCount > 0 ? .green : .gray)
+                }
+
+                HStack {
+                    StatusPill(text: "\(group.urls.count) urls", tone: .blue)
+                    StatusPill(text: "conf \(Int(group.confidence * 100))%", tone: group.confidence > 0.65 ? .green : .orange)
+                    if let min = group.episodeMin, let max = group.episodeMax {
+                        StatusPill(text: "Tap \(min)-\(max)", tone: .indigo)
+                    }
+                }
+
+                if !group.reason.isEmpty {
+                    Text(group.reason)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+
+                ForEach(group.urls.prefix(3), id: \.self) { url in
+                    HStack(spacing: 6) {
+                        Image(systemName: model.completedScrapeURLs.contains(url) ? "checkmark.circle.fill" : "circle")
+                            .font(.caption2)
+                            .foregroundStyle(model.completedScrapeURLs.contains(url) ? .green : .secondary)
+                        Text(url)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
+            .padding(12)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(isSelected ? Color.accentColor.opacity(0.7) : Color.clear, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct ScrapeVideoSelectableCard: View {
+    var video: ScrapeVideo
+    @EnvironmentObject private var model: AppModel
+
+    var selected: Bool {
+        model.selectedScrapeURLs.contains(video.url)
+    }
+
+    var body: some View {
+        Button {
+            model.toggleScrapeSelection(video)
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: selected ? "checkmark.square.fill" : "square")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                    .padding(.top, 2)
+                ScrapeVideoCard(video: video)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct ScrapeVideoCard: View {
     var video: ScrapeVideo
 
@@ -2544,6 +3522,12 @@ struct ScrapeVideoCard: View {
             Text(video.caption)
                 .font(.subheadline)
                 .lineLimit(3)
+            if !video.translation.isEmpty {
+                Text(video.translation)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .lineLimit(3)
+            }
             Text(video.url)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -2682,6 +3666,12 @@ func formatWatchTime(_ seconds: Double) -> String {
     let minutes = total / 60
     let secs = total % 60
     return String(format: "%02d:%02d", minutes, secs)
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
 }
 
 let appConfigFields: [ConfigField] = [
@@ -2932,6 +3922,7 @@ func parseProject(_ data: [String: Any]) -> ProjectRow {
     let metaTitle = string(metadata["title"])
     let douyinTitle = string(douyin["douyin_title"], fallback: string(douyin["title"]))
     let seriesName = string(ctx["series_name_vi"], fallback: string(ctx["series_name"], fallback: string(data["series_name"])))
+    let seriesFolder = string(ctx["series_folder"], fallback: string(data["series_folder"]))
     let epNo = intOptional(ctx["episode_no"]) ?? intOptional(data["episode_no"]) ?? extractEpisodeNo(metaTitle) ?? extractEpisodeNo(douyinTitle)
     let display: String
     if let episode = epNo, !seriesName.isEmpty {
@@ -2952,6 +3943,7 @@ func parseProject(_ data: [String: Any]) -> ProjectRow {
         subtitle: folder.isEmpty ? douyinTitle : folder,
         created: string(data["created_at"], fallback: string(data["updated_at"])),
         series: seriesName,
+        seriesFolder: seriesFolder,
         episodeNo: epNo,
         progress: progress,
         steps: steps,
@@ -2992,6 +3984,99 @@ func parseSeries(_ data: [String: Any]) -> SeriesRow {
         uploaded: int(data["uploaded_count"]),
         episodes: episodes
     )
+}
+
+func scrapeVideoPayload(_ video: ScrapeVideo) -> [String: Any] {
+    [
+        "url": video.url,
+        "desc": video.caption,
+        "caption": video.caption,
+        "duration": video.duration,
+        "duration_sec": double(video.duration),
+        "local_done": video.done
+    ]
+}
+
+func parseAISeriesGroups(_ data: [String: Any]) -> [AISeriesGroup] {
+    let groups = (data["groups"] as? [[String: Any]]) ?? []
+    return groups.map { item in
+        let name = string(item["series_name_vi"], fallback: string(item["series_name"], fallback: "Series"))
+        let urls = ((item["urls"] as? [String]) ?? []).filter { !$0.isEmpty }
+        return AISeriesGroup(
+            folder: string(item["folder"], fallback: string(item["folder_name"])),
+            name: name,
+            originalName: string(item["series_name"]),
+            reason: string(item["reason"]),
+            confidence: double(item["confidence"]),
+            urls: urls,
+            uniqueURLs: ((item["unique_episode_urls"] as? [String]) ?? []).filter { !$0.isEmpty },
+            episodeMin: intOptional(item["episode_min"]),
+            episodeMax: intOptional(item["episode_max"]),
+            duplicateCount: int(item["duplicate_episode_count"]),
+            videos: (item["videos"] as? [[String: Any]]) ?? []
+        )
+    }
+}
+
+func buildSeriesContextMap(group: AISeriesGroup, urls: [String]) -> [String: [String: Any]] {
+    var videosByURL: [String: [String: Any]] = [:]
+    for video in group.videos {
+        let url = string(video["url"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !url.isEmpty { videosByURL[url] = video }
+    }
+
+    let orderedURLs = group.urls.isEmpty
+        ? group.videos.map { string($0["url"]) }.filter { !$0.isEmpty }
+        : group.urls
+    var indexByURL: [String: Int] = [:]
+    for (index, url) in orderedURLs.enumerated() where indexByURL[url] == nil {
+        indexByURL[url] = index
+    }
+
+    let knownEpisodes = orderedURLs.enumerated().compactMap { index, url -> (Int, Int)? in
+        guard let ep = intOptional(videosByURL[url]?["episode_no"]), ep > 0 else { return nil }
+        return (index, ep)
+    }
+
+    func inferredEpisode(for url: String) -> Int? {
+        if let direct = intOptional(videosByURL[url]?["episode_no"]), direct > 0 { return direct }
+        guard let index = indexByURL[url], !knownEpisodes.isEmpty else { return nil }
+        if let left = knownEpisodes.last(where: { $0.0 < index }),
+           let right = knownEpisodes.first(where: { $0.0 > index }),
+           right.0 - left.0 == right.1 - left.1 {
+            let candidate = left.1 + (index - left.0)
+            return candidate > 0 ? candidate : nil
+        }
+        if knownEpisodes.count >= 2 {
+            let first = knownEpisodes[0]
+            let second = knownEpisodes[1]
+            if index < first.0, second.0 - first.0 == second.1 - first.1 {
+                let candidate = first.1 - (first.0 - index)
+                return candidate > 0 ? candidate : nil
+            }
+            let previous = knownEpisodes[knownEpisodes.count - 2]
+            let last = knownEpisodes[knownEpisodes.count - 1]
+            if index > last.0, last.0 - previous.0 == last.1 - previous.1 {
+                let candidate = last.1 + (index - last.0)
+                return candidate > 0 ? candidate : nil
+            }
+        }
+        return nil
+    }
+
+    var contexts: [String: [String: Any]] = [:]
+    for url in urls {
+        contexts[url] = [
+            "series_name_vi": group.name,
+            "series_name": group.originalName.isEmpty ? group.name : group.originalName,
+            "series_folder": group.folder,
+            "episode_no": inferredEpisode(for: url).map { $0 as Any } ?? NSNull(),
+            "episode_min": group.episodeMin.map { $0 as Any } ?? NSNull(),
+            "episode_max": group.episodeMax.map { $0 as Any } ?? NSNull(),
+            "source": "douyin_series_group"
+        ]
+    }
+    return contexts
 }
 
 func string(_ value: Any?, fallback: String = "") -> String {
