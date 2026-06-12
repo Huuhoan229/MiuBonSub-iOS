@@ -43,14 +43,14 @@ enum MainTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .pipeline: return "Pipeline"
-        case .running: return "Running"
-        case .scraper: return "Scrape"
-        case .projects: return "Projects"
-        case .videos: return "Videos"
-        case .uploads: return "Tools"
-        case .dictionary: return "Dict"
-        case .settings: return "Settings"
+        case .pipeline: return "Xử lý"
+        case .running: return "Đang chạy"
+        case .scraper: return "Quét"
+        case .projects: return "Dự án"
+        case .videos: return "Xem"
+        case .uploads: return "Công cụ"
+        case .dictionary: return "Từ điển"
+        case .settings: return "Cài đặt"
         }
     }
 
@@ -69,11 +69,11 @@ enum MainTab: String, CaseIterable, Identifiable {
 }
 
 struct HealthSnapshot {
-    var server = "Unknown"
-    var youtube = "Unknown"
-    var tiktok = "Unknown"
-    var facebook = "Unknown"
-    var drive = "Unknown"
+    var server = "Không rõ"
+    var youtube = "Không rõ"
+    var tiktok = "Không rõ"
+    var facebook = "Không rõ"
+    var drive = "Không rõ"
 }
 
 struct QueueItem: Identifiable {
@@ -329,13 +329,13 @@ final class AppModel: ObservableObject {
     @Published var selectedTab: MainTab = .pipeline
     @Published var health = HealthSnapshot()
     @Published var isOnline = false
-    @Published var statusMessage = "Chua ket noi backend"
+    @Published var statusMessage = "Chưa kết nối backend"
     @Published var urlInput = ""
     @Published var activeJobId = ""
     @Published var activeQueueId = ""
     @Published var pipelineStatus = "Idle"
     @Published var pipelineProgress: Double = 0
-    @Published var pipelineMessage = "San sang"
+    @Published var pipelineMessage = "Sẵn sàng"
     @Published var logLines: [String] = []
     @Published var queue = QueueSnapshot()
     @Published var runningQueues: [QueueSnapshot] = []
@@ -351,37 +351,37 @@ final class AppModel: ObservableObject {
     @Published var selectedProject = ""
     @Published var uploadStatus = "Idle"
     @Published var runtimeLogLines: [String] = []
-    @Published var runtimeLogTitle = "Chon item dang chay de xem log runtime"
+    @Published var runtimeLogTitle = "Chọn item đang chạy để xem log runtime"
     @Published var selectedRuntimeQueueId = ""
     @Published var selectedRuntimeItemIndex: Int?
     @Published var toolStatuses: [StatusLine] = []
-    @Published var toolMessage = "San sang"
+    @Published var toolMessage = "Sẵn sàng"
     @Published var selectedVideo: VideoSelection?
     @Published var selectedVideoSeriesFolder = ""
     @Published var videoEpisodeSearch = ""
     @Published var configValues: [String: String] = [:]
     @Published var configRows: [ConfigRow] = []
-    @Published var configMessage = "Chua load settings"
-    @Published var translationTestMessage = "Chua test 9Router/WebAI"
-    @Published var ttsTestMessage = "Chua test TTS/CapCut"
-    @Published var warpTestMessage = "Chua test WARP"
+    @Published var configMessage = "Chưa tải cài đặt"
+    @Published var translationTestMessage = "Chưa kiểm tra 9Router/WebAI"
+    @Published var ttsTestMessage = "Chưa kiểm tra TTS/CapCut"
+    @Published var warpTestMessage = "Chưa kiểm tra WARP"
     @Published var videoLibraryMode = "series"
     @Published var authUsername = ""
     @Published var authPassword = ""
     @Published var authToken: String {
         didSet { UserDefaults.standard.set(authToken, forKey: "miubon.authToken") }
     }
-    @Published var authMessage = "Chua dang nhap"
+    @Published var authMessage = "Chưa đăng nhập"
     @Published var watchProgress: [String: WatchProgress] = [:]
     @Published var selectedGlossaryFolder = ""
     @Published var glossaryRows: [GlossaryEntry] = []
     @Published var glossarySourceInput = ""
     @Published var glossaryTargetInput = ""
-    @Published var glossaryMessage = "Chon series de sua tu dien"
+    @Published var glossaryMessage = "Chọn series để sửa từ điển"
     @Published var selectedScrapeURLs: Set<String> = []
     @Published var aiSeriesGroups: [AISeriesGroup] = []
     @Published var selectedAIGroupIDs: Set<UUID> = []
-    @Published var aiGroupMessage = "Chua AI group series"
+    @Published var aiGroupMessage = "Chưa gom nhóm series bằng AI"
     @Published var completedScrapeURLs: Set<String> = []
     @Published var douyinWatchdog = DouyinWatchdogState()
 
@@ -444,6 +444,15 @@ final class AppModel: ObservableObject {
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
+    var scrapeProgress: Double {
+        let status = scrapeStatus.lowercased()
+        if status == "idle" { return 0 }
+        if status == "done" { return 1 }
+        if status.contains("error") || status.contains("failed") { return 0 }
+        if status.contains("scan") || status.contains("start") || status.contains("running") { return 0.18 }
+        return scrapeVideos.isEmpty ? 0 : 0.65
+    }
+
     func startPolling() {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
@@ -477,23 +486,23 @@ final class AppModel: ObservableObject {
     }
 
     func refreshAll(silent: Bool = false) async {
-        await refreshHealth(silent: silent)
         await refreshRunning()
+        if !activeQueueId.isEmpty { await pollQueue(activeQueueId) }
+        if !activeJobId.isEmpty { await pollJob(activeJobId) }
+        await pollSelectedRuntimeLogs()
+        await refreshHealth(silent: silent)
         await refreshProjects()
         await refreshSeries()
         await refreshUploadQueue()
         if configValues.isEmpty { await refreshConfig() }
-        if !activeQueueId.isEmpty { await pollQueue(activeQueueId) }
-        if !activeJobId.isEmpty { await pollJob(activeJobId) }
-        await pollSelectedRuntimeLogs()
     }
 
     func refreshHealth(silent: Bool = false) async {
         do {
-            let result = try await api.request("/api/health")
+            let result = try await api.request("/api/health", timeout: 5)
             health = parseHealth(result)
             isOnline = true
-            statusMessage = "Backend online"
+            statusMessage = "Backend đang trực tuyến"
         } catch {
             isOnline = false
             if !silent { statusMessage = error.localizedDescription }
@@ -503,7 +512,7 @@ final class AppModel: ObservableObject {
     func startPipeline(single: Bool) async {
         let urls = extractURLs(urlInput)
         guard !urls.isEmpty else {
-            statusMessage = "Hay nhap Douyin/TikTok URL"
+            statusMessage = "Hãy nhập URL Douyin/TikTok"
             return
         }
 
@@ -512,7 +521,7 @@ final class AppModel: ObservableObject {
                 let result = try await api.request("/api/pipeline/start", method: "POST", body: ["url": urls[0]])
                 activeJobId = string(result["job_id"])
                 pipelineStatus = "Running"
-                pipelineMessage = "Pipeline da bat dau"
+                pipelineMessage = "Pipeline đã bắt đầu"
                 pipelineProgress = 0.02
             } else {
                 let contexts = urls.reduce(into: [String: [String: Any]]()) { out, url in
@@ -526,7 +535,7 @@ final class AppModel: ObservableObject {
                 activeQueueId = string(result["queue_id"])
                 queue.id = activeQueueId
                 pipelineStatus = "Queue running"
-                pipelineMessage = "Queue da bat dau: \(urls.count) URL"
+                pipelineMessage = "Queue đã bắt đầu: \(urls.count) URL"
                 selectedTab = .running
             }
             await refreshAll(silent: true)
@@ -553,12 +562,12 @@ final class AppModel: ObservableObject {
             if status == "done" {
                 NotificationCenterBridge.shared.notifyOnce(
                     key: "pipeline-\(jobId)-done",
-                    title: "Pipeline hoan thanh",
-                    body: pipelineMessage.isEmpty ? "Render/upload da hoan thanh." : pipelineMessage
+                    title: "Pipeline hoàn thành",
+                    body: pipelineMessage.isEmpty ? "Render/upload đã hoàn thành." : pipelineMessage
                 )
                 activeJobId = ""
             } else if status == "error" || status == "failed" {
-                NotificationCenterBridge.shared.notifyOnce(key: "pipeline-\(jobId)-error", title: "Pipeline loi", body: pipelineMessage)
+                NotificationCenterBridge.shared.notifyOnce(key: "pipeline-\(jobId)-error", title: "Pipeline lỗi", body: pipelineMessage)
                 activeJobId = ""
             }
         } catch {
@@ -574,19 +583,20 @@ final class AppModel: ObservableObject {
             pipelineStatus = snapshot.status.capitalized
             pipelineProgress = snapshot.progress
             pipelineMessage = snapshot.message
+            await autoFollowRuntimeItem(in: snapshot, force: false)
 
             if snapshot.status == "done" || snapshot.status == "finished" {
                 NotificationCenterBridge.shared.notifyOnce(
                     key: "queue-\(queueId)-done",
-                    title: "Queue hoan thanh",
-                    body: "\(snapshot.completed)/\(snapshot.total) video da xu ly."
+                    title: "Queue hoàn thành",
+                    body: "\(snapshot.completed)/\(snapshot.total) video đã xử lý."
                 )
                 activeQueueId = ""
             } else if snapshot.status.contains("error") || snapshot.status.contains("failed") {
                 NotificationCenterBridge.shared.notifyOnce(
                     key: "queue-\(queueId)-error",
-                    title: "Queue co loi",
-                    body: snapshot.message.isEmpty ? "Kiem tra log de xem chi tiet." : snapshot.message
+                    title: "Queue có lỗi",
+                    body: snapshot.message.isEmpty ? "Kiểm tra log để xem chi tiết." : snapshot.message
                 )
             }
         } catch {
@@ -598,10 +608,71 @@ final class AppModel: ObservableObject {
         do {
             let result = try await api.request("/api/pipeline/queues")
             let rawQueues = (result["queues"] as? [[String: Any]]) ?? []
-            runningQueues = rawQueues.map { parseQueue($0, knownId: string($0["queue_id"], fallback: string($0["id"]))) }
+            var rows: [QueueSnapshot] = []
+            for raw in rawQueues {
+                let queueId = string(raw["queue_id"], fallback: string(raw["id"]))
+                let summary = parseQueue(raw, knownId: queueId)
+                if !queueId.isEmpty,
+                   !summary.status.lowercased().contains("done"),
+                   let detail = try? await api.request("/api/pipeline/queue/\(queueId)") {
+                    rows.append(parseQueue(detail, knownId: queueId))
+                } else {
+                    rows.append(summary)
+                }
+            }
+            runningQueues = rows
+            if activeQueueId.isEmpty,
+               let firstActive = rows.first(where: { !$0.status.lowercased().contains("done") && !$0.status.lowercased().contains("error") }) {
+                activeQueueId = firstActive.id
+                queue = firstActive
+            } else if let active = rows.first(where: { $0.id == activeQueueId }) {
+                queue = active
+            }
+            if let focus = rows.first(where: { $0.id == activeQueueId }) ?? rows.first {
+                await autoFollowRuntimeItem(in: focus, force: false)
+            }
         } catch {
             runningQueues = []
         }
+    }
+
+    func openQueueDetails(_ queueId: String) async {
+        guard !queueId.isEmpty else { return }
+        do {
+            let result = try await api.request("/api/pipeline/queue/\(queueId)")
+            let snapshot = parseQueue(result, knownId: queueId)
+            activeQueueId = queueId
+            queue = snapshot
+            if let index = preferredRuntimeItemIndex(in: snapshot) {
+                await selectRuntimeItem(queueId: queueId, itemIndex: index)
+            } else {
+                runtimeLogTitle = "Queue \(queueId) chưa có item runtime"
+                runtimeLogLines = []
+            }
+        } catch {
+            runtimeLogTitle = "Không tải được queue \(queueId): \(error.localizedDescription)"
+        }
+    }
+
+    func autoFollowRuntimeItem(in queue: QueueSnapshot, force: Bool) async {
+        guard !queue.id.isEmpty, let index = preferredRuntimeItemIndex(in: queue) else { return }
+        let selectedItem = queue.items.first { $0.index == selectedRuntimeItemIndex }
+        let selectedFinished = selectedRuntimeQueueId == queue.id
+            && (selectedItem?.status.lowercased().contains("done") == true || selectedItem?.status.lowercased().contains("skipped") == true)
+        if force || selectedRuntimeQueueId.isEmpty || selectedRuntimeQueueId == queue.id && (selectedRuntimeItemIndex == nil || selectedFinished) {
+            await selectRuntimeItem(queueId: queue.id, itemIndex: index)
+        }
+    }
+
+    func preferredRuntimeItemIndex(in queue: QueueSnapshot) -> Int? {
+        let activeHints = ["running", "pipeline", "download", "separate", "stt", "translate", "tts", "render", "upload", "ready", "error", "failed"]
+        if let item = queue.items.first(where: { item in
+            let status = item.status.lowercased()
+            return activeHints.contains { status.contains($0) }
+        }) {
+            return item.index
+        }
+        return queue.items.first?.index
     }
 
     func queueAction(_ action: String, id: String) async {
@@ -683,7 +754,7 @@ final class AppModel: ObservableObject {
 
     func startScrape() async {
         guard !scrapeURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            statusMessage = "Hay nhap URL profile Douyin"
+            statusMessage = "Hãy nhập URL profile Douyin"
             return
         }
         scrapeStatus = "Starting"
@@ -734,8 +805,8 @@ final class AppModel: ObservableObject {
                     }
                     NotificationCenterBridge.shared.notifyOnce(
                         key: "scrape-\(jobId)-done",
-                        title: "Scrape user xong",
-                        body: "Tim thay \(scrapeVideos.count) video."
+                        title: "Quét user xong",
+                        body: "Tìm thấy \(scrapeVideos.count) video."
                     )
                     return
                 }
@@ -743,8 +814,8 @@ final class AppModel: ObservableObject {
                     scrapeStatus = "Error"
                     NotificationCenterBridge.shared.notifyOnce(
                         key: "scrape-\(jobId)-error",
-                        title: "Scrape user loi",
-                        body: string(result["error"], fallback: "Kiem tra backend log.")
+                        title: "Quét user lỗi",
+                        body: string(result["error"], fallback: "Kiểm tra backend log.")
                     )
                     return
                 }
@@ -763,7 +834,7 @@ final class AppModel: ObservableObject {
 
     func uploadSelected(to target: String) async {
         guard !selectedProject.isEmpty else {
-            uploadStatus = "Hay chon project da render"
+            uploadStatus = "Hãy chọn project đã render"
             return
         }
 
@@ -803,7 +874,7 @@ final class AppModel: ObservableObject {
                 if status == "done" || status == "success" {
                     NotificationCenterBridge.shared.notifyOnce(
                         key: "\(target)-\(jobId)-done",
-                        title: "\(target.uppercased()) upload thanh cong",
+                        title: "\(target.uppercased()) upload thành công",
                         body: selectedProject
                     )
                     await refreshUploadQueue()
@@ -812,7 +883,7 @@ final class AppModel: ObservableObject {
                 if status == "error" || status == "failed" {
                     NotificationCenterBridge.shared.notifyOnce(
                         key: "\(target)-\(jobId)-error",
-                        title: "\(target.uppercased()) upload loi",
+                        title: "\(target.uppercased()) upload lỗi",
                         body: string(result["error"], fallback: selectedProject)
                     )
                     return
@@ -878,15 +949,15 @@ final class AppModel: ObservableObject {
             configRows = result.keys.sorted().map { key in
                 ConfigRow(key: key, value: safeConfigDisplay(key: key, value: result[key], masked: result["\(key)_masked"]))
             }
-            configMessage = "Da load \(result.count) settings"
+            configMessage = "Đã tải \(result.count) cài đặt"
         } catch {
-            configMessage = "Load settings loi: \(error.localizedDescription)"
+            configMessage = "Tải cài đặt lỗi: \(error.localizedDescription)"
         }
     }
 
     func saveConfig() async {
         guard !configValues.isEmpty else {
-            configMessage = "Hay Reload settings truoc khi save"
+            configMessage = "Hãy tải lại cài đặt trước khi lưu"
             return
         }
         var payload: [String: Any] = [:]
@@ -900,11 +971,11 @@ final class AppModel: ObservableObject {
 
         do {
             _ = try await api.request("/api/config", method: "POST", body: payload)
-            configMessage = "Da luu \(payload.count) settings"
+            configMessage = "Đã lưu \(payload.count) cài đặt"
             await refreshConfig()
             await refreshToolStatuses()
         } catch {
-            configMessage = "Save settings loi: \(error.localizedDescription)"
+            configMessage = "Lưu cài đặt lỗi: \(error.localizedDescription)"
         }
     }
 
@@ -968,7 +1039,7 @@ final class AppModel: ObservableObject {
             if bool(result["ok"]) {
                 warpTestMessage = "OK: IP \(string(result["ip"], fallback: "?")) | \(string(result["latency_ms"], fallback: "?"))ms"
             } else {
-                warpTestMessage = "Fail: \(string(result["error"], fallback: "Khong ket noi duoc WARP"))"
+                warpTestMessage = "Fail: \(string(result["error"], fallback: "Không kết nối được WARP"))"
             }
         } catch {
             warpTestMessage = "WARP fail: \(error.localizedDescription)"
@@ -989,10 +1060,10 @@ final class AppModel: ObservableObject {
             )
             if bool(result["ok"]) {
                 authToken = string(result["token"])
-                authMessage = "Da dang nhap: \(string(result["username"], fallback: authUsername))"
+                authMessage = "Đã đăng nhập: \(string(result["username"], fallback: authUsername))"
                 await loadWatchProgress()
             } else {
-                authMessage = string(result["error"], fallback: "Dang nhap that bai")
+                authMessage = string(result["error"], fallback: "Đăng nhập thất bại")
             }
         } catch {
             authMessage = "Auth error: \(error.localizedDescription)"
@@ -1002,7 +1073,7 @@ final class AppModel: ObservableObject {
     func logout() {
         authToken = ""
         watchProgress = [:]
-        authMessage = "Da dang xuat"
+        authMessage = "Đã đăng xuất"
     }
 
     func loadWatchProgress() async {
@@ -1020,7 +1091,7 @@ final class AppModel: ObservableObject {
             }
             watchProgress = parsed
         } catch {
-            authMessage = "Load progress loi: \(error.localizedDescription)"
+            authMessage = "Tải tiến độ xem lỗi: \(error.localizedDescription)"
         }
     }
 
@@ -1035,14 +1106,14 @@ final class AppModel: ObservableObject {
             )
             watchProgress[folder] = WatchProgress(episodeIndex: episodeIndex, time: time)
         } catch {
-            authMessage = "Save progress loi: \(error.localizedDescription)"
+            authMessage = "Lưu tiến độ xem lỗi: \(error.localizedDescription)"
         }
     }
 
     func loadGlossary(folder: String? = nil) async {
         let targetFolder = folder ?? selectedGlossaryFolder
         guard !targetFolder.isEmpty else {
-            glossaryMessage = "Chon series truoc"
+            glossaryMessage = "Chọn series trước"
             return
         }
         selectedGlossaryFolder = targetFolder
@@ -1053,15 +1124,15 @@ final class AppModel: ObservableObject {
             glossaryRows = raw.keys.sorted().map { key in
                 GlossaryEntry(source: key, target: string(raw[key]))
             }
-            glossaryMessage = "Da load \(glossaryRows.count) tu"
+            glossaryMessage = "Đã tải \(glossaryRows.count) từ"
         } catch {
-            glossaryMessage = "Load tu dien loi: \(error.localizedDescription)"
+            glossaryMessage = "Tải từ điển lỗi: \(error.localizedDescription)"
         }
     }
 
     func saveGlossary() async {
         guard !selectedGlossaryFolder.isEmpty else {
-            glossaryMessage = "Chon series truoc"
+            glossaryMessage = "Chọn series trước"
             return
         }
         var payload: [String: String] = [:]
@@ -1073,10 +1144,10 @@ final class AppModel: ObservableObject {
         do {
             let encoded = selectedGlossaryFolder.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? selectedGlossaryFolder
             let result = try await api.request("/api/series/\(encoded)/glossary", method: "POST", body: ["glossary": payload])
-            glossaryMessage = "Da luu \(int(result["saved_items"], fallback: payload.count)) tu"
+            glossaryMessage = "Đã lưu \(int(result["saved_items"], fallback: payload.count)) từ"
             await loadGlossary()
         } catch {
-            glossaryMessage = "Save tu dien loi: \(error.localizedDescription)"
+            glossaryMessage = "Lưu từ điển lỗi: \(error.localizedDescription)"
         }
     }
 
@@ -1084,7 +1155,7 @@ final class AppModel: ObservableObject {
         let source = glossarySourceInput.trimmingCharacters(in: .whitespacesAndNewlines)
         let target = glossaryTargetInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !source.isEmpty, !target.isEmpty else {
-            glossaryMessage = "Nhap tu goc va ban dich"
+            glossaryMessage = "Nhập từ gốc và bản dịch"
             return
         }
         if let index = glossaryRows.firstIndex(where: { $0.source.caseInsensitiveCompare(source) == .orderedSame }) {
@@ -1095,17 +1166,17 @@ final class AppModel: ObservableObject {
         }
         glossarySourceInput = ""
         glossaryTargetInput = ""
-        glossaryMessage = "Da them/cap nhat, bam Save de ghi backend"
+        glossaryMessage = "Đã thêm/cập nhật, bấm Lưu để ghi backend"
     }
 
     func deleteGlossary(_ entry: GlossaryEntry) {
         glossaryRows.removeAll { $0.id == entry.id }
-        glossaryMessage = "Da xoa local, bam Save de ghi backend"
+        glossaryMessage = "Đã xóa local, bấm Lưu để ghi backend"
     }
 
     func extractGlossaryAI() async {
         guard !selectedGlossaryFolder.isEmpty else {
-            glossaryMessage = "Chon series truoc"
+            glossaryMessage = "Chọn series trước"
             return
         }
         do {
@@ -1124,9 +1195,9 @@ final class AppModel: ObservableObject {
                 }
             }
             glossaryRows.sort { $0.source < $1.source }
-            glossaryMessage = "AI trich xuat \(items.count) tu, bam Save de ghi backend"
+            glossaryMessage = "AI trích xuất \(items.count) từ, bấm Lưu để ghi backend"
         } catch {
-            glossaryMessage = "AI glossary loi: \(error.localizedDescription)"
+            glossaryMessage = "AI từ điển lỗi: \(error.localizedDescription)"
         }
     }
 
@@ -1150,21 +1221,21 @@ final class AppModel: ObservableObject {
             .map(\.url)
             .filter { !$0.isEmpty }
         guard !urls.isEmpty else {
-            aiGroupMessage = "Chua chon video hop le"
+            aiGroupMessage = "Chưa chọn video hợp lệ"
             return
         }
         appendURLsToPipeline(urls)
         selectedTab = .pipeline
-        aiGroupMessage = "Da them \(urls.count) URL vao Pipeline"
+        aiGroupMessage = "Đã thêm \(urls.count) URL vào Pipeline"
     }
 
     func translateScrapeCaptions() async {
         let captions = scrapeVideos.map(\.caption)
         guard !captions.isEmpty else {
-            aiGroupMessage = "Chua co caption de dich"
+            aiGroupMessage = "Chưa có caption để dịch"
             return
         }
-        aiGroupMessage = "Dang dich caption bang 9Router..."
+        aiGroupMessage = "Đang dịch caption bằng 9Router..."
         do {
             let result = try await api.request(
                 "/api/douyin/translate-captions",
@@ -1178,21 +1249,21 @@ final class AppModel: ObservableObject {
                     scrapeVideos[index].translation = translated
                 }
             }
-            aiGroupMessage = "Da dich \(translations.count) caption"
+            aiGroupMessage = "Đã dịch \(translations.count) caption"
         } catch {
-            aiGroupMessage = "Dich caption loi: \(error.localizedDescription)"
+            aiGroupMessage = "Dịch caption lỗi: \(error.localizedDescription)"
         }
     }
 
     func groupScrapeSeriesAI(loadSaved: Bool = false) async {
-        aiGroupMessage = loadSaved ? "Dang load AI group da luu..." : "Dang AI group series bang 9Router..."
+        aiGroupMessage = loadSaved ? "Đang tải nhóm AI đã lưu..." : "Đang gom nhóm series bằng 9Router..."
         do {
             let result: [String: Any]
             if loadSaved {
                 result = try await api.request("/api/douyin/load-group")
             } else {
                 guard !scrapeVideos.isEmpty else {
-                    aiGroupMessage = "Chua co video scrape de group"
+                    aiGroupMessage = "Chưa có video quét để gom nhóm"
                     return
                 }
                 result = try await api.request(
@@ -1207,7 +1278,7 @@ final class AppModel: ObservableObject {
             aiGroupMessage = "AI group: \(aiSeriesGroups.count) series | standalone \(int(result["standalone_count"]))"
             await loadCompletedScrapeURLs()
         } catch {
-            aiGroupMessage = "AI group loi: \(error.localizedDescription)"
+            aiGroupMessage = "Gom nhóm AI lỗi: \(error.localizedDescription)"
         }
     }
 
@@ -1235,18 +1306,18 @@ final class AppModel: ObservableObject {
     func addSelectedAIGroupToPipeline(newOnly: Bool) {
         let prepared = preparedSelectedAIGroupURLs(newOnly: newOnly)
         guard !prepared.urls.isEmpty else {
-            aiGroupMessage = "Khong co URL moi trong group da chon"
+            aiGroupMessage = "Không có URL mới trong nhóm đã chọn"
             return
         }
         appendURLsToPipeline(prepared.urls, contexts: prepared.contexts)
         selectedTab = .pipeline
-        aiGroupMessage = "Da them \(prepared.urls.count) URL series vao Pipeline"
+        aiGroupMessage = "Đã thêm \(prepared.urls.count) URL series vào Pipeline"
     }
 
     func startSelectedAIGroupQueue(newOnly: Bool = true) async {
         let prepared = preparedSelectedAIGroupURLs(newOnly: newOnly)
         guard !prepared.urls.isEmpty else {
-            aiGroupMessage = "Khong co URL de start queue"
+            aiGroupMessage = "Không có URL để chạy queue"
             return
         }
         do {
@@ -1261,12 +1332,12 @@ final class AppModel: ObservableObject {
             activeQueueId = string(result["queue_id"])
             queue.id = activeQueueId
             pipelineStatus = "Queue running"
-            pipelineMessage = "Started selected series queue: \(prepared.urls.count) URL"
+            pipelineMessage = "Đã chạy queue series đã chọn: \(prepared.urls.count) URL"
             aiGroupMessage = pipelineMessage
             selectedTab = .running
             await refreshAll(silent: true)
         } catch {
-            aiGroupMessage = "Start selected queue loi: \(error.localizedDescription)"
+            aiGroupMessage = "Chạy queue đã chọn lỗi: \(error.localizedDescription)"
         }
     }
 
@@ -1317,7 +1388,7 @@ final class AppModel: ObservableObject {
                 summary: string(result["last_summary"], fallback: "Watchdog loaded")
             )
         } catch {
-            douyinWatchdog.summary = "Load watchdog loi: \(error.localizedDescription)"
+            douyinWatchdog.summary = "Tải watchdog lỗi: \(error.localizedDescription)"
         }
     }
 
@@ -1339,14 +1410,14 @@ final class AppModel: ObservableObject {
                 ]
             )
             await loadDouyinWatchdogState()
-            aiGroupMessage = "Da luu Douyin watchdog"
+            aiGroupMessage = "Đã lưu Douyin watchdog"
         } catch {
-            aiGroupMessage = "Save watchdog loi: \(error.localizedDescription)"
+            aiGroupMessage = "Lưu watchdog lỗi: \(error.localizedDescription)"
         }
     }
 
     func runDouyinWatchdogOnce() async {
-        aiGroupMessage = "Dang chay Douyin watchdog..."
+        aiGroupMessage = "Đang chạy Douyin watchdog..."
         do {
             let result = try await api.request("/api/douyin/watchdog/run-once", method: "POST", body: [:], timeout: 600)
             let output = (result["result"] as? [String: Any]) ?? [:]
@@ -1354,7 +1425,7 @@ final class AppModel: ObservableObject {
             await loadDouyinWatchdogState()
             await refreshRunning()
         } catch {
-            aiGroupMessage = "Run watchdog loi: \(error.localizedDescription)"
+            aiGroupMessage = "Chạy watchdog lỗi: \(error.localizedDescription)"
             await loadDouyinWatchdogState()
         }
     }
@@ -1399,7 +1470,7 @@ final class AppModel: ObservableObject {
 
     func playProject(_ project: ProjectRow, file: String = "preview") {
         guard project.rendered else {
-            statusMessage = "Project chua render xong nen chua xem duoc video"
+            statusMessage = "Project chưa render xong nên chưa xem được video"
             return
         }
         guard
@@ -1407,7 +1478,7 @@ final class AppModel: ObservableObject {
             let finalURL = projectMediaURL(project, file: "final_video.mp4"),
             let url = projectMediaURL(project, file: file)
         else {
-            statusMessage = "Khong tao duoc URL video"
+            statusMessage = "Không tạo được URL video"
             return
         }
         let watchFolder = videoWatchFolder(for: project)
@@ -1429,7 +1500,7 @@ final class AppModel: ObservableObject {
 
     func playEpisode(_ episode: SeriesEpisode, in series: SeriesRow, index: Int) {
         guard episode.rendered else {
-            statusMessage = "Tap nay chua render xong"
+            statusMessage = "Tập này chưa render xong"
             return
         }
         let pseudoProject = ProjectRow(
@@ -1451,7 +1522,7 @@ final class AppModel: ObservableObject {
             let previewURL = projectMediaURL(pseudoProject, file: "preview"),
             let finalURL = projectMediaURL(pseudoProject, file: "final_video.mp4")
         else {
-            statusMessage = "Khong tao duoc URL video"
+            statusMessage = "Không tạo được URL video"
             return
         }
         let progress = watchProgress[series.folder]
@@ -1514,7 +1585,7 @@ final class AppModel: ObservableObject {
 
     func playNextVideo(after selection: VideoSelection? = nil) {
         guard let next = nextSelection(after: selection ?? selectedVideo) else {
-            statusMessage = "Het tap de xem"
+            statusMessage = "Hết tập để xem"
             return
         }
         selectedVideo = next
@@ -1608,7 +1679,7 @@ final class AppModel: ObservableObject {
 
     func openProjectVideo(_ project: ProjectRow, file: String = "preview") {
         guard let url = projectMediaURL(project, file: file) else {
-            statusMessage = "Khong tao duoc URL video"
+            statusMessage = "Không tạo được URL video"
             return
         }
         UIApplication.shared.open(url, options: [:], completionHandler: nil)
@@ -1787,7 +1858,7 @@ struct PipelineView: View {
 
     var body: some View {
         ScreenScroll {
-            SectionCard(title: "System", symbol: "server.rack") {
+            SectionCard(title: "Hệ thống", symbol: "server.rack") {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     MetricTile(title: "Backend", value: model.health.server, tone: model.isOnline ? .green : .red)
                     MetricTile(title: "YouTube", value: model.health.youtube, tone: .blue)
@@ -1796,14 +1867,14 @@ struct PipelineView: View {
                 }
             }
 
-            SectionCard(title: "Tao pipeline", symbol: "link") {
+            SectionCard(title: "Tạo pipeline", symbol: "link") {
                 TextEditor(text: $model.urlInput)
                     .frame(minHeight: 150)
                     .padding(10)
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(alignment: .topLeading) {
                         if model.urlInput.isEmpty {
-                            Text("Paste Douyin/TikTok URL, moi link mot dong...")
+                            Text("Dán URL Douyin/TikTok, mỗi link một dòng...")
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 18)
@@ -1811,10 +1882,10 @@ struct PipelineView: View {
                     }
 
                 HStack(spacing: 10) {
-                    PrimaryAction(title: "Start 1", symbol: "play.fill") {
+                    PrimaryAction(title: "Chạy 1 link", symbol: "play.fill") {
                         Task { await model.startPipeline(single: true) }
                     }
-                    PrimaryAction(title: "Start Queue", symbol: "list.bullet.rectangle") {
+                    PrimaryAction(title: "Chạy queue", symbol: "list.bullet.rectangle") {
                         Task { await model.startPipeline(single: false) }
                     }
                 }
@@ -1838,40 +1909,46 @@ struct RunningView: View {
 
     var body: some View {
         ScreenScroll {
-            SectionCard(title: "Queue dang chay", symbol: "waveform.path.ecg") {
+            SectionCard(title: "Queue đang chạy", symbol: "waveform.path.ecg") {
                 if !model.queue.id.isEmpty {
-                    QueueCard(queue: model.queue) { item in
+                    QueueCard(
+                        queue: model.queue,
+                        onOpen: { Task { await model.openQueueDetails(model.queue.id) } }
+                    ) { item in
                         Task { await model.selectRuntimeItem(queueId: model.queue.id, itemIndex: item.index) }
                     }
                 }
                 if model.runningQueues.isEmpty && model.queue.id.isEmpty {
-                    EmptyState(text: "Chua co queue dang chay")
+                    EmptyState(text: "Chưa có queue đang chạy")
                 }
-                ForEach(model.runningQueues, id: \.id) { queue in
-                    QueueCard(queue: queue) { item in
+                ForEach(model.runningQueues.filter { $0.id != model.queue.id }, id: \.id) { queue in
+                    QueueCard(
+                        queue: queue,
+                        onOpen: { Task { await model.openQueueDetails(queue.id) } }
+                    ) { item in
                         Task { await model.selectRuntimeItem(queueId: queue.id, itemIndex: item.index) }
                     }
                     HStack {
-                        SmallButton(title: "Pause", symbol: "pause.fill") {
+                        SmallButton(title: "Tạm dừng", symbol: "pause.fill") {
                             Task { await model.queueAction("pause", id: queue.id) }
                         }
-                        SmallButton(title: "Resume", symbol: "play.fill") {
+                        SmallButton(title: "Tiếp tục", symbol: "play.fill") {
                             Task { await model.queueAction("resume", id: queue.id) }
                         }
-                        SmallButton(title: "Skip", symbol: "forward.fill") {
+                        SmallButton(title: "Bỏ qua", symbol: "forward.fill") {
                             Task { await model.queueAction("skip", id: queue.id) }
                         }
                     }
                 }
             }
 
-            SectionCard(title: "Runtime logs", symbol: "terminal.fill") {
+            SectionCard(title: "Log runtime", symbol: "terminal.fill") {
                 Text(model.runtimeLogTitle)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 if model.runtimeLogLines.isEmpty {
-                    EmptyState(text: "Cham vao mot item dang chay de xem log truc tiep.")
+                    EmptyState(text: "Chạm vào một item đang chạy để xem log trực tiếp.")
                 } else {
                     LogConsole(lines: model.runtimeLogLines, maxHeight: 360)
                 }
@@ -1885,26 +1962,26 @@ struct ScraperView: View {
 
     var body: some View {
         ScreenScroll {
-            SectionCard(title: "Douyin user scraper", symbol: "person.crop.circle.badge.plus") {
+            SectionCard(title: "Quét user Douyin", symbol: "person.crop.circle.badge.plus") {
                 TextField("https://www.douyin.com/user/...", text: $model.scrapeURL)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .inputShell()
 
                 HStack {
-                    TextField("Min duration", text: $model.scrapeMinDuration)
+                    TextField("Thời lượng tối thiểu", text: $model.scrapeMinDuration)
                         .keyboardType(.numberPad)
                         .inputShell()
-                    Toggle("Oldest", isOn: $model.scrapeOldestFirst)
+                    Toggle("Cũ trước", isOn: $model.scrapeOldestFirst)
                         .toggleStyle(.switch)
                 }
 
-                PrimaryAction(title: "Scan videos", symbol: "magnifyingglass") {
+                PrimaryAction(title: "Quét video", symbol: "magnifyingglass") {
                     Task { await model.startScrape() }
                 }
             }
 
-            ProgressCard(title: model.scrapeStatus, message: "\(model.scrapeVideos.count) video", progress: model.scrapeStatus == "Done" ? 1 : 0.15)
+            ProgressCard(title: model.scrapeStatus, message: "\(model.scrapeVideos.count) video", progress: model.scrapeProgress)
 
             ScrapeAIToolsView()
                 .environmentObject(model)
@@ -1913,25 +1990,25 @@ struct ScraperView: View {
                 .environmentObject(model)
 
             if !model.scrapeLogLines.isEmpty {
-                SectionCard(title: "Scrape logs", symbol: "terminal") {
+                SectionCard(title: "Log quét", symbol: "terminal") {
                     LogConsole(lines: model.scrapeLogLines, maxHeight: 220)
                 }
             }
 
             if !model.scrapeVideos.isEmpty {
-                SectionCard(title: "Ket qua scrape", symbol: "film.stack") {
+                SectionCard(title: "Kết quả quét", symbol: "film.stack") {
                     HStack(spacing: 10) {
-                        SmallButton(title: "Select All", symbol: "checkmark.square") {
+                        SmallButton(title: "Chọn tất cả", symbol: "checkmark.square") {
                             model.setScrapeSelection(all: true)
                         }
-                        SmallButton(title: "New Only", symbol: "sparkles") {
+                        SmallButton(title: "Chỉ video mới", symbol: "sparkles") {
                             model.setScrapeSelection(all: true, newOnly: true)
                         }
-                        SmallButton(title: "Clear", symbol: "square") {
+                        SmallButton(title: "Bỏ chọn", symbol: "square") {
                             model.setScrapeSelection(all: false)
                         }
                     }
-                    PrimaryAction(title: "Add selected/new vao Pipeline", symbol: "plus.circle.fill") {
+                    PrimaryAction(title: "Thêm video đã chọn vào Pipeline", symbol: "plus.circle.fill") {
                         model.addSelectedScrapedToPipeline(newOnly: true)
                     }
                     ForEach(model.scrapeVideos) { video in
@@ -1948,41 +2025,41 @@ struct ScrapeAIToolsView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        SectionCard(title: "AI group series", symbol: "sparkles.tv.fill") {
-            Text("Group video scrape thanh series bang 9Router, giu context series_folder/episode_no khi start queue.")
+        SectionCard(title: "AI gom nhóm series", symbol: "sparkles.tv.fill") {
+            Text("Dùng 9Router gom video đã quét thành series, giữ series_folder/episode_no khi chạy queue.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                SmallButton(title: "Translate Captions", symbol: "captions.bubble.fill") {
+                SmallButton(title: "Dịch caption", symbol: "captions.bubble.fill") {
                     Task { await model.translateScrapeCaptions() }
                 }
-                SmallButton(title: "AI Group", symbol: "sparkles") {
+                SmallButton(title: "Gom nhóm AI", symbol: "sparkles") {
                     Task { await model.groupScrapeSeriesAI() }
                 }
-                SmallButton(title: "Load Saved", symbol: "tray.and.arrow.down.fill") {
+                SmallButton(title: "Tải nhóm đã lưu", symbol: "tray.and.arrow.down.fill") {
                     Task { await model.groupScrapeSeriesAI(loadSaved: true) }
                 }
-                SmallButton(title: "Refresh Done", symbol: "checkmark.seal.fill") {
+                SmallButton(title: "Cập nhật đã làm", symbol: "checkmark.seal.fill") {
                     Task { await model.loadCompletedScrapeURLs() }
                 }
             }
 
             HStack(spacing: 10) {
-                SmallButton(title: "Select All", symbol: "checkmark.square") {
+                SmallButton(title: "Chọn tất cả", symbol: "checkmark.square") {
                     model.setAIGroupSelection(all: true)
                 }
-                SmallButton(title: "Clear", symbol: "square") {
+                SmallButton(title: "Bỏ chọn", symbol: "square") {
                     model.setAIGroupSelection(all: false)
                 }
             }
 
             HStack(spacing: 10) {
-                PrimaryAction(title: "Add New", symbol: "plus.circle.fill") {
+                PrimaryAction(title: "Thêm video mới", symbol: "plus.circle.fill") {
                     model.addSelectedAIGroupToPipeline(newOnly: true)
                 }
-                PrimaryAction(title: "Start Queue", symbol: "play.fill") {
+                PrimaryAction(title: "Chạy queue", symbol: "play.fill") {
                     Task { await model.startSelectedAIGroupQueue(newOnly: true) }
                 }
             }
@@ -1993,7 +2070,7 @@ struct ScrapeAIToolsView: View {
                 .lineLimit(4)
 
             if model.aiSeriesGroups.isEmpty {
-                EmptyState(text: "Chua co AI group. Bam AI Group sau khi scrape, hoac Load Saved.")
+                EmptyState(text: "Chưa có nhóm AI. Bấm Gom nhóm AI sau khi quét hoặc Tải nhóm đã lưu.")
             } else {
                 ForEach(model.aiSeriesGroups) { group in
                     AISeriesGroupCard(group: group)
@@ -2008,8 +2085,8 @@ struct DouyinWatchdogCard: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        SectionCard(title: "Douyin User Watchdog", symbol: "dog.fill") {
-            Text("Tu scan user theo chu ky, neu co video moi thi backend group series va add vao queue.")
+        SectionCard(title: "Watchdog user Douyin", symbol: "dog.fill") {
+            Text("Tự quét user theo chu kỳ; nếu có video mới thì backend gom series và thêm vào queue.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -2019,7 +2096,7 @@ struct DouyinWatchdogCard: View {
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(alignment: .topLeading) {
                     if model.douyinWatchdog.userURLs.isEmpty {
-                        Text("User URLs, moi dong mot link...")
+                        Text("URL user, mỗi dòng một link...")
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 18)
@@ -2027,34 +2104,34 @@ struct DouyinWatchdogCard: View {
                 }
 
             HStack {
-                TextField("Interval min", text: $model.douyinWatchdog.intervalMin)
+                TextField("Chu kỳ phút", text: $model.douyinWatchdog.intervalMin)
                     .keyboardType(.numberPad)
                     .inputShell()
-                TextField("Min sec", text: $model.douyinWatchdog.minDurationSec)
+                TextField("Tối thiểu giây", text: $model.douyinWatchdog.minDurationSec)
                     .keyboardType(.numberPad)
                     .inputShell()
             }
 
-            Toggle("Enable Watchdog", isOn: $model.douyinWatchdog.enabled)
+            Toggle("Bật watchdog", isOn: $model.douyinWatchdog.enabled)
                 .toggleStyle(.switch)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                SmallButton(title: "Load", symbol: "arrow.clockwise") {
+                SmallButton(title: "Tải", symbol: "arrow.clockwise") {
                     Task { await model.loadDouyinWatchdogState() }
                 }
-                SmallButton(title: "Save", symbol: "square.and.arrow.down.fill") {
+                SmallButton(title: "Lưu", symbol: "square.and.arrow.down.fill") {
                     Task { await model.saveDouyinWatchdog() }
                 }
-                SmallButton(title: "Run Once", symbol: "play.circle.fill") {
+                SmallButton(title: "Chạy một lần", symbol: "play.circle.fill") {
                     Task { await model.runDouyinWatchdogOnce() }
                 }
-                StatusPill(text: model.douyinWatchdog.running ? "Running" : "Idle", tone: model.douyinWatchdog.running ? .orange : .green)
+                StatusPill(text: model.douyinWatchdog.running ? "Đang chạy" : "Rảnh", tone: model.douyinWatchdog.running ? .orange : .green)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
-            Text("Last: \(model.douyinWatchdog.lastRun) | \(model.douyinWatchdog.summary)")
+            Text("Lần cuối: \(model.douyinWatchdog.lastRun) | \(model.douyinWatchdog.summary)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(4)
@@ -2068,18 +2145,18 @@ struct ProjectsView: View {
 
     var body: some View {
         ScreenScroll {
-            SectionCard(title: "Series library", symbol: "play.square.stack.fill") {
+            SectionCard(title: "Thư viện series", symbol: "play.square.stack.fill") {
                 if model.seriesRows.isEmpty {
-                    EmptyState(text: "Chua co series hoac backend chua tra /api/series")
+                    EmptyState(text: "Chưa có series hoặc backend chưa trả /api/series")
                 }
                 ForEach(model.seriesRows) { series in
                     SeriesCard(series: series)
                 }
             }
 
-            SectionCard(title: "Projects", symbol: "rectangle.stack") {
+            SectionCard(title: "Dự án", symbol: "rectangle.stack") {
                 if model.projects.isEmpty {
-                    EmptyState(text: "Chua load duoc project tu backend")
+                    EmptyState(text: "Chưa tải được project từ backend")
                 }
                 ForEach(model.projects) { project in
                     ProjectCard(
@@ -2098,26 +2175,26 @@ struct VideosView: View {
 
     var body: some View {
         ScreenScroll {
-            SectionCard(title: "Tai khoan xem phim", symbol: "person.crop.circle.fill") {
+            SectionCard(title: "Tài khoản xem phim", symbol: "person.crop.circle.fill") {
                 if model.authToken.isEmpty {
-                    TextField("Username", text: $model.authUsername)
+                    TextField("Tên đăng nhập", text: $model.authUsername)
                         .textInputAutocapitalization(.never)
                         .inputShell()
-                    SecureField("Password", text: $model.authPassword)
+                    SecureField("Mật khẩu", text: $model.authPassword)
                         .inputShell()
                     HStack(spacing: 10) {
-                        SmallButton(title: "Dang nhap", symbol: "person.fill.checkmark") {
+                        SmallButton(title: "Đăng nhập", symbol: "person.fill.checkmark") {
                             Task { await model.login() }
                         }
-                        SmallButton(title: "Dang ky", symbol: "person.badge.plus") {
+                        SmallButton(title: "Đăng ký", symbol: "person.badge.plus") {
                             Task { await model.login(register: true) }
                         }
                     }
                 } else {
                     HStack {
-                        StatusPill(text: "Logged in", tone: .green)
+                        StatusPill(text: "Đã đăng nhập", tone: .green)
                         Spacer()
-                        SmallButton(title: "Logout", symbol: "rectangle.portrait.and.arrow.right") {
+                        SmallButton(title: "Đăng xuất", symbol: "rectangle.portrait.and.arrow.right") {
                             model.logout()
                         }
                         .frame(width: 120)
@@ -2150,7 +2227,7 @@ struct VideoNowPlayingSection: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        SectionCard(title: "Dang xem", symbol: "play.tv.fill") {
+        SectionCard(title: "Đang xem", symbol: "play.tv.fill") {
             if let selection = model.selectedVideo {
                 InlineVideoPlayer(selection: selection)
                     .environmentObject(model)
@@ -2160,7 +2237,7 @@ struct VideoNowPlayingSection: View {
                     Image(systemName: "play.rectangle.on.rectangle.fill")
                         .font(.system(size: 44, weight: .black))
                         .foregroundStyle(.secondary)
-                    Text("Chon series hoac phim le ben duoi de xem.")
+                    Text("Chọn series hoặc phim lẻ bên dưới để xem.")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
@@ -2176,13 +2253,13 @@ struct VideoLibrarySection: View {
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
-        SectionCard(title: "Thu vien video", symbol: "play.square.stack.fill") {
+        SectionCard(title: "Thư viện video", symbol: "play.square.stack.fill") {
             HStack {
-                Text("\(model.effectiveSeriesRows.count) series | \(model.standaloneProjects.count) phim le")
+                Text("\(model.effectiveSeriesRows.count) series | \(model.standaloneProjects.count) phim lẻ")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                SmallButton(title: "Refresh", symbol: "arrow.clockwise") {
+                SmallButton(title: "Làm mới", symbol: "arrow.clockwise") {
                     Task {
                         await model.refreshSeries()
                         await model.refreshProjects()
@@ -2193,8 +2270,8 @@ struct VideoLibrarySection: View {
             }
 
             Picker("Loai", selection: $model.videoLibraryMode) {
-                Text("Phim series").tag("series")
-                Text("Standalone").tag("standalone")
+                Text("Series").tag("series")
+                Text("Phim lẻ").tag("standalone")
             }
             .pickerStyle(.segmented)
 
@@ -2202,12 +2279,12 @@ struct VideoLibrarySection: View {
                 SeriesWatchLibrary()
                     .environmentObject(model)
             } else {
-                TextField("Tim phim le...", text: $model.videoEpisodeSearch)
+                TextField("Tìm phim lẻ...", text: $model.videoEpisodeSearch)
                     .textInputAutocapitalization(.never)
                     .inputShell()
                 let projects = filteredStandalone
                 if projects.isEmpty {
-                    EmptyState(text: "Chua co phim le render.")
+                    EmptyState(text: "Chưa có phim lẻ đã render.")
                 }
                 LazyVGrid(columns: columns, spacing: 14) {
                     ForEach(projects) { project in
@@ -2234,7 +2311,7 @@ struct SeriesWatchLibrary: View {
 
     var body: some View {
         if model.effectiveSeriesRows.isEmpty {
-            EmptyState(text: "Chua co series nao render.")
+            EmptyState(text: "Chưa có series đã render.")
         } else {
             LazyVGrid(columns: posterColumns, spacing: 12) {
                 ForEach(model.effectiveSeriesRows) { series in
@@ -2316,19 +2393,19 @@ struct EpisodeListPanel: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                SmallButton(title: "Next", symbol: "forward.fill") {
+                SmallButton(title: "Tập tiếp", symbol: "forward.fill") {
                     model.playNextVideo()
                 }
                 .frame(width: 92)
             }
 
-            TextField("Tim tap: 42, ten tap, project...", text: $model.videoEpisodeSearch)
+            TextField("Tìm tập: 42, tên tập, project...", text: $model.videoEpisodeSearch)
                 .textInputAutocapitalization(.never)
                 .inputShell()
 
             let episodes = model.filteredEpisodes(in: series)
             if episodes.isEmpty {
-                EmptyState(text: "Khong co tap khop tim kiem.")
+                EmptyState(text: "Không có tập khớp tìm kiếm.")
             } else {
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(Array(episodes.enumerated()), id: \.element.id) { _, episode in
@@ -2367,9 +2444,9 @@ struct UploadsView: View {
 
     var body: some View {
         ScreenScroll {
-            SectionCard(title: "Tai khoan & trang thai", symbol: "person.crop.circle.badge.checkmark") {
+            SectionCard(title: "Tài khoản & trạng thái", symbol: "person.crop.circle.badge.checkmark") {
                 if model.toolStatuses.isEmpty {
-                    EmptyState(text: "Cham Refresh de kiem tra YouTube, TikTok, Facebook, Drive, Watchdog.")
+                    EmptyState(text: "Bấm Làm mới để kiểm tra YouTube, TikTok, Facebook, Drive, Watchdog.")
                 }
                 ForEach(model.toolStatuses) { row in
                     HStack {
@@ -2384,10 +2461,10 @@ struct UploadsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    SmallButton(title: "Refresh", symbol: "arrow.clockwise") { Task { await model.refreshToolStatuses() } }
-                    SmallButton(title: "YouTube login", symbol: "play.tv") { Task { await model.runToolAction(title: "YouTube login", path: "/api/youtube/login") } }
+                    SmallButton(title: "Làm mới", symbol: "arrow.clockwise") { Task { await model.refreshToolStatuses() } }
+                    SmallButton(title: "Đăng nhập YouTube", symbol: "play.tv") { Task { await model.runToolAction(title: "YouTube login", path: "/api/youtube/login") } }
                     SmallButton(title: "TikTok OAuth", symbol: "music.note") { Task { await model.openURLFromEndpoint(title: "TikTok OAuth", path: "/api/tiktok/oauth/start") } }
-                    SmallButton(title: "Drive login", symbol: "externaldrive") { model.openBackendPath("/api/gdrive/login") }
+                    SmallButton(title: "Đăng nhập Drive", symbol: "externaldrive") { model.openBackendPath("/api/gdrive/login") }
                 }
             }
 
@@ -2406,7 +2483,7 @@ struct UploadsView: View {
                     SmallButton(title: "TikTok", symbol: "music.note") { Task { await model.uploadSelected(to: "tiktok") } }
                     SmallButton(title: "Facebook", symbol: "f.circle.fill") { Task { await model.uploadSelected(to: "facebook") } }
                     SmallButton(title: "Drive", symbol: "externaldrive.fill") { Task { await model.uploadSelected(to: "drive") } }
-                    SmallButton(title: "YouTube queue", symbol: "play.tv.fill") { Task { await model.refreshUploadQueue() } }
+                    SmallButton(title: "Queue YouTube", symbol: "play.tv.fill") { Task { await model.refreshUploadQueue() } }
                 }
                 Text(model.uploadStatus)
                     .font(.footnote)
@@ -2414,9 +2491,9 @@ struct UploadsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            SectionCard(title: "YouTube queue", symbol: "list.bullet.clipboard") {
+            SectionCard(title: "Queue YouTube", symbol: "list.bullet.clipboard") {
                 HStack {
-                    SmallButton(title: "Sort tap", symbol: "arrow.up.arrow.down") {
+                    SmallButton(title: "Sắp xếp tập", symbol: "arrow.up.arrow.down") {
                         Task { await model.runToolAction(title: "Sort YouTube queue", path: "/api/youtube/queue/sort", body: ["mode": "episode_asc"]) }
                     }
                     SmallButton(title: "Watchdog", symbol: "shield.lefthalf.filled") {
@@ -2424,19 +2501,19 @@ struct UploadsView: View {
                     }
                 }
                 if model.uploadRows.isEmpty {
-                    EmptyState(text: "Queue upload YouTube dang trong")
+                    EmptyState(text: "Queue upload YouTube đang trống")
                 }
                 ForEach(model.uploadRows) { row in
                     UploadRowView(row: row)
                 }
             }
 
-            SectionCard(title: "Dong bo & watchdog", symbol: "antenna.radiowaves.left.and.right") {
+            SectionCard(title: "Đồng bộ & watchdog", symbol: "antenna.radiowaves.left.and.right") {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    SmallButton(title: "Drive sync", symbol: "arrow.triangle.2.circlepath") {
+                    SmallButton(title: "Đồng bộ Drive", symbol: "arrow.triangle.2.circlepath") {
                         Task { await model.runToolAction(title: "Drive sync", path: "/api/gdrive/sync_projects_async") }
                     }
-                    SmallButton(title: "Mass upload Drive", symbol: "icloud.and.arrow.up") {
+                    SmallButton(title: "Upload Drive hàng loạt", symbol: "icloud.and.arrow.up") {
                         Task { await model.runToolAction(title: "Drive mass upload", path: "/api/gdrive/mass_upload_videos") }
                     }
                     SmallButton(title: "Douyin watchdog", symbol: "magnifyingglass.circle") {
@@ -2457,9 +2534,9 @@ struct DictionaryView: View {
 
     var body: some View {
         ScreenScroll {
-            SectionCard(title: "Tu dien dich", symbol: "book.closed.fill") {
+            SectionCard(title: "Từ điển dịch", symbol: "book.closed.fill") {
                 Picker("Series", selection: $model.selectedGlossaryFolder) {
-                    Text("Chon series").tag("")
+                    Text("Chọn series").tag("")
                     ForEach(model.seriesRows) { series in
                         Text(series.name).tag(series.folder)
                     }
@@ -2473,13 +2550,13 @@ struct DictionaryView: View {
                 }
 
                 HStack(spacing: 10) {
-                    SmallButton(title: "Reload", symbol: "arrow.clockwise") {
+                    SmallButton(title: "Tải lại", symbol: "arrow.clockwise") {
                         Task { await model.loadGlossary() }
                     }
-                    SmallButton(title: "AI extract", symbol: "sparkles") {
+                    SmallButton(title: "AI trích xuất", symbol: "sparkles") {
                         Task { await model.extractGlossaryAI() }
                     }
-                    SmallButton(title: "Save", symbol: "square.and.arrow.down.fill") {
+                    SmallButton(title: "Lưu", symbol: "square.and.arrow.down.fill") {
                         Task { await model.saveGlossary() }
                     }
                 }
@@ -2490,20 +2567,20 @@ struct DictionaryView: View {
                     .lineLimit(3)
             }
 
-            SectionCard(title: "Them / cap nhat tu", symbol: "plus.circle.fill") {
-                TextField("Tu goc: Xiaosuke", text: $model.glossarySourceInput)
+            SectionCard(title: "Thêm / cập nhật từ", symbol: "plus.circle.fill") {
+                TextField("Từ gốc: Xiaosuke", text: $model.glossarySourceInput)
                     .textInputAutocapitalization(.never)
                     .inputShell()
-                TextField("Ban dich: Tieu Tuc", text: $model.glossaryTargetInput)
+                TextField("Bản dịch: Tiểu Túc", text: $model.glossaryTargetInput)
                     .inputShell()
-                PrimaryAction(title: "Them / cap nhat", symbol: "plus") {
+                PrimaryAction(title: "Thêm / cập nhật", symbol: "plus") {
                     model.addGlossaryInput()
                 }
             }
 
-            SectionCard(title: "Danh sach tu", symbol: "list.bullet") {
+            SectionCard(title: "Danh sách từ", symbol: "list.bullet") {
                 if model.glossaryRows.isEmpty {
-                    EmptyState(text: "Chua co tu nao trong series nay.")
+                    EmptyState(text: "Chưa có từ nào trong series này.")
                 }
                 ForEach($model.glossaryRows) { $entry in
                     GlossaryRowView(entry: $entry) {
@@ -2524,10 +2601,10 @@ struct GlossaryRowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("Tu goc", text: $entry.source)
+            TextField("Từ gốc", text: $entry.source)
                 .textInputAutocapitalization(.never)
                 .inputShell()
-            TextField("Ban dich", text: $entry.target)
+            TextField("Bản dịch", text: $entry.target)
                 .inputShell()
             HStack {
                 Text(String(entry.id.uuidString.prefix(8)))
@@ -2535,7 +2612,7 @@ struct GlossaryRowView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button(action: onDelete) {
-                    Label("Xoa", systemImage: "trash")
+                Label("Xóa", systemImage: "trash")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.red)
                 }
@@ -2557,12 +2634,12 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .inputShell()
-                PrimaryAction(title: "Test ket noi", symbol: "bolt.horizontal.circle.fill") {
+                PrimaryAction(title: "Kiểm tra kết nối", symbol: "bolt.horizontal.circle.fill") {
                     Task { await model.refreshAll() }
                 }
             }
 
-            SectionCard(title: "Giao dien", symbol: "paintpalette.fill") {
+            SectionCard(title: "Giao diện", symbol: "paintpalette.fill") {
                 Picker("Theme", selection: Binding(get: { model.theme }, set: { model.theme = $0 })) {
                     ForEach(AppTheme.allCases) { theme in
                         Text(theme.label).tag(theme)
@@ -2576,7 +2653,7 @@ struct SettingsView: View {
 
             SectionCard(title: "Check API", symbol: "checkmark.seal.fill") {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    SmallButton(title: "Refresh status", symbol: "arrow.clockwise") {
+                    SmallButton(title: "Làm mới trạng thái", symbol: "arrow.clockwise") {
                         Task {
                             await model.refreshHealth()
                             await model.refreshToolStatuses()
@@ -2599,7 +2676,7 @@ struct SettingsView: View {
                 StatusText(title: "WARP", value: model.warpTestMessage)
 
                 if model.toolStatuses.isEmpty {
-                    EmptyState(text: "Chua co status. Bam Refresh status.")
+                    EmptyState(text: "Chưa có trạng thái. Bấm Làm mới trạng thái.")
                 }
                 ForEach(model.toolStatuses) { row in
                     HStack {
@@ -2612,12 +2689,12 @@ struct SettingsView: View {
                 }
             }
 
-            SectionCard(title: "Settings backend", symbol: "gearshape.2.fill") {
+            SectionCard(title: "Cài đặt backend", symbol: "gearshape.2.fill") {
                 HStack(spacing: 10) {
-                    PrimaryAction(title: "Save Settings", symbol: "square.and.arrow.down.fill") {
+                    PrimaryAction(title: "Lưu cài đặt", symbol: "square.and.arrow.down.fill") {
                         Task { await model.saveConfig() }
                     }
-                    PrimaryAction(title: "Reload", symbol: "arrow.clockwise") {
+                    PrimaryAction(title: "Tải lại", symbol: "arrow.clockwise") {
                         Task { await model.refreshConfig() }
                     }
                 }
@@ -2635,17 +2712,17 @@ struct SettingsView: View {
                 }
             }
 
-            SectionCard(title: "Tat ca settings raw", symbol: "list.bullet.rectangle") {
+            SectionCard(title: "Tất cả cài đặt raw", symbol: "list.bullet.rectangle") {
                 if model.configRows.isEmpty {
-                    EmptyState(text: "Chua load /api/config")
+                    EmptyState(text: "Chưa tải /api/config")
                 }
                 ForEach(model.configRows) { row in
                     ConfigRawRow(row: row)
                 }
             }
 
-            SectionCard(title: "Ghi chu build", symbol: "shippingbox.fill") {
-                Text("App native nay goi backend MBVietSub qua API. Render, Playwright scrape, ffmpeg va upload van chay tren PC/server. Khi app vao nen, iOS cho poll tiep trong mot khoang thoi gian de gui local notification; neu user kill app han thi can push notification/APNs tu backend moi bao dam van bao.")
+            SectionCard(title: "Ghi chú build", symbol: "shippingbox.fill") {
+                Text("App native gọi backend MBVietSub qua API. Render, Playwright scrape, ffmpeg và upload vẫn chạy trên PC/server. Khi app vào nền, iOS chỉ cho poll thêm một khoảng thời gian; nếu user kill app hẳn thì cần push notification/APNs từ backend mới đảm bảo vẫn báo.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2822,7 +2899,7 @@ struct ProgressCard: View {
     var body: some View {
         SectionCard(title: "Trang thai", symbol: "gauge.with.dots.needle.bottom.50percent") {
             HStack {
-                Text(title)
+                Text(displayStatus(title))
                     .font(.system(.headline, design: .rounded).weight(.bold))
                 Spacer()
                 Text("\(Int(max(0, min(progress, 1)) * 100))%")
@@ -2831,7 +2908,7 @@ struct ProgressCard: View {
             }
             ProgressView(value: max(0, min(progress, 1)))
                 .tint(.accentColor)
-            Text(message.isEmpty ? "Dang cho backend cap nhat..." : message)
+            Text(message.isEmpty ? "Đang chờ backend cập nhật..." : message)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
@@ -2841,6 +2918,7 @@ struct ProgressCard: View {
 
 struct QueueCard: View {
     var queue: QueueSnapshot
+    var onOpen: (() -> Void)? = nil
     var onSelect: ((QueueItem) -> Void)? = nil
 
     var body: some View {
@@ -2850,13 +2928,24 @@ struct QueueCard: View {
                     .font(.system(.subheadline, design: .rounded).weight(.bold))
                     .lineLimit(1)
                 Spacer()
-                StatusPill(text: queue.status.isEmpty ? "running" : queue.status, tone: queue.status.contains("done") ? .green : .blue)
+                StatusPill(text: displayStatus(queue.status.isEmpty ? "running" : queue.status), tone: queue.status.contains("done") ? .green : .blue)
             }
             ProgressView(value: queue.progress)
             Text(queue.message)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+
+            HStack(spacing: 10) {
+                SmallButton(title: queue.items.isEmpty ? "Tải item/log" : "Xem log", symbol: "terminal.fill") {
+                    onOpen?()
+                }
+                if !queue.items.isEmpty, let active = queue.items.first(where: { !$0.status.lowercased().contains("done") }) {
+                    SmallButton(title: "#\(active.index + 1)", symbol: "scope") {
+                        onSelect?(active)
+                    }
+                }
+            }
 
             ForEach(queue.items.prefix(18)) { item in
                 Button {
@@ -2871,13 +2960,13 @@ struct QueueCard: View {
                                 .font(.caption)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
-                            Text(item.message.isEmpty ? item.status : item.message)
+                            Text(item.message.isEmpty ? displayStatus(item.status) : item.message)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
                         }
                         Spacer()
-                        StatusPill(text: item.status, tone: item.status.contains("done") ? .green : item.status.contains("error") || item.status.contains("failed") ? .red : .orange)
+                        StatusPill(text: displayStatus(item.status), tone: item.status.contains("done") ? .green : item.status.contains("error") || item.status.contains("failed") ? .red : .orange)
                     }
                     .contentShape(Rectangle())
                 }
@@ -2893,7 +2982,7 @@ struct LogCard: View {
     var lines: [String]
 
     var body: some View {
-        SectionCard(title: "Logs", symbol: "terminal.fill") {
+        SectionCard(title: "Log", symbol: "terminal.fill") {
             LogConsole(lines: lines, maxHeight: 280)
         }
     }

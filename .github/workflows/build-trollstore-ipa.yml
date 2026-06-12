@@ -1,0 +1,34 @@
+name: Build Trollstore IPA
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS IPA
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build IPA
+        run: |
+          chmod +x ./build_trollstore_ipa.sh
+          ./build_trollstore_ipa.sh
+        working-directory: ./
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiuBonVietsub-TrollStore
+          path: ./dist/MiuBonVietsub-TrollStore.ipa
+          retention-days: 7

@@ -199,13 +199,28 @@
     </div>
   </div>
 
+  
   <!-- Scrape progress -->
   <div id="scrape-progress" class="card hidden">
     <h2><span>⏳</span> Scanning... <span id="scrape-status-badge" class="badge badge-info">RUNNING</span></h2>
-    <div id="scrape-logs" class="log-box" style="max-height:200px"></div>
+    <div id="scrape-logs" class="log-box mt-3"></div>
+  </div>
+  
+  <!-- Scrape History -->
+  <div class="card">
+    <div class="flex" style="align-items:center">
+      <h2><span>📜</span> Lịch sử Quét</h2>
+      <div style="margin-left:auto">
+        <button class="btn btn-outline btn-sm" onclick="loadScrapeHistory()">🔄 Refresh</button>
+        <button class="btn btn-outline btn-sm" onclick="clearScrapeHistory()" style="color:var(--error); border-color:var(--error)">🗑️ Clear All</button>
+      </div>
+    </div>
+    <div id="scrape-history" class="log-box mt-2" style="max-height: 200px; overflow-y: auto; background: var(--bg-dark); border: 1px solid var(--border); padding: 10px; border-radius: 8px;">
+      <div style="color:var(--text-dim);">Đang tải lịch sử...</div>
+    </div>
   </div>
 
-  <!-- Video results -->
+  
   <div id="scrape-results" class="card hidden">
     <h2><span>🎥</span> Videos — <span id="scrape-author"></span> <span id="scrape-count" class="badge badge-info">0</span></h2>
     <div class="btn-group" style="margin-bottom:14px">

@@ -1,3 +1,30 @@
+// --- AUTO INJECTED API ROUTING FOR STATIC HOSTING & iOS APP ---
+(function() {
+    const host = window.location.hostname;
+    // Đối với App iOS/Watch, host thường là rỗng hoặc capacitor/localhost,
+    // nhưng ta vẫn cần phải ép nó gọi về https://api-mbvietsub.miubon.xyz
+    // Nếu chạy web qua Vercel, host chứa vercel.app
+    const isVercel = host.includes('vercel.app');
+    const isBrowserLocal = (host === 'localhost' || host === '127.0.0.1') && window.location.protocol.startsWith('http');
+    
+    // Nếu chạy qua Vercel hoặc test Local bằng Live Server, để trống (dùng relative path)
+    // Nếu chạy App iOS (file:// hoặc capacitor://) hoặc host miubon.xyz, dùng fixed API
+    const apiBase = (isBrowserLocal || isVercel) ? '' : 'https://api-mbvietsub.miubon.xyz';
+    
+    if (apiBase !== '') {
+        const originalFetch = window.fetch;
+        window.fetch = function(input, init) {
+            if (typeof input === 'string' && input.startsWith('/api/')) {
+                input = apiBase + input;
+            } else if (input instanceof URL && input.pathname.startsWith('/api/')) {
+                input = new URL(apiBase + input.pathname + input.search, window.location.origin);
+            }
+            return originalFetch.call(this, input, init);
+        };
+    }
+})();
+// ----------------------------------------------------
+
 const IS_CAPACITOR_APP = window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:' || window.location.protocol === 'file:' || !!window.Capacitor;
 const IS_IOS_REMOTE_MODE = IS_CAPACITOR_APP || window.location.pathname.startsWith('/ios') || window.location.search.includes('ios=1');
 let API = IS_IOS_REMOTE_MODE ? (localStorage.getItem('MIUBON_API_BASE') || '') : '';
@@ -480,6 +507,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('hidden', c.id !== `tab-${tab}`));
   if (tab === 'projects') loadProjects();
     if (tab === 'series') loadSeriesLibrary();
+    if (tab === 'home') loadScrapeHistory();
   if (tab === 'auth') { checkHealth(); checkGDriveStatus(); }
   if (tab === 'ytmanager') { checkHealth(); loadYoutubeWatchdogState(); loadYoutubeVideos(); }
   if (tab === 'tiktok') { loadTikTokStatus(); loadTikTokProjects(); loadTikTokQuickConfig(); }
@@ -4453,6 +4481,20 @@ function switchSeriesSubTab(subtab) {
     document.querySelectorAll('.series-sub-content').forEach(c => c.classList.toggle('hidden', c.id !== subtab));
 }
 
+async function resumeSeries(folder, event) {
+    if(event) event.stopPropagation();
+    if(!confirm(`Bạn có chắc muốn tự động queue các tập còn thiếu của series '${folder}' không?`)) return;
+    
+    try {
+        const res = await api('/api/series/resume', 'POST', {folder: folder});
+        if(res.error) throw new Error(res.error);
+        showToast(`Đã thêm ${res.queued_count} tập vào queue. (${res.completed_count}/${res.total} đã tải)`);
+        loadSeriesLibrary();
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
 async function loadSeriesLibrary() {
     const listSeries = document.getElementById('series-list');
     const listStandalones = document.getElementById('standalone-list');
@@ -4516,6 +4558,7 @@ function renderSeriesCard(s) {
             <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Folder: <code>${safeStr(s.series_folder)}</code></div>
             <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Episodes: <span class="badge badge-default">${total} downloaded</span> (Max: ${ep_max})</div>
             <div style="font-size:0.8rem; color:var(--text-dim);">Latest update: ${safeStr(latest.created_at || '')}</div>
+            ${(s.registered && total < (s.episode_max || total)) ? `<button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="resumeSeries('${safeStr(s.series_folder)}', event)">▶ Resume</button>` : ''}
         </div>
       </div>
       
@@ -4682,6 +4725,7 @@ async function miubonLogin() {
     localStorage.setItem('miubon_user', r.username);
     miubonCheckAuth();
     miubonLoadProgress();
+    loadScrapeHistory();
     alert('Đăng nhập thành công!');
   } catch (e) {
     alert(e.message);
@@ -4732,6 +4776,7 @@ async function wallAction() {
     localStorage.setItem('miubon_user', r.username);
     miubonCheckAuth();
     miubonLoadProgress();
+    loadScrapeHistory();
   } catch(e) {
     errEl.innerText = e.message;
   }
@@ -4787,6 +4832,7 @@ function miubonSaveProgress(folder, epIndex, timeSec) {
 document.addEventListener('DOMContentLoaded', () => {
   miubonCheckAuth();
   miubonLoadProgress();
+    loadScrapeHistory();
   
   let lastSaveTime = 0;
   const vid = document.getElementById('watch-video-element');
@@ -5505,3 +5551,144 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+async function loadScrapeHistory() {
+  const box = document.getElementById('scrape-history');
+  if (!box) return;
+  try {
+    const data = await api('/api/douyin/scrape/history');
+    if (!data || data.length === 0) {
+      box.innerHTML = '<div style="color:var(--text-dim);">Không có lịch sử quét nào.</div>';
+      return;
+    }
+    box.innerHTML = data.map(job => {
+      const d = new Date(job.start_time * 1000).toLocaleString('vi-VN');
+      let statusColor = 'var(--text-dim)';
+      let statusText = 'Unknown';
+      if (job.status === 'running') { statusColor = 'var(--info)'; statusText = 'Đang chạy'; }
+      if (job.status === 'done') { statusColor = 'var(--success)'; statusText = 'Hoàn thành'; }
+      if (job.status === 'error') { statusColor = 'var(--error)'; statusText = 'Lỗi'; }
+      return `
+        <div class="flex" style="align-items:center; border-bottom: 1px solid var(--border); padding: 8px 0; font-size: 0.9rem;">
+          <div style="flex:1">
+            <div style="font-weight: 500; color: var(--text)">${job.url.substring(0, 40)}...</div>
+            <div style="color: var(--text-dim); font-size: 0.8rem;">
+              <span style="color: ${statusColor}">${statusText}</span> • ${d}
+              ${job.total_videos ? `• ${job.total_videos} videos (${job.author})` : ''}
+            </div>
+          </div>
+          <div>
+            <button class="btn btn-sm btn-outline" onclick="deleteScrapeJob('${job.job_id}')" style="color:var(--error); border-color:var(--error); margin-right:4px;">Xóa</button>
+            <button class="btn btn-sm btn-primary" onclick="resumeScrapeJob('${job.job_id}', '${job.status}')">Xem</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<div style="color:var(--error);">Lỗi tải lịch sử</div>';
+  }
+}
+
+async function resumeScrapeJob(jobId, status) {
+  // Same logic as polling
+  const btn = document.getElementById('btn-scrape');
+  btn.disabled = true;
+  document.getElementById('scrape-progress').classList.remove('hidden');
+  document.getElementById('scrape-results').classList.add('hidden');
+  document.getElementById('scrape-logs').innerHTML = '';
+  scrapeSeriesGroups = [];
+  scrapeSeriesSelected = new Set();
+  const seriesBox = document.getElementById('scrape-series-results');
+  if (seriesBox) {
+    seriesBox.classList.add('hidden');
+    seriesBox.innerHTML = '';
+  }
+  
+  toast('Loading job data...');
+  
+  // if done or error, we just fetch once
+  if (status !== 'running') {
+    const s = await api(`/api/douyin/scrape/${jobId}`);
+    const logBox = document.getElementById('scrape-logs');
+    logBox.innerHTML = (s.logs || []).map(l => `<div class="log-line log-default"><span class="log-msg">${l}</span></div>`).join('');
+    logBox.scrollTop = logBox.scrollHeight;
+    const badge = document.getElementById('scrape-status-badge');
+    
+    if (s.status === 'done') {
+      badge.className = 'badge badge-success'; badge.textContent = 'DONE';
+      if (s.result) {
+        scrapeVideos = s.result.videos || [];
+        renderScrapeResults(s.result);
+      }
+      toast('Loaded completed job.');
+    } else {
+      badge.className = 'badge badge-error'; badge.textContent = 'ERROR';
+      toast('Job failed: ' + (s.error || ''), 'error');
+    }
+    btn.disabled = false;
+    return;
+  }
+  
+  // if running, we start polling
+  const pollId = setInterval(async () => {
+    try {
+      const s = await api(`/api/douyin/scrape/${jobId}`);
+      const logBox = document.getElementById('scrape-logs');
+      logBox.innerHTML = (s.logs || []).map(l => `<div class="log-line log-default"><span class="log-msg">${l}</span></div>`).join('');
+      logBox.scrollTop = logBox.scrollHeight;
+      const badge = document.getElementById('scrape-status-badge');
+      
+      if (s.status === 'done') {
+        clearInterval(pollId);
+        badge.className = 'badge badge-success'; badge.textContent = 'DONE';
+        btn.disabled = false;
+        if (s.result) {
+          scrapeVideos = s.result.videos || [];
+          renderScrapeResults(s.result);
+          // AUTO-GROUP SERIES AFTER RENDER
+          setTimeout(() => { 
+            groupSeriesByAI(); 
+          }, 1500);
+        }
+        toast(`Found ${scrapeVideos.length} videos! Grouping series...`);
+        loadScrapeHistory();
+      } else if (s.status === 'error') {
+        clearInterval(pollId);
+        badge.className = 'badge badge-error'; badge.textContent = 'ERROR';
+        btn.disabled = false;
+        toast('Scrape failed: ' + (s.error || ''), 'error');
+        loadScrapeHistory();
+      }
+    } catch(e) {
+      clearInterval(pollId);
+      btn.disabled = false;
+      toast('Error polling: ' + e.message, 'error');
+    }
+  }, 3000);
+}
+
+async function deleteScrapeJob(jobId) {
+  if (!confirm('Bạn có chắc muốn xóa lịch sử này?')) return;
+  try {
+    const res = await api(`/api/douyin/scrape/history/${jobId}`, { method: 'DELETE' });
+    if (res.ok) {
+      toast('Đã xóa lịch sử!');
+      loadScrapeHistory();
+    } else {
+      toast('Lỗi: ' + (res.error || 'Unknown'), 'error');
+    }
+  } catch(e) { toast('Lỗi: ' + e.message, 'error'); }
+}
+
+async function clearScrapeHistory() {
+  if (!confirm('Bạn có chắc muốn XÓA TOÀN BỘ lịch sử quét? Không thể hoàn tác!')) return;
+  try {
+    const res = await api('/api/douyin/scrape/history', { method: 'DELETE' });
+    if (res.ok) {
+      toast('Đã xóa toàn bộ lịch sử!');
+      loadScrapeHistory();
+    } else {
+      toast('Lỗi: ' + (res.error || 'Unknown'), 'error');
+    }
+  } catch(e) { toast('Lỗi: ' + e.message, 'error'); }
+}
