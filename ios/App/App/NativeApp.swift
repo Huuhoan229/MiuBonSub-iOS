@@ -3311,7 +3311,7 @@ struct InlineVideoPlayer: View {
                 SmallButton(title: "Next", symbol: "forward.fill") {
                     Task {
                         await saveCurrentProgress()
-                        model.playNextVideo(after: selection)
+                        await model.playNextVideo(after: selection)
                     }
                 }
                 .opacity(model.canPlayNext(after: selection) ? 1 : 0.42)
@@ -3352,7 +3352,7 @@ struct InlineVideoPlayer: View {
         ) { _ in
             Task {
                 await saveCurrentProgress()
-                model.playNextVideo(after: selection)
+                await model.playNextVideo(after: selection)
             }
         }
         if autoplay { player.play() }
@@ -3370,7 +3370,7 @@ struct InlineVideoPlayer: View {
         ) { _ in
             Task {
                 await saveCurrentProgress()
-                model.playNextVideo(after: selection)
+                await model.playNextVideo(after: selection)
             }
         }
         player.play()
@@ -3746,6 +3746,20 @@ func extractURLs(_ text: String) -> [String] {
     return regex.matches(in: text, range: range).compactMap {
         guard let swiftRange = Range($0.range, in: text) else { return nil }
         return String(text[swiftRange]).trimmingCharacters(in: CharacterSet(charactersIn: ".,;"))
+    }
+}
+
+func displayStatus(_ status: String) -> String {
+    let lower = status.lowercased()
+    
+    switch lower {
+    case "done", "finished": return "✓ Hoàn thành"
+    case "running", "processing", "pipeline": return "⟳ Đang chạy"
+    case "error", "failed": return "✗ Lỗi"
+    case "idle": return "○ Sẵn sàng"
+    case "paused": return "⏸ Tạm dừng"
+    case "waiting", "queued": return "⧐ Chờ đợi"
+    default: return lower.prefix(1).uppercased() + lower.dropFirst()
     }
 }
 
