@@ -2172,7 +2172,7 @@ struct ProjectsView: View {
 
 struct VideosView: View {
     @EnvironmentObject private var model: AppModel
-    private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+    private let columns = [GridItem(.flexible(), spacing: 14)]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2266,9 +2266,14 @@ struct VideosView: View {
                 .padding(.bottom, 120)
             }
         }
-        .fullScreenCover(item: $model.selectedVideo) { selection in
-            VideoPlayerSheet(selection: selection)
-                .environmentObject(model)
+        .fullScreenCover(isPresented: Binding(
+            get: { model.selectedVideo != nil },
+            set: { if !$0 { model.selectedVideo = nil } }
+        )) {
+            if let selection = model.selectedVideo {
+                VideoPlayerSheet(selection: selection)
+                    .environmentObject(model)
+            }
         }
         .task {
             if !model.authToken.isEmpty {
