@@ -1475,7 +1475,7 @@ final class AppModel: ObservableObject {
         }
         guard
             let previewURL = projectMediaURL(project, file: "preview"),
-            let finalURL = projectMediaURL(project, file: "final_video.mp4"),
+            let finalURL = projectMediaURL(project, file: "final_video_preview.mp4"),
             let url = projectMediaURL(project, file: file)
         else {
             statusMessage = "Không tạo được URL video"
@@ -1520,7 +1520,7 @@ final class AppModel: ObservableObject {
         )
         guard
             let previewURL = projectMediaURL(pseudoProject, file: "preview"),
-            let finalURL = projectMediaURL(pseudoProject, file: "final_video.mp4")
+            let finalURL = projectMediaURL(pseudoProject, file: "final_video_preview.mp4")
         else {
             statusMessage = "Không tạo được URL video"
             return
@@ -1611,7 +1611,7 @@ final class AppModel: ObservableObject {
     func makeVideoSelection(project: ProjectRow, file: String = "preview", resume: Bool = true) -> VideoSelection? {
         guard
             let previewURL = projectMediaURL(project, file: "preview"),
-            let finalURL = projectMediaURL(project, file: "final_video.mp4"),
+            let finalURL = projectMediaURL(project, file: "final_video_preview.mp4"),
             let url = projectMediaURL(project, file: file)
         else { return nil }
         let folder = videoWatchFolder(for: project)
@@ -1647,7 +1647,7 @@ final class AppModel: ObservableObject {
         )
         guard
             let previewURL = projectMediaURL(pseudoProject, file: "preview"),
-            let finalURL = projectMediaURL(pseudoProject, file: "final_video.mp4")
+            let finalURL = projectMediaURL(pseudoProject, file: "final_video_preview.mp4")
         else { return nil }
         let progress = watchProgress[series.folder]
         return VideoSelection(
