@@ -4,6 +4,56 @@ import AVKit
 import SwiftUI
 import UIKit
 import UserNotifications
+import WebKit
+
+struct IdentifiableString: Identifiable {
+    let id = UUID()
+    let value: String
+}
+
+struct OAuthWebView: UIViewRepresentable {
+    let url: URL
+    let onCallback: (URL) -> Void
+    let onCancel: () -> Void
+
+    func makeUIView(context: Context) -> WKWebView {
+        let prefs = WKWebpagePreferences()
+        prefs.allowsContentJavaScript = true
+        let config = WKWebViewConfiguration()
+        config.defaultWebpagePreferences = prefs
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        return webView
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        let request = URLRequest(url: url)
+        uiView.load(request)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, WKNavigationDelegate {
+        var parent: OAuthWebView
+
+        init(_ parent: OAuthWebView) {
+            self.parent = parent
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if let url = navigationAction.request.url {
+                if url.host == "127.0.0.1" || url.host == "localhost" {
+                    parent.onCallback(url)
+                    decisionHandler(.cancel)
+                    return
+                }
+            }
+            decisionHandler(.allow)
+        }
+    }
+}
 
 enum AppTheme: String, CaseIterable, Identifiable {
     case system
@@ -327,6 +377,7 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(pollSeconds, forKey: "miubon.pollSeconds") }
     }
     @Published var selectedTab: MainTab = .pipeline
+    @Published var oauthLoginPath: String? = nil
     @Published var health = HealthSnapshot()
     @Published var isOnline = false
     @Published var statusMessage = "Chưa kết nối backend"
@@ -1735,6 +1786,34 @@ struct MiuBonRootView: View {
         }
         .environmentObject(model)
         .preferredColorScheme(model.theme.colorScheme)
+        .sheet(item: Binding(
+            get: { model.oauthLoginPath != nil ? IdentifiableString(value: model.oauthLoginPath!) : nil },
+            set: { if $0 == nil { model.oauthLoginPath = nil } }
+        )) { item in
+            if let url = model.backendURLFor(item.value) {
+                NavigationView {
+                    OAuthWebView(url: url) { callbackUrl in
+                        Task {
+                            model.oauthLoginPath = nil
+                            let query = callbackUrl.query ?? ""
+                            await model.runToolAction(title: "Drive login", path: "/api/gdrive/callback?\(query)", method: "GET")
+                            await model.refreshAll()
+                        }
+                    } onCancel: {
+                        model.oauthLoginPath = nil
+                    }
+                    .navigationTitle("Đăng nhập")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("Hủy") { model.oauthLoginPath = nil }
+                        }
+                    }
+                }
+            } else {
+                Text("Invalid URL")
+            }
+        }
         .task {
             await model.refreshAll()
             await model.refreshToolStatuses()
@@ -2308,7 +2387,7 @@ struct UploadsView: View {
                     SmallButton(title: "Làm mới", symbol: "arrow.clockwise") { Task { await model.refreshToolStatuses() } }
                     SmallButton(title: "Đăng nhập YouTube", symbol: "play.tv") { Task { await model.runToolAction(title: "YouTube login", path: "/api/youtube/login") } }
                     SmallButton(title: "TikTok OAuth", symbol: "music.note") { Task { await model.openURLFromEndpoint(title: "TikTok OAuth", path: "/api/tiktok/oauth/start") } }
-                    SmallButton(title: "Đăng nhập Drive", symbol: "externaldrive") { model.openBackendPath("/api/gdrive/login") }
+                    SmallButton(title: "Đăng nhập Drive", symbol: "externaldrive") { model.oauthLoginPath = "/api/gdrive/login" }
                 }
             }
 
@@ -2526,6 +2605,29 @@ struct SettingsView: View {
 
                 Stepper("Polling \(model.pollSeconds)s", value: $model.pollSeconds, in: 1...15)
                     .padding(.top, 6)
+            }
+
+            SectionCard(title: "Quản lý VPN", symbol: "network.badge.shield.half.filled") {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    SmallButton(title: "Trạng thái VPN", symbol: "magnifyingglass") {
+                        Task { await model.runToolAction(title: "Trạng thái VPN", path: "/api/vpn/status", method: "GET") }
+                    }
+                    SmallButton(title: "Check IP", symbol: "globe") {
+                        Task { await model.runToolAction(title: "Check IP", path: "/api/vpn/check-ip", method: "GET") }
+                    }
+                    SmallButton(title: "Watchdog", symbol: "eye") {
+                        Task { await model.runToolAction(title: "Watchdog", path: "/api/vpn/watchdog", method: "GET") }
+                    }
+                    SmallButton(title: "Bật/Reset VPN", symbol: "play.fill") {
+                        Task { await model.runToolAction(title: "Bật VPN", path: "/api/vpn/start") }
+                    }
+                    SmallButton(title: "Đổi IP", symbol: "arrow.triangle.2.circlepath") {
+                        Task { await model.runToolAction(title: "Đổi IP", path: "/api/vpn/rotate-now") }
+                    }
+                    SmallButton(title: "Tắt VPN", symbol: "stop.fill") {
+                        Task { await model.runToolAction(title: "Tắt VPN", path: "/api/vpn/stop") }
+                    }
+                }
             }
 
             SectionCard(title: "Check API", symbol: "checkmark.seal.fill") {
