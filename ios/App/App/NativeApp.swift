@@ -2172,364 +2172,111 @@ struct ProjectsView: View {
 
 struct VideosView: View {
     @EnvironmentObject private var model: AppModel
+    private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
     var body: some View {
-        ScreenScroll {
-            SectionCard(title: "Tài khoản xem phim", symbol: "person.crop.circle.fill") {
-                if model.authToken.isEmpty {
-                    TextField("Tên đăng nhập", text: $model.authUsername)
-                        .textInputAutocapitalization(.never)
-                        .inputShell()
-                    SecureField("Mật khẩu", text: $model.authPassword)
-                        .inputShell()
-                    HStack(spacing: 10) {
-                        SmallButton(title: "Đăng nhập", symbol: "person.fill.checkmark") {
-                            Task { await model.login() }
-                        }
-                        SmallButton(title: "Đăng ký", symbol: "person.badge.plus") {
-                            Task { await model.login(register: true) }
-                        }
-                    }
-                } else {
-                    HStack {
-                        StatusPill(text: "Đã đăng nhập", tone: .green)
-                        Spacer()
-                        SmallButton(title: "Đăng xuất", symbol: "rectangle.portrait.and.arrow.right") {
-                            model.logout()
-                        }
-                        .frame(width: 120)
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                HStack(spacing: 8) {
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(Color.accentColor)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("MiuBon")
+                            .font(.system(.title3, design: .rounded).weight(.black))
+                        Text("PREMIUM WATCH")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.cyan)
                     }
                 }
-                Text(model.authMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                Spacer()
+                Circle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 36, height: 36)
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
 
-            VideoNowPlayingSection()
-                .environmentObject(model)
+            // Controls
+            HStack {
+                Picker("Loai", selection: $model.videoLibraryMode) {
+                    Text("Series").tag("series")
+                    Text("Lẻ").tag("standalone")
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 140)
 
-            VideoLibrarySection()
+                Spacer()
+
+                Button {
+                    Task {
+                        await model.refreshSeries()
+                        await model.refreshProjects()
+                        await model.loadWatchProgress()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.clockwise")
+                        Text("Làm mới")
+                    }
+                    .font(.caption.weight(.bold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.1), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Status
+                    HStack {
+                        Text("\(model.videoLibraryMode == "series" ? model.effectiveSeriesRows.count : model.standaloneProjects.count) mục đã sẵn sàng.")
+                            .font(.caption)
+                            .foregroundStyle(.cyan)
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(Color.cyan.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.cyan.opacity(0.3), lineWidth: 1))
+                    .padding(.horizontal, 16)
+
+                    if model.videoLibraryMode == "series" {
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(model.effectiveSeriesRows) { series in
+                                ModernSeriesCard(series: series)
+                                    .environmentObject(model)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    } else {
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(model.standaloneProjects) { project in
+                                ModernStandaloneCard(project: project)
+                                    .environmentObject(model)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                }
+                .padding(.bottom, 120)
+            }
+        }
+        .fullScreenCover(item: $model.selectedVideo) { selection in
+            VideoPlayerSheet(selection: selection)
                 .environmentObject(model)
         }
         .task {
             if !model.authToken.isEmpty {
                 await model.loadWatchProgress()
             }
-            if model.selectedVideo == nil, let series = model.effectiveSeriesRows.first {
-                model.selectSeriesForWatching(series)
-            }
         }
     }
-}
-
-struct VideoNowPlayingSection: View {
-    @EnvironmentObject private var model: AppModel
-
-    var body: some View {
-        SectionCard(title: "Đang xem", symbol: "play.tv.fill") {
-            if let selection = model.selectedVideo {
-                InlineVideoPlayer(selection: selection)
-                    .environmentObject(model)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-            } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "play.rectangle.on.rectangle.fill")
-                        .font(.system(size: 44, weight: .black))
-                        .foregroundStyle(.secondary)
-                    Text("Chọn series hoặc phim lẻ bên dưới để xem.")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-            }
-        }
-    }
-}
-
-struct VideoLibrarySection: View {
-    @EnvironmentObject private var model: AppModel
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
-
-    var body: some View {
-        SectionCard(title: "Thư viện video", symbol: "play.square.stack.fill") {
-            HStack {
-                Text("\(model.effectiveSeriesRows.count) series | \(model.standaloneProjects.count) phim lẻ")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                SmallButton(title: "Làm mới", symbol: "arrow.clockwise") {
-                    Task {
-                        await model.refreshSeries()
-                        await model.refreshProjects()
-                        await model.loadWatchProgress()
-                    }
-                }
-                .frame(width: 116)
-            }
-
-            Picker("Loai", selection: $model.videoLibraryMode) {
-                Text("Series").tag("series")
-                Text("Phim lẻ").tag("standalone")
-            }
-            .pickerStyle(.segmented)
-
-            if model.videoLibraryMode == "series" {
-                SeriesWatchLibrary()
-                    .environmentObject(model)
-            } else {
-                TextField("Tìm phim lẻ...", text: $model.videoEpisodeSearch)
-                    .textInputAutocapitalization(.never)
-                    .inputShell()
-                let projects = filteredStandalone
-                if projects.isEmpty {
-                    EmptyState(text: "Chưa có phim lẻ đã render.")
-                }
-                LazyVGrid(columns: columns, spacing: 14) {
-                    ForEach(projects) { project in
-                        StandalonePosterCard(project: project)
-                    }
-                }
-            }
-        }
-    }
-
-    private var filteredStandalone: [ProjectRow] {
-        let query = model.videoEpisodeSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return model.standaloneProjects }
-        return model.standaloneProjects.filter {
-            $0.displayName.lowercased().contains(query)
-                || $0.folderName.lowercased().contains(query)
-        }
-    }
-}
-
-struct SeriesWatchLibrary: View {
-    @EnvironmentObject private var model: AppModel
-    private let posterColumns = [GridItem(.flexible()), GridItem(.flexible())]
-
-    var body: some View {
-        if model.effectiveSeriesRows.isEmpty {
-            EmptyState(text: "Chưa có series đã render.")
-        } else {
-            LazyVGrid(columns: posterColumns, spacing: 12) {
-                ForEach(model.effectiveSeriesRows) { series in
-                    SeriesMiniPosterCard(
-                        series: series,
-                        selected: model.selectedVideoSeriesFolder == series.folder
-                    ) {
-                        model.selectSeriesForWatching(series)
-                    }
-                    .environmentObject(model)
-                }
-            }
-
-            if let series = model.selectedVideoSeries() {
-                EpisodeListPanel(series: series)
-                    .environmentObject(model)
-            }
-        }
-    }
-}
-
-struct SeriesMiniPosterCard: View {
-    var series: SeriesRow
-    var selected: Bool
-    var action: () -> Void
-    @EnvironmentObject private var model: AppModel
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .bottomLeading) {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LinearGradient(colors: [.pink.opacity(0.36), .black.opacity(0.82)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    if let first = model.renderedEpisodes(in: series).first,
-                       let url = model.projectMediaURL(projectName: first.projectName, file: "thumbnail.jpg") {
-                        AsyncImage(url: url) { phase in
-                            if let image = phase.image {
-                                image.resizable().scaledToFill()
-                            } else {
-                                Color.clear
-                            }
-                        }
-                    }
-                    LinearGradient(colors: [.clear, .black.opacity(0.82)], startPoint: .top, endPoint: .bottom)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(series.name)
-                            .font(.system(.caption, design: .rounded).weight(.black))
-                            .foregroundStyle(.white)
-                            .lineLimit(2)
-                        Text("\(series.rendered)/\(series.total) tap")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.white.opacity(0.82))
-                    }
-                    .padding(10)
-                }
-                .frame(height: 150)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(selected ? Color.accentColor : Color.clear, lineWidth: 3))
-            }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-struct EpisodeListPanel: View {
-    var series: SeriesRow
-    @EnvironmentObject private var model: AppModel
-    private let columns = Array(repeating: GridItem(.flexible()), count: 5)
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(series.name)
-                        .font(.system(.headline, design: .rounded).weight(.black))
-                        .lineLimit(2)
-                    Text(series.episodeRange)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                SmallButton(title: "Tập tiếp", symbol: "forward.fill") {
-                    model.playNextVideo()
-                }
-                .frame(width: 92)
-            }
-
-            TextField("Tìm tập: 42, tên tập, project...", text: $model.videoEpisodeSearch)
-                .textInputAutocapitalization(.never)
-                .inputShell()
-
-            let episodes = model.filteredEpisodes(in: series)
-            if episodes.isEmpty {
-                EmptyState(text: "Không có tập khớp tìm kiếm.")
-            } else {
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(Array(episodes.enumerated()), id: \.element.id) { _, episode in
-                        let absoluteIndex = model.renderedEpisodes(in: series).firstIndex(where: { $0.projectName == episode.projectName }) ?? 0
-                        Button {
-                            model.playEpisode(episode, in: series, index: absoluteIndex)
-                        } label: {
-                            VStack(spacing: 2) {
-                                Text("\(episode.episodeNo)")
-                                    .font(.caption.weight(.black))
-                                if model.watchProgress[series.folder]?.episodeIndex == absoluteIndex {
-                                    Circle().fill(Color.white).frame(width: 4, height: 4)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(isCurrent(absoluteIndex) ? Color.accentColor : Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .foregroundStyle(isCurrent(absoluteIndex) ? .white : .primary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .padding(12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-
-    private func isCurrent(_ index: Int) -> Bool {
-        model.selectedVideo?.watchFolder == series.folder && model.selectedVideo?.episodeIndex == index
-    }
-}
-
-struct UploadsView: View {
-    @EnvironmentObject private var model: AppModel
-
-    var body: some View {
-        ScreenScroll {
-            SectionCard(title: "Tài khoản & trạng thái", symbol: "person.crop.circle.badge.checkmark") {
-                if model.toolStatuses.isEmpty {
-                    EmptyState(text: "Bấm Làm mới để kiểm tra YouTube, TikTok, Facebook, Drive, Watchdog.")
-                }
-                ForEach(model.toolStatuses) { row in
-                    HStack {
-                        Text(row.title).font(.subheadline.weight(.semibold))
-                        Spacer()
-                        StatusPill(text: row.value, tone: row.tone)
-                    }
-                    .padding(10)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                Text(model.toolMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    SmallButton(title: "Làm mới", symbol: "arrow.clockwise") { Task { await model.refreshToolStatuses() } }
-                    SmallButton(title: "Đăng nhập YouTube", symbol: "play.tv") { Task { await model.runToolAction(title: "YouTube login", path: "/api/youtube/login") } }
-                    SmallButton(title: "TikTok OAuth", symbol: "music.note") { Task { await model.openURLFromEndpoint(title: "TikTok OAuth", path: "/api/tiktok/oauth/start") } }
-                    SmallButton(title: "Đăng nhập Drive", symbol: "externaldrive") { model.openBackendPath("/api/gdrive/login") }
-                }
-            }
-
-            SectionCard(title: "Upload nhanh", symbol: "arrow.up.circle") {
-                Picker("Project", selection: $model.selectedProject) {
-                    ForEach(model.projects) { project in
-                        Text(project.displayName).tag(project.folderName)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    SmallButton(title: "TikTok", symbol: "music.note") { Task { await model.uploadSelected(to: "tiktok") } }
-                    SmallButton(title: "Facebook", symbol: "f.circle.fill") { Task { await model.uploadSelected(to: "facebook") } }
-                    SmallButton(title: "Drive", symbol: "externaldrive.fill") { Task { await model.uploadSelected(to: "drive") } }
-                    SmallButton(title: "Queue YouTube", symbol: "play.tv.fill") { Task { await model.refreshUploadQueue() } }
-                }
-                Text(model.uploadStatus)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            SectionCard(title: "Queue YouTube", symbol: "list.bullet.clipboard") {
-                HStack {
-                    SmallButton(title: "Sắp xếp tập", symbol: "arrow.up.arrow.down") {
-                        Task { await model.runToolAction(title: "Sort YouTube queue", path: "/api/youtube/queue/sort", body: ["mode": "episode_asc"]) }
-                    }
-                    SmallButton(title: "Watchdog", symbol: "shield.lefthalf.filled") {
-                        Task { await model.runToolAction(title: "YouTube watchdog", path: "/api/youtube/watchdog/run-once") }
-                    }
-                }
-                if model.uploadRows.isEmpty {
-                    EmptyState(text: "Queue upload YouTube đang trống")
-                }
-                ForEach(model.uploadRows) { row in
-                    UploadRowView(row: row)
-                }
-            }
-
-            SectionCard(title: "Đồng bộ & watchdog", symbol: "antenna.radiowaves.left.and.right") {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    SmallButton(title: "Đồng bộ Drive", symbol: "arrow.triangle.2.circlepath") {
-                        Task { await model.runToolAction(title: "Drive sync", path: "/api/gdrive/sync_projects_async") }
-                    }
-                    SmallButton(title: "Upload Drive hàng loạt", symbol: "icloud.and.arrow.up") {
-                        Task { await model.runToolAction(title: "Drive mass upload", path: "/api/gdrive/mass_upload_videos") }
-                    }
-                    SmallButton(title: "Douyin watchdog", symbol: "magnifyingglass.circle") {
-                        Task { await model.runToolAction(title: "Douyin watchdog", path: "/api/douyin/watchdog/run-once") }
-                    }
-                    SmallButton(title: "FB pages", symbol: "f.circle") {
-                        Task { await model.runToolAction(title: "Facebook status", path: "/api/facebook/reels/status", method: "GET") }
-                    }
-                }
-            }
-        }
-        .task { await model.refreshToolStatuses() }
-    }
-}
-
-struct DictionaryView: View {
+}\n\nstruct DictionaryView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
@@ -2629,6 +2376,66 @@ struct SettingsView: View {
 
     var body: some View {
         ScreenScroll {
+\n            SectionCard(title: "Tài khoản xem phim", symbol: "person.crop.circle.fill") {
+                if model.authToken.isEmpty {
+                    TextField("Tên đăng nhập", text: $model.authUsername)
+                        .textInputAutocapitalization(.never)
+                        .inputShell()
+                    SecureField("Mật khẩu", text: $model.authPassword)
+                        .inputShell()
+                    HStack(spacing: 10) {
+                        SmallButton(title: "Đăng nhập", symbol: "person.fill.checkmark") {
+                            Task { await model.login() }
+                        }
+                        SmallButton(title: "Đăng ký", symbol: "person.badge.plus") {
+                            Task { await model.login(register: true) }
+                        }
+                    }
+                } else {
+                    HStack {
+                        StatusPill(text: "Đã đăng nhập", tone: .green)
+                        Spacer()
+                        SmallButton(title: "Đăng xuất", symbol: "rectangle.portrait.and.arrow.right") {
+                            model.logout()
+                        }
+                        .frame(width: 120)
+                    }
+                }
+                Text(model.authMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+\n            SectionCard(title: "Tài khoản xem phim", symbol: "person.crop.circle.fill") {
+                if model.authToken.isEmpty {
+                    TextField("Tên đăng nhập", text: $model.authUsername)
+                        .textInputAutocapitalization(.never)
+                        .inputShell()
+                    SecureField("Mật khẩu", text: $model.authPassword)
+                        .inputShell()
+                    HStack(spacing: 10) {
+                        SmallButton(title: "Đăng nhập", symbol: "person.fill.checkmark") {
+                            Task { await model.login() }
+                        }
+                        SmallButton(title: "Đăng ký", symbol: "person.badge.plus") {
+                            Task { await model.login(register: true) }
+                        }
+                    }
+                } else {
+                    HStack {
+                        StatusPill(text: "Đã đăng nhập", tone: .green)
+                        Spacer()
+                        SmallButton(title: "Đăng xuất", symbol: "rectangle.portrait.and.arrow.right") {
+                            model.logout()
+                        }
+                        .frame(width: 120)
+                    }
+                }
+                Text(model.authMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
             SectionCard(title: "Backend", symbol: "network") {
                 TextField("http://IP-PC:2209", text: $model.backendURL)
                     .textInputAutocapitalization(.never)
@@ -3063,101 +2870,71 @@ struct ProjectCard: View {
     }
 }
 
-struct SeriesPosterCard: View {
+struct ModernSeriesCard: View {
     var series: SeriesRow
     @EnvironmentObject private var model: AppModel
 
-    var renderedEpisodes: [SeriesEpisode] {
-        series.episodes.filter(\.rendered).sorted { $0.episodeNo < $1.episodeNo }
-    }
-
     var body: some View {
-        DisclosureGroup {
-            EpisodeGridView(series: series, episodes: renderedEpisodes)
-                .environmentObject(model)
-                .padding(.top, 10)
+        Button {
+            model.selectSeriesForWatching(series)
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                posterImage(projectName: renderedEpisodes.first?.projectName)
-                    .overlay(alignment: .topLeading) {
-                        Text("\(series.rendered)/\(series.total)")
-                            .font(.caption.weight(.black))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(Color.pink, in: Capsule())
-                            .foregroundStyle(.white)
-                            .padding(8)
+            ZStack(alignment: .bottomLeading) {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.black)
+                
+                if let first = model.renderedEpisodes(in: series).first,
+                   let url = model.projectMediaURL(projectName: first.projectName, file: "thumbnail.jpg") {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else {
+                            Color.gray.opacity(0.3)
+                        }
                     }
-                Text(series.name)
-                    .font(.system(.subheadline, design: .rounded).weight(.black))
-                    .lineLimit(2)
-                if let progress = model.watchProgress[series.folder] {
-                    Text("Dang xem tap \(progress.episodeIndex + 1) | \(formatWatchTime(progress.time))")
+                }
+                
+                LinearGradient(colors: [.clear, .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(series.name)
+                        .font(.system(.subheadline, design: .rounded).weight(.black))
+                        .foregroundStyle(.cyan)
+                        .lineLimit(2)
+                    
+                    Text("\(series.rendered)/\(series.total) Rendered")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .padding(10)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-
-    private func posterImage(projectName: String?) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(LinearGradient(colors: [.pink.opacity(0.28), .black.opacity(0.82)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            if let projectName, let url = model.projectMediaURL(projectName: projectName, file: "thumbnail.jpg") {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        Image(systemName: "play.square.stack.fill")
-                            .font(.system(size: 38, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.75))
+                    
+                    if let progress = model.watchProgress[series.folder] {
+                        Text("Đã xem: tập \(progress.episodeIndex + 1)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.blue)
                     }
                 }
+                .padding(12)
+                
+                VStack {
+                    HStack {
+                        Spacer()
+                        Text("\(series.total) Tập")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.6), in: Capsule())
+                    }
+                    Spacer()
+                }
+                .padding(8)
             }
+            .frame(height: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .frame(height: 185)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .buttonStyle(.plain)
     }
 }
 
-struct EpisodeGridView: View {
-    var series: SeriesRow
-    var episodes: [SeriesEpisode]
-    @EnvironmentObject private var model: AppModel
-    private let columns = Array(repeating: GridItem(.flexible()), count: 5)
-
-    var body: some View {
-        if episodes.isEmpty {
-            EmptyState(text: "Series nay chua co tap render.")
-        } else {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(Array(episodes.enumerated()), id: \.element.id) { index, episode in
-                    Button {
-                        model.playEpisode(episode, in: series, index: index)
-                    } label: {
-                        Text("\(episode.episodeNo)")
-                            .font(.caption.weight(.black))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(isCurrent(index) ? Color.pink : Color.secondary.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .foregroundStyle(isCurrent(index) ? .white : .primary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    private func isCurrent(_ index: Int) -> Bool {
-        model.watchProgress[series.folder]?.episodeIndex == index
-    }
-}
-
-struct StandalonePosterCard: View {
+struct ModernStandaloneCard: View {
     var project: ProjectRow
     @EnvironmentObject private var model: AppModel
 
@@ -3165,186 +2942,225 @@ struct StandalonePosterCard: View {
         Button {
             model.playProject(project)
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LinearGradient(colors: [.blue.opacity(0.28), .black.opacity(0.82)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    if let url = model.projectMediaURL(project, file: "thumbnail.jpg") {
-                        AsyncImage(url: url) { phase in
-                            if let image = phase.image {
-                                image.resizable().scaledToFill()
-                            } else {
-                                Image(systemName: "film.fill")
-                                    .font(.system(size: 38, weight: .bold))
-                                    .foregroundStyle(.white.opacity(0.75))
-                            }
+            ZStack(alignment: .bottomLeading) {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.black)
+                
+                if let url = model.projectMediaURL(project, file: "thumbnail.jpg") {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else {
+                            Color.gray.opacity(0.3)
                         }
                     }
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 38, weight: .bold))
-                        .foregroundStyle(.white)
-                        .shadow(radius: 12)
                 }
-                .frame(height: 185)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-
-                Text(project.displayName)
-                    .font(.system(.subheadline, design: .rounded).weight(.black))
-                    .lineLimit(2)
-                if let progress = model.watchProgress[project.folderName] {
-                    Text(formatWatchTime(progress.time))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                
+                LinearGradient(colors: [.clear, .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(project.displayName)
+                        .font(.system(.subheadline, design: .rounded).weight(.black))
+                        .foregroundStyle(.cyan)
+                        .lineLimit(2)
                 }
+                .padding(12)
             }
-            .padding(10)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .frame(height: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
     }
 }
 
-struct VideoLibraryCard: View {
-    var project: ProjectRow
-    var thumbnailURL: URL?
-    var onPreview: () -> Void
-    var onFull: () -> Void
-    var onOpen: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button(action: onPreview) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [.black.opacity(0.84), .black.opacity(0.54), .accentColor.opacity(0.28)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    if let thumbnailURL = thumbnailURL {
-                        AsyncImage(url: thumbnailURL) { phase in
-                            if let image = phase.image {
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            } else {
-                                Color.clear
-                            }
-                        }
-                    }
-                    VStack(spacing: 8) {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 44, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .shadow(radius: 12)
-                        Text("Tap de xem preview")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.white.opacity(0.88))
-                    }
-                }
-                .frame(height: 190)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(project.displayName)
-                    .font(.system(.subheadline, design: .rounded).weight(.bold))
-                    .lineLimit(2)
-                Text(project.subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            HStack(spacing: 10) {
-                SmallButton(title: "Preview", symbol: "play.fill", action: onPreview)
-                SmallButton(title: "Full", symbol: "film.fill", action: onFull)
-                SmallButton(title: "Open", symbol: "safari.fill", action: onOpen)
-            }
-        }
-        .padding(12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-    }
-}
-
-struct InlineVideoPlayer: View {
+struct VideoPlayerSheet: View {
     var selection: VideoSelection
     @EnvironmentObject private var model: AppModel
+    @Environment(\ .dismiss) private var dismiss
+    
     @State private var player = AVPlayer()
-    @State private var currentURL: URL?
+    @State private var currentSource: String = "Cloudflare"
     @State private var endObserver: NSObjectProtocol?
+    @State private var searchEpisode: String = ""
+
+    var series: SeriesRow? {
+        model.selectedVideoSeries()
+    }
+    
+    var renderedEpisodes: [SeriesEpisode] {
+        guard let s = series else { return [] }
+        return model.renderedEpisodes(in: s)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VideoPlayer(player: player)
-                .frame(height: 238)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.white.opacity(0.16)))
-                .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(selection.title)
-                    .font(.system(.headline, design: .rounded).weight(.black))
-                    .lineLimit(2)
-                Text(selection.subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                if selection.resumeTime > 2 {
-                    Text("Resume: \(formatWatchTime(selection.resumeTime))")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            HStack(spacing: 8) {
-                SmallButton(title: "Preview", symbol: "bolt.fill") {
-                    switchTo(selection.previewURL)
-                }
-                SmallButton(title: "Full", symbol: "film.fill") {
-                    switchTo(selection.finalURL)
-                }
-                SmallButton(title: "Next", symbol: "forward.fill") {
-                    Task {
-                        await saveCurrentProgress()
-                        await model.playNextVideo(after: selection)
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("SERIES")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.pink)
+                        Text(series?.name ?? selection.title)
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(.white)
+                        Text("Tập \(selection.episodeIndex + 1) | \(selection.title) | vị trí \(selection.episodeIndex + 1)/\(series?.total ?? 1)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        player.pause()
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(Color.white.opacity(0.3))
                     }
                 }
-                .opacity(model.canPlayNext(after: selection) ? 1 : 0.42)
-                SmallButton(title: "Open", symbol: "safari.fill") {
-                    UIApplication.shared.open(currentURL ?? selection.url, options: [:], completionHandler: nil)
+                .padding(16)
+                
+                HStack(spacing: 12) {
+                    Button("Cloudflare") { switchSource("Cloudflare") }
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(currentSource == "Cloudflare" ? Color.clear : Color.white.opacity(0.1), in: Capsule())
+                        .overlay(Capsule().stroke(currentSource == "Cloudflare" ? Color.cyan : Color.clear, lineWidth: 1))
+                        .foregroundStyle(currentSource == "Cloudflare" ? Color.cyan : Color.white)
+                    
+                    Button("Drive") { switchSource("Drive") }
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(currentSource == "Drive" ? Color.clear : Color.white.opacity(0.1), in: Capsule())
+                        .overlay(Capsule().stroke(currentSource == "Drive" ? Color.cyan : Color.clear, lineWidth: 1))
+                        .foregroundStyle(currentSource == "Drive" ? Color.cyan : Color.white)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                
+                VideoPlayer(player: player)
+                    .frame(height: UIScreen.main.bounds.width * 9/16)
+                    .background(Color.black)
+                
+                HStack(spacing: 16) {
+                    Button {
+                        if let s = series, selection.episodeIndex > 0, let ep = renderedEpisodes.first(where: { $0.episodeNo == selection.episodeIndex }) {
+                            Task {
+                                await saveCurrentProgress()
+                                model.playEpisode(ep, in: s, index: selection.episodeIndex - 1)
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                            Text("Tập trước")
+                        }
+                        .font(.caption.weight(.bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundStyle(.white)
+                    }
+                    
+                    Button {
+                        Task {
+                            await saveCurrentProgress()
+                            await model.playNextVideo(after: selection)
+                        }
+                    } label: {
+                        HStack {
+                            Text("Tập tiếp")
+                            Image(systemName: "chevron.right")
+                        }
+                        .font(.caption.weight(.bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundStyle(.white)
+                    }
+                }
+                .padding(16)
+                
+                if let s = series {
+                    VStack(spacing: 16) {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
+                            TextField("Tìm kiếm tập...", text: $searchEpisode)
+                                .textInputAutocapitalization(.never)
+                        }
+                        .padding(12)
+                        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal, 16)
+                        
+                        ScrollView {
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+                                ForEach(renderedEpisodes) { ep in
+                                    let idx = renderedEpisodes.firstIndex(where: { $0.id == ep.id }) ?? 0
+                                    let isCurrent = idx == selection.episodeIndex
+                                    Button {
+                                        Task {
+                                            await saveCurrentProgress()
+                                            model.playEpisode(ep, in: s, index: idx)
+                                        }
+                                    } label: {
+                                        Text("\(ep.episodeNo)")
+                                            .font(.callout.weight(.bold))
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 16)
+                                            .background(isCurrent ? Color.cyan : Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+                                            .foregroundStyle(isCurrent ? .black : .white)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 32)
+                        }
+                    }
+                } else {
+                    Spacer()
                 }
             }
-
-            Text("Player nam cung trang voi danh sach tap. Het tap se tu chuyen tap tiep theo neu con video rendered.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        .onAppear { configurePlayer(for: selection, autoplay: true) }
+        .onAppear {
+            configurePlayer(autoplay: true)
+        }
         .onChange(of: selection.id) { _ in
             Task { await saveCurrentProgress() }
-            configurePlayer(for: selection, autoplay: true)
+            configurePlayer(autoplay: true)
         }
         .onDisappear {
             Task { await saveCurrentProgress() }
-            removeEndObserver()
             player.pause()
+            removeEndObserver()
         }
     }
-
-    private func configurePlayer(for selection: VideoSelection, autoplay: Bool) {
-        removeEndObserver()
-        currentURL = selection.url
-        let item = AVPlayerItem(url: selection.url)
+    
+    private func switchSource(_ source: String) {
+        currentSource = source
+        let url = source == "Drive" ? selection.previewURL : selection.finalURL
+        let item = AVPlayerItem(url: url)
+        
+        let currentTime = player.currentTime()
         player.replaceCurrentItem(with: item)
+        player.seek(to: currentTime)
+        player.play()
+    }
+
+    private func configurePlayer(autoplay: Bool) {
+        removeEndObserver()
+        let url = currentSource == "Drive" ? selection.previewURL : selection.finalURL
+        let item = AVPlayerItem(url: url)
+        player.replaceCurrentItem(with: item)
+        
         if selection.resumeTime > 2 {
             player.seek(to: CMTime(seconds: selection.resumeTime, preferredTimescale: 600))
         }
+        
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
@@ -3358,22 +3174,11 @@ struct InlineVideoPlayer: View {
         if autoplay { player.play() }
     }
 
-    private func switchTo(_ url: URL) {
-        currentURL = url
-        removeEndObserver()
-        let item = AVPlayerItem(url: url)
-        player.replaceCurrentItem(with: item)
-        endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: item,
-            queue: .main
-        ) { _ in
-            Task {
-                await saveCurrentProgress()
-                await model.playNextVideo(after: selection)
-            }
+    private func removeEndObserver() {
+        if let observer = endObserver {
+            NotificationCenter.default.removeObserver(observer)
+            endObserver = nil
         }
-        player.play()
     }
 
     private func saveCurrentProgress() async {
@@ -3381,99 +3186,8 @@ struct InlineVideoPlayer: View {
         guard seconds.isFinite else { return }
         await model.saveWatchProgress(folder: selection.watchFolder, episodeIndex: selection.episodeIndex, time: seconds)
     }
-
-    private func removeEndObserver() {
-        if let endObserver {
-            NotificationCenter.default.removeObserver(endObserver)
-            self.endObserver = nil
-        }
-    }
 }
 
-struct VideoPlayerSheet: View {
-    var selection: VideoSelection
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var model: AppModel
-    @State private var player: AVPlayer
-    @State private var currentURL: URL
-
-    init(selection: VideoSelection) {
-        self.selection = selection
-        _currentURL = State(initialValue: selection.url)
-        _player = State(initialValue: AVPlayer(url: selection.url))
-    }
-
-    var body: some View {
-        NavigationView {
-            VStack(alignment: .leading, spacing: 14) {
-                VideoPlayer(player: player)
-                    .frame(height: 260)
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.white.opacity(0.18)))
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(selection.title)
-                        .font(.system(.headline, design: .rounded).weight(.black))
-                        .lineLimit(2)
-                    Text(selection.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .truncationMode(.middle)
-                    Text(currentURL.absoluteString)
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-
-                HStack(spacing: 10) {
-                    SmallButton(title: "Preview", symbol: "bolt.fill") {
-                        switchTo(selection.previewURL)
-                    }
-                    SmallButton(title: "Full", symbol: "film.fill") {
-                        switchTo(selection.finalURL)
-                    }
-                    SmallButton(title: "Open", symbol: "safari.fill") {
-                        UIApplication.shared.open(currentURL, options: [:], completionHandler: nil)
-                    }
-                }
-
-                Text("Preview dung final_video_preview.mp4 neu backend da tao, neu khong co se fallback sang final_video.mp4.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-            }
-            .padding(16)
-            .background(AppBackground())
-            .navigationBarTitle("Xem video", displayMode: .inline)
-            .navigationBarItems(trailing: Button("Dong") { dismiss() })
-        }
-        .onAppear {
-            if selection.resumeTime > 2 {
-                player.seek(to: CMTime(seconds: selection.resumeTime, preferredTimescale: 600))
-            }
-            player.play()
-        }
-        .onDisappear {
-            let seconds = player.currentTime().seconds
-            player.pause()
-            if seconds.isFinite {
-                Task {
-                    await model.saveWatchProgress(folder: selection.watchFolder, episodeIndex: selection.episodeIndex, time: seconds)
-                }
-            }
-        }
-    }
-
-    private func switchTo(_ url: URL) {
-        currentURL = url
-        player.pause()
-        player.replaceCurrentItem(with: AVPlayerItem(url: url))
-        player.play()
-    }
-}
 
 struct SeriesCard: View {
     var series: SeriesRow
