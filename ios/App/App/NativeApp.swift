@@ -2276,7 +2276,9 @@ struct VideosView: View {
             }
         }
     }
-}\n\nstruct DictionaryView: View {
+}
+
+struct DictionaryView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
@@ -2376,37 +2378,8 @@ struct SettingsView: View {
 
     var body: some View {
         ScreenScroll {
-\n            SectionCard(title: "Tài khoản xem phim", symbol: "person.crop.circle.fill") {
-                if model.authToken.isEmpty {
-                    TextField("Tên đăng nhập", text: $model.authUsername)
-                        .textInputAutocapitalization(.never)
-                        .inputShell()
-                    SecureField("Mật khẩu", text: $model.authPassword)
-                        .inputShell()
-                    HStack(spacing: 10) {
-                        SmallButton(title: "Đăng nhập", symbol: "person.fill.checkmark") {
-                            Task { await model.login() }
-                        }
-                        SmallButton(title: "Đăng ký", symbol: "person.badge.plus") {
-                            Task { await model.login(register: true) }
-                        }
-                    }
-                } else {
-                    HStack {
-                        StatusPill(text: "Đã đăng nhập", tone: .green)
-                        Spacer()
-                        SmallButton(title: "Đăng xuất", symbol: "rectangle.portrait.and.arrow.right") {
-                            model.logout()
-                        }
-                        .frame(width: 120)
-                    }
-                }
-                Text(model.authMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-\n            SectionCard(title: "Tài khoản xem phim", symbol: "person.crop.circle.fill") {
+
+            SectionCard(title: "Tài khoản xem phim", symbol: "person.crop.circle.fill") {
                 if model.authToken.isEmpty {
                     TextField("Tên đăng nhập", text: $model.authUsername)
                         .textInputAutocapitalization(.never)
