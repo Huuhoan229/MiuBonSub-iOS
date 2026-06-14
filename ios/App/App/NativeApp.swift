@@ -1798,31 +1798,6 @@ struct MiuBonRootView: View {
         }
         .environmentObject(model)
         .preferredColorScheme(model.theme.colorScheme)
-        .sheet(isPresented: $model.isOAuthPresented) {
-            if let path = model.oauthLoginPath, let url = model.backendURLFor(path) {
-                NavigationView {
-                    OAuthWebView(url: url) { callbackUrl in
-                        Task {
-                            model.oauthLoginPath = nil
-                            let query = callbackUrl.query ?? ""
-                            await model.runToolAction(title: "Drive login", path: "/api/gdrive/callback?\(query)", method: "GET")
-                            await model.refreshAll()
-                        }
-                    } onCancel: {
-                        model.oauthLoginPath = nil
-                    }
-                    .navigationTitle("Đăng nhập")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("Hủy") { model.oauthLoginPath = nil }
-                        }
-                    }
-                }
-            } else {
-                Text("Invalid URL")
-            }
-        }
         .task {
             await model.refreshAll()
             await model.refreshToolStatuses()
@@ -2458,6 +2433,31 @@ struct UploadsView: View {
             }
         }
         .task { await model.refreshToolStatuses() }
+        .sheet(isPresented: $model.isOAuthPresented) {
+            if let path = model.oauthLoginPath, let url = model.backendURLFor(path) {
+                NavigationView {
+                    OAuthWebView(url: url) { callbackUrl in
+                        Task {
+                            model.oauthLoginPath = nil
+                            let query = callbackUrl.query ?? ""
+                            await model.runToolAction(title: "Drive login", path: "/api/gdrive/callback?\(query)", method: "GET")
+                            await model.refreshAll()
+                        }
+                    } onCancel: {
+                        model.oauthLoginPath = nil
+                    }
+                    .navigationTitle("Đăng nhập")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("Hủy") { model.oauthLoginPath = nil }
+                        }
+                    }
+                }
+            } else {
+                Text("Invalid URL")
+            }
+        }
     }
 }
 
