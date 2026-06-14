@@ -6,10 +6,6 @@ import UIKit
 import UserNotifications
 import WebKit
 
-struct IdentifiableString: Identifiable {
-    let id = UUID()
-    let value: String
-}
 
 struct OAuthWebView: UIViewRepresentable {
     let url: URL
@@ -23,12 +19,15 @@ struct OAuthWebView: UIViewRepresentable {
         config.defaultWebpagePreferences = prefs
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
+        
+        let request = URLRequest(url: url)
+        webView.load(request)
+        
         return webView
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        let request = URLRequest(url: url)
-        uiView.load(request)
+        // Avoid reloading during SwiftUI updates to preserve the OAuth flow
     }
 
     func makeCoordinator() -> Coordinator {
@@ -1786,11 +1785,11 @@ struct MiuBonRootView: View {
         }
         .environmentObject(model)
         .preferredColorScheme(model.theme.colorScheme)
-        .sheet(item: Binding(
-            get: { model.oauthLoginPath != nil ? IdentifiableString(value: model.oauthLoginPath!) : nil },
-            set: { if $0 == nil { model.oauthLoginPath = nil } }
-        )) { item in
-            if let url = model.backendURLFor(item.value) {
+        .sheet(isPresented: Binding(
+            get: { model.oauthLoginPath != nil },
+            set: { if !$0 { model.oauthLoginPath = nil } }
+        )) {
+            if let path = model.oauthLoginPath, let url = model.backendURLFor(path) {
                 NavigationView {
                     OAuthWebView(url: url) { callbackUrl in
                         Task {
@@ -2926,30 +2925,38 @@ struct QueueCard: View {
                 }
             }
 
-            ForEach(queue.items.prefix(18)) { item in
-                Button {
-                    onSelect?(item)
-                } label: {
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("#\(item.index + 1)")
-                            .font(.caption.monospacedDigit().weight(.bold))
-                            .foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(item.url.isEmpty ? item.message : item.url)
-                                .font(.caption)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Text(item.message.isEmpty ? displayStatus(item.status) : item.message)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
+            if !queue.items.isEmpty {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(queue.items) { item in
+                            Button {
+                                onSelect?(item)
+                            } label: {
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text("#\(item.index + 1)")
+                                        .font(.caption.monospacedDigit().weight(.bold))
+                                        .foregroundStyle(.secondary)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(item.url.isEmpty ? item.message : item.url)
+                                            .font(.caption)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                        Text(item.message.isEmpty ? displayStatus(item.status) : item.message)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
+                                    Spacer()
+                                    StatusPill(text: displayStatus(item.status), tone: item.status.contains("done") ? .green : item.status.contains("error") || item.status.contains("failed") ? .red : .orange)
+                                }
+                                .padding(.vertical, 2)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
-                        Spacer()
-                        StatusPill(text: displayStatus(item.status), tone: item.status.contains("done") ? .green : item.status.contains("error") || item.status.contains("failed") ? .red : .orange)
                     }
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .frame(maxHeight: 280)
             }
         }
         .padding(12)
