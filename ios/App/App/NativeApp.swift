@@ -4,55 +4,54 @@ import AVKit
 import SwiftUI
 import UIKit
 import UserNotifications
-import WebKit
 
 
-struct OAuthWebView: UIViewRepresentable {
-    let url: URL
-    let onCallback: (URL) -> Void
-    let onCancel: () -> Void
-
-    func makeUIView(context: Context) -> WKWebView {
-        let prefs = WKWebpagePreferences()
-        prefs.allowsContentJavaScript = true
-        let config = WKWebViewConfiguration()
-        config.defaultWebpagePreferences = prefs
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.navigationDelegate = context.coordinator
-        
-        let request = URLRequest(url: url)
-        webView.load(request)
-        
-        return webView
-    }
-
-    func updateUIView(_ uiView: WKWebView, context: Context) {
-        // Avoid reloading during SwiftUI updates to preserve the OAuth flow
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    class Coordinator: NSObject, WKNavigationDelegate {
-        var parent: OAuthWebView
-
-        init(_ parent: OAuthWebView) {
-            self.parent = parent
-        }
-
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if let url = navigationAction.request.url {
-                if url.host == "127.0.0.1" || url.host == "localhost" {
-                    parent.onCallback(url)
-                    decisionHandler(.cancel)
-                    return
-                }
-            }
-            decisionHandler(.allow)
-        }
-    }
-}
+// struct OAuthWebView: UIViewRepresentable {
+//     let url: URL
+//     let onCallback: (URL) -> Void
+//     let onCancel: () -> Void
+//
+//     func makeUIView(context: Context) -> WKWebView {
+//         let prefs = WKWebpagePreferences()
+//         prefs.allowsContentJavaScript = true
+//         let config = WKWebViewConfiguration()
+//         config.defaultWebpagePreferences = prefs
+//         let webView = WKWebView(frame: .zero, configuration: config)
+//         webView.navigationDelegate = context.coordinator
+//         
+//         let request = URLRequest(url: url)
+//         webView.load(request)
+//         
+//         return webView
+//     }
+//
+//     func updateUIView(_ uiView: WKWebView, context: Context) {
+//         // Avoid reloading during SwiftUI updates to preserve the OAuth flow
+//     }
+//
+//     func makeCoordinator() -> Coordinator {
+//         Coordinator(self)
+//     }
+//
+//     class Coordinator: NSObject, WKNavigationDelegate {
+//         var parent: OAuthWebView
+//
+//         init(_ parent: OAuthWebView) {
+//             self.parent = parent
+//         }
+//
+//         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+//             if let url = navigationAction.request.url {
+//                 if url.host == "127.0.0.1" || url.host == "localhost" {
+//                     parent.onCallback(url)
+//                     decisionHandler(.cancel)
+//                     return
+//                 }
+//             }
+//             decisionHandler(.allow)
+//         }
+//     }
+// }
 
 enum AppTheme: String, CaseIterable, Identifiable {
     case system
@@ -2436,15 +2435,15 @@ struct UploadsView: View {
         .sheet(isPresented: $model.isOAuthPresented) {
             if let path = model.oauthLoginPath, let url = model.backendURLFor(path) {
                 NavigationView {
-                    OAuthWebView(url: url) { callbackUrl in
-                        Task {
-                            model.oauthLoginPath = nil
-                            let query = callbackUrl.query ?? ""
-                            await model.runToolAction(title: "Drive login", path: "/api/gdrive/callback?\(query)", method: "GET")
-                            await model.refreshAll()
+                    VStack {
+                        Text("OAuthWebView is temporarily disabled for crash testing")
+                        Button("Mock Login Success") {
+                            Task {
+                                model.oauthLoginPath = nil
+                                await model.runToolAction(title: "Drive login", path: "/api/gdrive/callback?code=mock", method: "GET")
+                                await model.refreshAll()
+                            }
                         }
-                    } onCancel: {
-                        model.oauthLoginPath = nil
                     }
                     .navigationTitle("Đăng nhập")
                     .navigationBarTitleDisplayMode(.inline)
