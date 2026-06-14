@@ -376,7 +376,20 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(pollSeconds, forKey: "miubon.pollSeconds") }
     }
     @Published var selectedTab: MainTab = .pipeline
-    @Published var oauthLoginPath: String? = nil
+    @Published var oauthLoginPath: String? = nil {
+        didSet {
+            if oauthLoginPath != nil && !isOAuthPresented {
+                isOAuthPresented = true
+            }
+        }
+    }
+    @Published var isOAuthPresented: Bool = false {
+        didSet {
+            if !isOAuthPresented && oauthLoginPath != nil {
+                oauthLoginPath = nil
+            }
+        }
+    }
     @Published var health = HealthSnapshot()
     @Published var isOnline = false
     @Published var statusMessage = "Chưa kết nối backend"
@@ -1785,10 +1798,7 @@ struct MiuBonRootView: View {
         }
         .environmentObject(model)
         .preferredColorScheme(model.theme.colorScheme)
-        .sheet(isPresented: Binding(
-            get: { model.oauthLoginPath != nil },
-            set: { if !$0 { model.oauthLoginPath = nil } }
-        )) {
+        .sheet(isPresented: $model.isOAuthPresented) {
             if let path = model.oauthLoginPath, let url = model.backendURLFor(path) {
                 NavigationView {
                     OAuthWebView(url: url) { callbackUrl in
