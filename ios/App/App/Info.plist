@@ -29,6 +29,14 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Ứng dụng cần quyền truy cập mạng nội bộ để kết nối đến MiuBon Vietsub Server.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Cần quyền truy cập máy ảnh.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cần quyền truy cập micro.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cần quyền truy cập thư viện ảnh.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
