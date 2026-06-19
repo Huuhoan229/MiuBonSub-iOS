@@ -329,7 +329,17 @@ final class MiuBonAPI {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response): (Data, URLResponse) = try await withCheckedThrowingContinuation { continuation in
+            let task = URLSession.shared.dataTask(with: request) { d, r, e in
+                if let e = e { continuation.resume(throwing: e); return }
+                guard let d = d, let r = r else {
+                    continuation.resume(throwing: NSError(domain: "Network", code: -1, userInfo: nil))
+                    return
+                }
+                continuation.resume(returning: (d, r))
+            }
+            task.resume()
+        }
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let message = String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)"
             throw NSError(domain: "MiuBonAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: message])
@@ -354,7 +364,17 @@ final class MiuBonAPI {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response): (Data, URLResponse) = try await withCheckedThrowingContinuation { continuation in
+            let task = URLSession.shared.dataTask(with: request) { d, r, e in
+                if let e = e { continuation.resume(throwing: e); return }
+                guard let d = d, let r = r else {
+                    continuation.resume(throwing: NSError(domain: "Network", code: -1, userInfo: nil))
+                    return
+                }
+                continuation.resume(returning: (d, r))
+            }
+            task.resume()
+        }
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let message = String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)"
             throw NSError(domain: "MiuBonAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: message])
