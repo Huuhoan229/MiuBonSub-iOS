@@ -6,11 +6,11 @@ import UserNotifications
 class NetworkManager: ObservableObject {
     static let shared = NetworkManager()
     
-    @Published var backendURL: String {
+    @Published var backendURL: String = UserDefaults.standard.string(forKey: "miubon.backendURL") ?? "https://api-mbvietsub.miubon.xyz" {
         didSet { UserDefaults.standard.set(backendURL, forKey: "miubon.backendURL") }
     }
     
-    @Published var authToken: String {
+    @Published var authToken: String = UserDefaults.standard.string(forKey: "miubon.authToken") ?? "" {
         didSet { UserDefaults.standard.set(authToken, forKey: "miubon.authToken") }
     }
     
@@ -18,9 +18,6 @@ class NetworkManager: ObservableObject {
     @Published var statusMessage: String = "Chưa kết nối"
     
     private init() {
-        // Cấu hình URL mặc định nếu chưa có
-        self.backendURL = UserDefaults.standard.string(forKey: "miubon.backendURL") ?? "https://api-mbvietsub.miubon.xyz"
-        self.authToken = UserDefaults.standard.string(forKey: "miubon.authToken") ?? ""
     }
     
     func request(_ path: String, method: String = "GET", body: Any? = nil, timeout: TimeInterval = 30) async throws -> [String: Any] {

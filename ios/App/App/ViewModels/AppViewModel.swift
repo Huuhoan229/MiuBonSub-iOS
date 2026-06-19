@@ -6,10 +6,13 @@ import Combine
 final class AppViewModel: ObservableObject {
     
     // MARK: - Global States
-    @Published var themeRaw: String {
+    @Published var themeRaw: String = UserDefaults.standard.string(forKey: "miubon.theme") ?? AppTheme.system.rawValue {
         didSet { UserDefaults.standard.set(themeRaw, forKey: "miubon.theme") }
     }
-    @Published var pollSeconds: Int {
+    @Published var pollSeconds: Int = {
+        let saved = UserDefaults.standard.integer(forKey: "miubon.pollSeconds")
+        return saved == 0 ? 3 : saved
+    }() {
         didSet { UserDefaults.standard.set(pollSeconds, forKey: "miubon.pollSeconds") }
     }
     @Published var selectedTab: MainTab = .pipeline
@@ -69,10 +72,6 @@ final class AppViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     init() {
-        themeRaw = UserDefaults.standard.string(forKey: "miubon.theme") ?? AppTheme.system.rawValue
-        let savedPoll = UserDefaults.standard.integer(forKey: "miubon.pollSeconds")
-        pollSeconds = savedPoll == 0 ? 3 : savedPoll
-        
         // Listen to network status safely using Combine
         network.$isOnline
             .receive(on: RunLoop.main)
