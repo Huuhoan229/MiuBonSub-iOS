@@ -3618,6 +3618,7 @@ struct PrimaryAction: View {
                 .padding(.vertical, 13)
                 .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .foregroundStyle(.white)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -3635,6 +3636,7 @@ struct SmallButton: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
