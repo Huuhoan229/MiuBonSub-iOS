@@ -66,18 +66,22 @@ final class AppViewModel: ObservableObject {
     private var network = NetworkManager.shared
     private var pollTask: Task<Void, Never>?
     
+    private var cancellables = Set<AnyCancellable>()
+    
     init() {
         themeRaw = UserDefaults.standard.string(forKey: "miubon.theme") ?? AppTheme.system.rawValue
         let savedPoll = UserDefaults.standard.integer(forKey: "miubon.pollSeconds")
         pollSeconds = savedPoll == 0 ? 3 : savedPoll
         
-        // Listen to network status
-        Task {
-            for await _ in network.$isOnline.values {
-                self.isOnline = network.isOnline
-                self.statusMessage = network.statusMessage
+        // Listen to network status safely using Combine
+        network.$isOnline
+            .receive(on: RunLoop.main)
+            .sink { [weak self] online in
+                guard let self = self else { return }
+                self.isOnline = online
+                self.statusMessage = self.network.statusMessage
             }
-        }
+            .store(in: &cancellables)
     }
     
     // MARK: - Core Methods
