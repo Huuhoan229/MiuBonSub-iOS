@@ -2,7 +2,6 @@ import Foundation
 import Combine
 import AVKit
 
-@MainActor
 final class VideoPlayerViewModel: ObservableObject {
     
     @Published var selectedVideo: VideoSelection?

@@ -2,7 +2,6 @@ import Foundation
 import SwiftUI
 import Combine
 
-@MainActor
 final class AppViewModel: ObservableObject {
     
     // MARK: - Global States
@@ -84,6 +83,7 @@ final class AppViewModel: ObservableObject {
     }
     
     // MARK: - Core Methods
+    @MainActor
     func startPolling() {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
@@ -100,11 +100,13 @@ final class AppViewModel: ObservableObject {
         pollTask = nil
     }
     
+    @MainActor
     func refreshAll(silent: Bool = false) async {
         await refreshHealth(silent: silent)
         // Gọi thêm các hàm tải queue, dự án...
     }
     
+    @MainActor
     func refreshHealth(silent: Bool = false) async {
         do {
             let result = try await network.request("/api/health", timeout: 5)
@@ -124,6 +126,7 @@ final class AppViewModel: ObservableObject {
         // Dummy implementation to satisfy compiler
     }
     
+    @MainActor
     func startPipeline(single: Bool) async {
         guard !urlInput.isEmpty else {
             statusMessage = "Vui lòng nhập URL"
