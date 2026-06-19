@@ -37,11 +37,7 @@
 	<string>Cần quyền truy cập micro.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Cần quyền truy cập thư viện ảnh.</string>
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
-	</dict>
+
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>
