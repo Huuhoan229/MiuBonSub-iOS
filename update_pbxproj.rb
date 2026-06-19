@@ -22,8 +22,8 @@ def add_files_to_group(project, target, group, dir_path)
       add_files_to_group(project, target, sub_group, path)
     elsif path.end_with?('.swift')
       file_name = File.basename(path)
-      unless group.files.any? { |f| f.path == file_name }
-        file_ref = group.new_file(path)
+      unless group.files.any? { |f| f.name == file_name || f.path == file_name }
+        file_ref = group.new_file(File.expand_path(path))
         target.source_build_phase.add_file_reference(file_ref)
       end
     end
