@@ -24,11 +24,7 @@ struct SettingsView: View {
                     }
                 }
                 
-                Section(header: Text("Tài Khoản & Thông Báo")) {
-                    Button("Yêu cầu quyền gửi Thông Báo") {
-                        NotificationCenterBridge.shared.configure()
-                    }
-                }
+
                 
                 Section(header: Text("Giao Diện")) {
                     Picker("Chủ đề", selection: $appVM.themeRaw) {

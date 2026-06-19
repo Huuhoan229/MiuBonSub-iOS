@@ -57,8 +57,6 @@ struct MiuBonRootView: View {
         .preferredColorScheme(appVM.themeRaw == "dark" ? .dark : (appVM.themeRaw == "light" ? .light : nil))
         .onAppear {
             appVM.startPolling()
-            // Đăng ký nhận thông báo Notification
-            NotificationCenterBridge.shared.configure()
         }
     }
 }
