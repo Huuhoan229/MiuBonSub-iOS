@@ -12,6 +12,11 @@ IPA_PATH="$OUT_DIR/MiuBonVietsub-TrollStore.ipa"
 rm -rf "$OUT_DIR" "$DERIVED"
 mkdir -p "$OUT_DIR"
 
+echo "Installing xcodeproj gem to patch Xcode project..."
+gem install xcodeproj --no-document || true
+echo "Running update_pbxproj.rb to add new Swift files..."
+ruby update_pbxproj.rb
+
 xcodebuild \
   -project "$PROJECT" \
   -scheme App \
