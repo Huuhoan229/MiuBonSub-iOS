@@ -32,7 +32,7 @@ enum MainTab: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .pipeline: return "play.rectangle.fill"
-        case .running: return "chart.line.uptrend.xyaxis"
+        case .running: return "waveform.path.ecg"
         case .scraper: return "magnifyingglass.circle.fill"
         case .projects: return "rectangle.stack.fill"
         case .videos: return "play.square.fill"
