@@ -23,7 +23,6 @@ class NetworkManager: ObservableObject {
         self.authToken = UserDefaults.standard.string(forKey: "miubon.authToken") ?? ""
     }
     
-    /// Hàm gọi API sử dụng async/await, trả về Dictionary (JSON Object)
     func request(_ path: String, method: String = "GET", body: Any? = nil, timeout: TimeInterval = 30) async throws -> [String: Any] {
         let cleanBase = backendURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !cleanBase.isEmpty, let url = URL(string: cleanBase + path) else {
@@ -43,7 +42,7 @@ class NetworkManager: ObservableObject {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await safeFetchData(for: request)
         
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let message = String(data: data, encoding: .utf8) ?? "HTTP Lỗi \(http.statusCode)"
@@ -70,11 +69,30 @@ class NetworkManager: ObservableObject {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await safeFetchData(for: request)
+        
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let message = String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)"
             throw NSError(domain: "NetworkManager", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: message])
         }
         return data
+    }
+    
+    // An toàn cho iOS 15 bằng cách dùng continuation thay vì URLSession async API bị lỗi
+    private func safeFetchData(for request: URLRequest) async throws -> (Data, URLResponse) {
+        return try await withCheckedThrowingContinuation { continuation in
+            let task = URLSession.shared.dataTask(with: request) { data, response, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                guard let data = data, let response = response else {
+                    continuation.resume(throwing: URLError(.badServerResponse))
+                    return
+                }
+                continuation.resume(returning: (data, response))
+            }
+            task.resume()
+        }
     }
 }
