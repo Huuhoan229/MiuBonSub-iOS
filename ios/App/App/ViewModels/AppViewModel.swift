@@ -38,6 +38,9 @@ final class AppViewModel: ObservableObject {
     @Published var selectedProject = ""
     @Published var videoLibraryMode = "series"
     
+    // Uploads
+    @Published var uploadRows: [UploadQueueRow] = []
+    
     // Scraper
     @Published var scrapeURL = ""
     @Published var scrapeMinDuration = "60"
@@ -49,6 +52,7 @@ final class AppViewModel: ObservableObject {
     @Published var aiSeriesGroups: [AISeriesGroup] = []
     @Published var selectedAIGroupIDs: Set<UUID> = []
     @Published var aiGroupMessage = "Chưa gom nhóm"
+    @Published var douyinWatchdog = DouyinWatchdogState()
     
     // Dictionary
     @Published var glossaryRows: [GlossaryEntry] = []
@@ -112,6 +116,10 @@ final class AppViewModel: ObservableObject {
             network.isOnline = false
             if !silent { network.statusMessage = error.localizedDescription }
         }
+    }
+    
+    func refreshProjects() async {
+        // Dummy implementation to satisfy compiler
     }
     
     func startPipeline(single: Bool) async {
