@@ -4,12 +4,11 @@ import AVKit
 
 @MainActor
 final class VideoPlayerViewModel: ObservableObject {
-    static let shared = VideoPlayerViewModel()
     
     @Published var selectedVideo: VideoSelection?
     @Published var watchProgress: [String: WatchProgress] = [:]
     
-    private init() {
+    init() {
         // Load watch progress from UserDefaults if needed
     }
     

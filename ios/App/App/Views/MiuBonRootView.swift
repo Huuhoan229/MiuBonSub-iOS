@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MiuBonRootView: View {
-    @StateObject private var appVM = AppViewModel.shared
+    @StateObject private var appVM = AppViewModel()
     
     var body: some View {
         TabView(selection: $appVM.selectedTab) {

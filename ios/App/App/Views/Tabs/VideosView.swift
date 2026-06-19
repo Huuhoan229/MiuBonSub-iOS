@@ -3,7 +3,7 @@ import AVKit
 
 struct VideosView: View {
     @EnvironmentObject var appVM: AppViewModel
-    @StateObject private var playerVM = VideoPlayerViewModel.shared
+    @StateObject private var playerVM = VideoPlayerViewModel()
     
     let columns = [GridItem(.flexible()), GridItem(.flexible())]
     

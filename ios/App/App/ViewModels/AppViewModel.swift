@@ -4,7 +4,6 @@ import Combine
 
 @MainActor
 final class AppViewModel: ObservableObject {
-    static let shared = AppViewModel()
     
     // MARK: - Global States
     @Published var themeRaw: String {
@@ -67,7 +66,7 @@ final class AppViewModel: ObservableObject {
     private var network = NetworkManager.shared
     private var pollTask: Task<Void, Never>?
     
-    private init() {
+    init() {
         themeRaw = UserDefaults.standard.string(forKey: "miubon.theme") ?? AppTheme.system.rawValue
         let savedPoll = UserDefaults.standard.integer(forKey: "miubon.pollSeconds")
         pollSeconds = savedPoll == 0 ? 3 : savedPoll
