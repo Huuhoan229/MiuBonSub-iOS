@@ -85,6 +85,7 @@ enum MainTab: String, CaseIterable, Identifiable {
     case videos
     case uploads
     case dictionary
+    case workers
     case settings
 
     var id: String { rawValue }
@@ -98,6 +99,7 @@ enum MainTab: String, CaseIterable, Identifiable {
         case .videos: return "Xem"
         case .uploads: return "Công cụ"
         case .dictionary: return "Từ điển"
+        case .workers: return "Thợ"
         case .settings: return "Cài đặt"
         }
     }
@@ -111,6 +113,7 @@ enum MainTab: String, CaseIterable, Identifiable {
         case .videos: return "play.square.fill"
         case .uploads: return "wrench.and.screwdriver.fill"
         case .dictionary: return "book.closed.fill"
+        case .workers: return "hammer.fill"
         case .settings: return "slider.horizontal.3"
         }
     }
@@ -424,6 +427,7 @@ final class AppModel: ObservableObject {
     @Published var projects: [ProjectRow] = []
     @Published var seriesRows: [SeriesRow] = []
     @Published var uploadRows: [UploadQueueRow] = []
+    @Published var workers: [WorkerProcess] = []
     @Published var scrapeURL = ""
     @Published var scrapeMinDuration = "60"
     @Published var scrapeOldestFirst = true
@@ -791,6 +795,31 @@ final class AppModel: ObservableObject {
             runtimeLogOffset = int(result["total"], fallback: runtimeLogOffset)
         } catch {
             runtimeLogTitle = "Runtime log error: \(error.localizedDescription)"
+        }
+    }
+    func fetchWorkers() async {
+        do {
+            let result = try await api.request("/api/workers")
+            let workersData = (result["workers"] as? [[String: Any]]) ?? []
+            self.workers = workersData.map { w in
+                WorkerProcess(
+                    pid: string(w["pid"]),
+                    uptime: string(w["uptime"]),
+                    project: string(w["current_project"]),
+                    status: string(w["status"])
+                )
+            }
+        } catch {
+            print("Fetch workers error: \(error)")
+        }
+    }
+
+    func killWorker(pid: String) async {
+        do {
+            _ = try await api.request("/api/workers/\(pid)/kill", method: "POST", body: [:])
+            await fetchWorkers()
+        } catch {
+            print("Kill worker error: \(error)")
         }
     }
 
@@ -1807,6 +1836,7 @@ struct MiuBonRootView: View {
                     VideosView().tag(MainTab.videos)
                     UploadsView().tag(MainTab.uploads)
                     DictionaryView().tag(MainTab.dictionary)
+                    WorkersView().tag(MainTab.workers)
                     SettingsView().tag(MainTab.settings)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -1908,24 +1938,28 @@ struct BottomTabs: View {
     var body: some View {
         HStack(spacing: 6) {
             ForEach(MainTab.allCases) { tab in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.22)) { model.selectedTab = tab }
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: tab.symbol).font(.system(size: 18, weight: .semibold))
-                        Text(tab.title).font(.system(size: 10, weight: .semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .foregroundStyle(model.selectedTab == tab ? Color.accentColor : .secondary)
-                    .background {
-                        if model.selectedTab == tab {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(.regularMaterial)
+                if tab == .workers && model.configValues["operation_mode"] != "master_worker" {
+                    // Hide
+                } else {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.22)) { model.selectedTab = tab }
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: tab.symbol).font(.system(size: 18, weight: .semibold))
+                            Text(tab.title).font(.system(size: 10, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .foregroundStyle(model.selectedTab == tab ? Color.accentColor : .secondary)
+                        .background {
+                            if model.selectedTab == tab {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .fill(.regularMaterial)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 10)
@@ -3702,6 +3736,7 @@ extension Array {
 }
 
 let appConfigFields: [ConfigField] = [
+    ConfigField(key: "operation_mode", label: "Architecture", group: "General", kind: .text),
     ConfigField(key: "channel_name", label: "Channel Name", group: "General", kind: .text),
     ConfigField(key: "api_key", label: "Gemini/API Key", group: "General", kind: .text, sensitive: true, placeholder: "De trong de giu key da luu"),
     ConfigField(key: "gemini_model", label: "Gemini Model", group: "General", kind: .text),
@@ -4151,3 +4186,71 @@ func bool(_ value: Any?) -> Bool {
     if let value = value as? String { return ["true", "1", "yes", "ok"].contains(value.lowercased()) }
     return false
 }
+
+struct WorkerProcess: Identifiable {
+    var id: String { pid }
+    var pid: String
+    var uptime: String
+    var project: String
+    var status: String
+}
+
+struct WorkersView: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var timer: Timer?
+
+    var body: some View {
+        ScreenScroll {
+            SectionCard(title: "Quản lý Thợ (Background Workers)", symbol: "hammer.fill") {
+                if model.workers.isEmpty {
+                    Text("Không có Thợ nào đang chạy.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 20)
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(model.workers) { worker in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("PID: \(worker.pid)")
+                                        .font(.subheadline.weight(.bold))
+                                        .foregroundStyle(.cyan)
+                                    Text("Uptime: \(worker.uptime)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    Text(worker.project.isEmpty ? "Đang rảnh rỗi" : "Job: \(worker.project)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.green)
+                                }
+                                Spacer()
+                                Button {
+                                    Task { await model.killWorker(pid: worker.pid) }
+                                } label: {
+                                    Text("Tắt")
+                                        .font(.caption.weight(.bold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(Color.red.opacity(0.2), in: Capsule())
+                                        .foregroundStyle(.red)
+                                }
+                            }
+                            .padding(12)
+                            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear {
+            Task { await model.fetchWorkers() }
+            timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+                Task { await model.fetchWorkers() }
+            }
+        }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+}
+

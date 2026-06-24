@@ -1,15 +1,12 @@
-// --- AUTO INJECTED API ROUTING FOR STATIC HOSTING & iOS APP ---
+// --- AUTO INJECTED API ROUTING FOR STATIC HOSTING ---
 (function() {
     const host = window.location.hostname;
-    // Đối với App iOS/Watch, host thường là rỗng hoặc capacitor/localhost,
-    // nhưng ta vẫn cần phải ép nó gọi về https://api-mbvietsub.miubon.xyz
-    // Nếu chạy web qua Vercel, host chứa vercel.app
+    const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '';
     const isVercel = host.includes('vercel.app');
-    const isBrowserLocal = (host === 'localhost' || host === '127.0.0.1') && window.location.protocol.startsWith('http');
     
-    // Nếu chạy qua Vercel hoặc test Local bằng Live Server, để trống (dùng relative path)
-    // Nếu chạy App iOS (file:// hoặc capacitor://) hoặc host miubon.xyz, dùng fixed API
-    const apiBase = (isBrowserLocal || isVercel) ? '' : 'https://api-mbvietsub.miubon.xyz';
+    // Nếu chạy trên localhost hoặc Vercel, dùng đường dẫn tương đối (để Vercel tự proxy)
+    // Nếu chạy trên host khác (miubon.xyz), trỏ thẳng về Backend nhà
+    const apiBase = (isLocal || isVercel) ? '' : 'https://api-mbvietsub.miubon.xyz';
     
     if (apiBase !== '') {
         const originalFetch = window.fetch;
@@ -41,7 +38,7 @@ if (IS_IOS_REMOTE_MODE && !API) {
 
 window.changeBackendUrl = function() {
     let current = localStorage.getItem('MIUBON_API_BASE') || 'http://';
-    let input = prompt("Change Backend PC IP Address:", current);
+    let input = prompt("Nhập Backend PC IP/Port (ví dụ http://192.168.1.10:5060):", current);
     if (input !== null) {
         localStorage.setItem('MIUBON_API_BASE', input.replace(/\/+$/, ''));
         window.location.reload();
@@ -54,6 +51,7 @@ let currentTab = 'pipeline';
 let pollTimer = null;
 let logOffset = 0;
 let currentJobId = null;
+let workerPollTimer = null;
 
 function safeHtml(str) {
   if (str === null || str === undefined) return '';
@@ -503,15 +501,18 @@ function toast(msg, type = 'success') {
 // ── Tabs ──
 function switchTab(tab) {
   currentTab = tab;
-  document.querySelectorAll('.bottom-tabs .tab[data-tab]').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab[data-tab]').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('hidden', c.id !== `tab-${tab}`));
   if (tab === 'projects') loadProjects();
     if (tab === 'series') loadSeriesLibrary();
     if (tab === 'home') loadScrapeHistory();
+  if (tab === 'glossary') { loadGlossary(); }
   if (tab === 'auth') { checkHealth(); checkGDriveStatus(); }
   if (tab === 'ytmanager') { checkHealth(); loadYoutubeWatchdogState(); loadYoutubeVideos(); }
   if (tab === 'tiktok') { loadTikTokStatus(); loadTikTokProjects(); loadTikTokQuickConfig(); }
   if (tab === 'facebook') { loadFacebookReelsStatus(); loadFacebookReelsProjects(); loadFacebookQuickConfig(); }
+  if (tab === 'vpn') { pollVpnStatus(); if (!vpnPollTimer) vpnPollTimer = setInterval(pollVpnStatus, 3000); }
+  if (tab !== 'vpn' && vpnPollTimer) { clearInterval(vpnPollTimer); vpnPollTimer = null; }
   if (tab === 'settings') loadConfig();
   if (tab === 'running') {
     loadRunningTab();
@@ -525,6 +526,16 @@ function switchTab(tab) {
     if (runningItemLogTimer) {
       clearInterval(runningItemLogTimer);
       runningItemLogTimer = null;
+    }
+  }
+  
+  if (tab === 'workers') {
+    fetchWorkers();
+    if (!workerPollTimer) workerPollTimer = setInterval(fetchWorkers, 3000);
+  } else {
+    if (workerPollTimer) {
+      clearInterval(workerPollTimer);
+      workerPollTimer = null;
     }
   }
   
@@ -552,6 +563,7 @@ async function checkHealth() {
       <div class="status-row"><span class="status-dot ${d.youtube?.ok ? 'green' : 'yellow'}"></span>YouTube: ${d.youtube?.ok ? `${d.youtube.enabled_count} kênh bật` : 'Not connected'}</div>
       <div class="status-row"><span class="status-dot ${d.tiktok?.ok ? 'green' : 'yellow'}"></span>TikTok: ${d.tiktok?.ok ? 'Ready' : 'Not logged in'}</div>
       <div class="status-row"><span class="status-dot ${d.facebook?.ok ? 'green' : 'yellow'}"></span>Facebook Reels: ${d.facebook?.configured ? 'Configured' : 'Not configured'}</div>
+      <div class="status-row"><span class="status-dot ${d.vpn?.enabled ? 'green' : 'yellow'}"></span>VPN Rotate: ${d.vpn?.enabled ? '🟢 ON — IP: ' + (d.vpn.current_ip || '...') + (d.vpn.current_server ? ' (' + d.vpn.current_server + ')' : '') : 'OFF'}</div>
     `;
 
     if (d.test_9router) {
@@ -792,6 +804,45 @@ async function refreshActiveQueues() {
   }
 }
 
+// ── Worker Manager ──
+async function fetchWorkers() {
+  try {
+    const d = await api('/api/workers');
+    const list = document.getElementById('workers-list');
+    if (!list) return;
+    const workers = d.workers || [];
+    if (workers.length === 0) {
+      list.innerHTML = '<div style="padding:15px;text-align:center;color:var(--text-dim);background:rgba(255,255,255,0.02);border-radius:8px;">Không có Thợ nào đang chạy.</div>';
+      return;
+    }
+    list.innerHTML = workers.map(w => `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid var(--border);">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <strong style="color:var(--text-light); font-size:1.05rem;">👷‍♂️ Thợ #${w.pid}</strong>
+          <span style="font-size:0.85rem; color:var(--text-dim);">Uptime: ${w.uptime_seconds}s | Status: ${safeHtml(w.status)}</span>
+        </div>
+        <button class="btn btn-error btn-sm" onclick="killWorker(${w.pid})">🛑 Tắt (Kill)</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.warn('fetchWorkers error', e);
+  }
+}
+
+async function killWorker(pid) {
+  if (!confirm(`Bạn có chắc muốn tắt Thợ #${pid} không?`)) return;
+  try {
+    const d = await api(`/api/workers/${pid}/kill`, { method: 'POST' });
+    if (d.ok) {
+      toast(`Đã tắt Thợ #${pid}`, 'success');
+      fetchWorkers();
+    } else {
+      toast(d.message || 'Lỗi khi tắt Thợ', 'error');
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
 
 async function cancelQueue(queueId) {
   if (!confirm('Are you sure you want to cancel this queue?')) return;
@@ -1848,12 +1899,12 @@ async function loadConfig() {
       'facebook_page_access_token','facebook_reels_actor_id','facebook_graph_version','facebook_reels_video_state',
       'facebook_reels_poll_timeout_sec','facebook_reels_poll_interval_sec','facebook_reels_request_timeout_sec',
       'facebook_api_proxy','facebook_upload_mode','facebook_reels_short_threshold_sec','facebook_reels_max_minutes','facebook_reels_auto_split',
-      'tts_engine','vieneu_voice','vieneu_mode','vieneu_ref_voice','capcut_voice','capcut_tts_workers','tts_speed','tts_pitch','tts_volume','demucs_model',
+      'tts_engine','vieneu_voice','vieneu_mode','vieneu_ref_voice','capcut_voice','capcut_tts_workers','capcut_tts_pipeline_limit','tts_speed','tts_pitch','tts_volume','demucs_model',
       'tiktok_max_minutes','tiktok_caption_max_chars','tiktok_upload_timeout_sec',
       'blur_sigma','mask_h','mask_y_pct',
       'thumbnail_mode','ai_thumbnail_provider','ai_thumbnail_model','ai_thumbnail_timeout_sec','ai_thumbnail_style','ai_thumbnail_api_key','ai_thumbnail_cloudflare_account_id','ai_thumbnail_cloudflare_api_token','ai_thumbnail_cloudflare_mode','ai_thumbnail_img2img_strength','ai_thumbnail_steps',
-      'font_name','font_size','margin_v','rotate_deg','projects_dir','privacy',
-      'douyin_warp_proxy', 'batch_pipeline_concurrency', 'download_concurrency', 'gpu_heavy_concurrency', 'pipeline_retry_max'];
+      'font_name','font_name_thumb','font_size','margin_v','rotate_deg','projects_dir','privacy',
+      'douyin_warp_proxy', 'batch_pipeline_concurrency', 'download_concurrency', 'gpu_heavy_concurrency', 'pipeline_retry_max', 'operation_mode'];
     fields.forEach(f => {
       const el = document.getElementById('cfg-' + f);
       if (el) {
@@ -1878,7 +1929,7 @@ async function loadConfig() {
         }
       }
     });
-    const cb = ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless','upload_fifo_strict','pipeline_skip_after_retry_exhausted','enable_webai_fallback'];
+    const cb = ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless','upload_fifo_strict','pipeline_skip_after_retry_exhausted','enable_webai_fallback','auto_mask_position'];
     cb.forEach(f => {
       const el = document.getElementById('cfg-' + f);
       if (el) el.checked = !!d[f];
@@ -1891,7 +1942,21 @@ async function loadConfig() {
     }
 
     toggleTtsOptions();
+    toggleWorkerTab();
   } catch (e) { console.error(e); }
+}
+
+function toggleWorkerTab() {
+  const opModeEl = document.getElementById('cfg-operation_mode');
+  const workerTabBtn = document.querySelector('.tab[data-tab="workers"]');
+  if (workerTabBtn && opModeEl) {
+    if (opModeEl.value === 'master_worker') {
+      workerTabBtn.style.display = 'inline-block';
+    } else {
+      workerTabBtn.style.display = 'none';
+      if (currentTab === 'workers') switchTab('pipeline');
+    }
+  }
 }
 
 async function saveConfig() {
@@ -1905,12 +1970,12 @@ async function saveConfig() {
     'facebook_page_access_token','facebook_reels_actor_id','facebook_graph_version','facebook_reels_video_state',
     'facebook_reels_poll_timeout_sec','facebook_reels_poll_interval_sec','facebook_reels_request_timeout_sec',
     'facebook_api_proxy','facebook_upload_mode','facebook_reels_short_threshold_sec','facebook_reels_max_minutes','facebook_reels_auto_split',
-    'tts_engine','vieneu_voice','vieneu_mode','vieneu_ref_voice','capcut_voice','capcut_tts_workers','tts_speed','tts_pitch','tts_volume','demucs_model',
+    'tts_engine','vieneu_voice','vieneu_mode','vieneu_ref_voice','capcut_voice','capcut_tts_workers','capcut_tts_pipeline_limit','tts_speed','tts_pitch','tts_volume','demucs_model',
     'tiktok_max_minutes','tiktok_caption_max_chars','tiktok_upload_timeout_sec',
     'ffmpeg_encoder','blur_sigma','mask_h','mask_y_pct',
     'thumbnail_mode','ai_thumbnail_provider','ai_thumbnail_model','ai_thumbnail_timeout_sec','ai_thumbnail_style','ai_thumbnail_api_key','ai_thumbnail_cloudflare_account_id','ai_thumbnail_cloudflare_api_token','ai_thumbnail_cloudflare_mode','ai_thumbnail_img2img_strength','ai_thumbnail_steps',
-    'font_name','font_size','margin_v','rotate_deg','projects_dir','privacy',
-    'douyin_warp_proxy', 'batch_pipeline_concurrency', 'download_concurrency', 'gpu_heavy_concurrency', 'pipeline_retry_max'];
+    'font_name','font_name_thumb','font_size','margin_v','rotate_deg','projects_dir','privacy',
+    'douyin_warp_proxy', 'batch_pipeline_concurrency', 'download_concurrency', 'gpu_heavy_concurrency', 'pipeline_retry_max', 'operation_mode'];
   const cfg = {};
   fields.forEach(f => {
     const el = document.getElementById('cfg-' + f);
@@ -1923,7 +1988,7 @@ async function saveConfig() {
       if (f === 'facebook_reels_auto_split') cfg[f] = String(v) === 'true';
     }
   });
-  ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless','upload_fifo_strict','pipeline_skip_after_retry_exhausted','enable_webai_fallback'].forEach(f => {
+  ['mirror','use_intro','auto_upload','auto_adjust_tts_speed','auto_upload_tiktok','auto_upload_facebook_reels','tiktok_auto_split','tiktok_headless','upload_fifo_strict','pipeline_skip_after_retry_exhausted','enable_webai_fallback','auto_mask_position'].forEach(f => {
     const el = document.getElementById('cfg-' + f);
     if (el) cfg[f] = el.checked;
   });
@@ -3427,7 +3492,7 @@ async function loadYTQueue() {
           </td>
           <td style="padding:10px;"><code>${safeStr(channel)}</code></td>
           <td style="padding:10px;">${statusHtml}</td>
-          <td style="padding:10px; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${safeStr(error)}">${safeStr(error)}</td>
+          <td style="padding:10px; max-width:300px; word-break:break-word; font-size:0.85rem;" title="${safeStr(error)}">${safeStr(error)}</td>
           <td style="padding:10px;">${attempts}</td>
           <td style="padding:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
             <button class="btn btn-outline btn-sm" ${idx <= 0 || isUploading ? 'disabled' : ''} onclick="moveYTItem('${encodedProject}', ${idx - 1})">Up</button>
@@ -3628,7 +3693,8 @@ async function startScrape() {
       body: {
         url,
         min_duration_sec: minDuration,
-        oldest_first: oldestFirst
+        oldest_first: oldestFirst,
+        skip_premium: document.getElementById('scrape-skip-premium')?.checked ?? true
       }
     });
     if (d.error) { toast(d.error, 'error'); btn.disabled = false; return; }
@@ -3814,18 +3880,41 @@ async function groupSeriesByAI() {
     const d = await api('/api/douyin/group-series', {
       method: 'POST',
       body: { videos: scrapeVideos },
-      timeoutMs: 600000
+      timeoutMs: 30000
     });
     if (d.error) {
       toast(d.error, 'error');
+      if (btn) btn.disabled = false;
       return;
     }
-    scrapeSeriesGroups = d.groups || [];
-    await renderSeriesGroups(d);
-    toast(`Grouped ${scrapeSeriesGroups.length} series, standalone: ${d.standalone_count || 0}`);
+    
+    if (!d.job_id) {
+      toast('Failed to start group series job', 'error');
+      if (btn) btn.disabled = false;
+      return;
+    }
+
+    const pollId = setInterval(async () => {
+      try {
+        const s = await api(`/api/douyin/group-series/${d.job_id}`);
+        if (s.status === 'done') {
+          clearInterval(pollId);
+          scrapeSeriesGroups = s.result?.groups || [];
+          await renderSeriesGroups(s.result);
+          toast(`Grouped ${scrapeSeriesGroups.length} series, standalone: ${s.result?.standalone_count || 0}`);
+          if (btn) btn.disabled = false;
+        } else if (s.status === 'error') {
+          clearInterval(pollId);
+          toast('Group series error: ' + (s.error || ''), 'error');
+          if (btn) btn.disabled = false;
+        }
+      } catch (pollErr) {
+        // keep polling on transient error unless it's repeated
+        console.warn('Poll error:', pollErr);
+      }
+    }, 3000);
   } catch (e) {
     toast('Group series error: ' + e.message, 'error');
-  } finally {
     if (btn) btn.disabled = false;
   }
 }
@@ -3912,13 +4001,13 @@ async function renderSeriesGroups(payload) {
           return `
             <div class="queue-item" style="display:block; padding:12px; margin-bottom:10px;">
               <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom:8px;">
-                <div>
-                  <label style="margin-right:8px; cursor:pointer">
+                <div style="display:flex; align-items:center; flex-wrap:wrap; gap:8px">
+                  <label style="cursor:pointer">
                     <input type="checkbox" id="sg-cb-${idx}" onchange="toggleSeriesGroupSelect(${idx}, this.checked)" ${allDone ? '' : 'checked'} />
                   </label>
-                  <b>${name}</b>
-                  <span class="badge badge-info" style="margin-left:8px">${g.count || urls.length} videos</span>
-                  <span class="badge badge-default" style="margin-left:8px">conf ${(conf * 100).toFixed(0)}%</span>
+                  <input type="text" class="input input-bordered input-sm" style="font-weight:bold; min-width:200px; flex-grow:1; max-width:400px" value="${name.replace(/"/g, '&quot;')}" onchange="updateSeriesName(${idx}, this.value)" />
+                  <span class="badge badge-info">${g.count || urls.length} videos</span>
+                  <span class="badge badge-default">conf ${(conf * 100).toFixed(0)}%</span>
                 </div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end">
                   ${duplicateCount > 0 && uniqueUrls.length ? `<button class="btn btn-outline btn-sm" onclick="addSeriesUniqueEpisodesToQueue(${idx})">+ Add Unique Episodes</button>` : ''}
@@ -4048,7 +4137,7 @@ function buildSeriesContextMap(group, urls) {
 
 
 
-function addSeriesUniqueEpisodesToQueue(idx) {
+async function addSeriesUniqueEpisodesToQueue(idx) {
   const group = scrapeSeriesGroups[idx];
   if (!group) {
     toast('Series not found', 'error');
@@ -4068,6 +4157,10 @@ function addSeriesUniqueEpisodesToQueue(idx) {
   const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
   const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
   group.folder = finalFolder;
+  
+  if (urls.length && finalFolder) {
+      api('/api/series/save-urls', { method: 'POST', body: { series_folder: finalFolder, urls: urls } }).catch(e => console.warn('save-urls optional:', e));
+  }
   
   const groupContexts = buildSeriesContextMap(group, urls);
   urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
@@ -4141,12 +4234,14 @@ function toggleTtsOptions() {
   const vnRef = document.getElementById('vieneu-ref-group');
   const capcutGroup = document.getElementById('capcut-voice-group');
   const capcutWorkersGroup = document.getElementById('capcut-workers-group');
+  const capcutPipelineLimitGroup = document.getElementById('capcut-pipeline-limit-group');
   
   if (vieneuModeGroup) vieneuModeGroup.style.display = engine === 'vieneu' ? '' : 'none';
   if (vieneuVoiceGroup) vieneuVoiceGroup.style.display = (engine === 'vieneu' && mode === 'preset') ? '' : 'none';
   if (vnRef) vnRef.style.display = (engine === 'vieneu' && mode === 'clone') ? '' : 'none';
   if (capcutGroup) capcutGroup.style.display = (engine === 'capcut' || engine === 'capcut_native') ? '' : 'none';
   if (capcutWorkersGroup) capcutWorkersGroup.style.display = (engine === 'capcut' || engine === 'capcut_native') ? '' : 'none';
+  if (capcutPipelineLimitGroup) capcutPipelineLimitGroup.style.display = (engine === 'capcut' || engine === 'capcut_native') ? '' : 'none';
 }
 
 // ── TTS Test ──
@@ -4170,6 +4265,7 @@ async function testTts() {
       vieneu_mode: document.getElementById('cfg-vieneu_mode')?.value,
       capcut_voice: document.getElementById('cfg-capcut_voice')?.value,
       capcut_tts_workers: parseInt(document.getElementById('cfg-capcut_tts_workers')?.value) || 2,
+      capcut_tts_pipeline_limit: parseInt(document.getElementById('cfg-capcut_tts_pipeline_limit')?.value) || 2,
       auto_adjust_tts_speed: !!document.getElementById('cfg-auto_adjust_tts_speed')?.checked,
       tts_speed: parseFloat(document.getElementById('cfg-tts_speed')?.value || '1') || 1,
       tts_pitch: parseFloat(document.getElementById('cfg-tts_pitch')?.value || '1') || 1,
@@ -4375,6 +4471,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     } catch(e) {}
+  loadScrapeHistory();
   updateDemoBanner();
   checkHealth();
   checkSavedState();
@@ -4383,7 +4480,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(checkHealth, 30000);
   activeQueuesTimer = setInterval(refreshActiveQueues, 5000);
   setInterval(loadDouyinWatchdogState, 45000);
-  document.querySelectorAll('.bottom-tabs .tab[data-tab]').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
+  document.querySelectorAll('.tab[data-tab]').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
   toggleTtsOptions();
 });
 
@@ -4426,7 +4523,7 @@ window.selectAllSeriesGroups = function(state) {
 };
 
 window.addSeriesToQueue = function(idx, newOnly) {
-    return addSeriesToQueue(idx, !!newOnly);
+    return addSeriesToQueueLocal(idx, !!newOnly);
 };
 
 window.addSelectedSeriesToQueue = function(newOnly) {
@@ -4481,20 +4578,6 @@ function switchSeriesSubTab(subtab) {
     document.querySelectorAll('.series-sub-content').forEach(c => c.classList.toggle('hidden', c.id !== subtab));
 }
 
-async function resumeSeries(folder, event) {
-    if(event) event.stopPropagation();
-    if(!confirm(`Bạn có chắc muốn tự động queue các tập còn thiếu của series '${folder}' không?`)) return;
-    
-    try {
-        const res = await api('/api/series/resume', 'POST', {folder: folder});
-        if(res.error) throw new Error(res.error);
-        showToast(`Đã thêm ${res.queued_count} tập vào queue. (${res.completed_count}/${res.total} đã tải)`);
-        loadSeriesLibrary();
-    } catch (e) {
-        alert(e.message);
-    }
-}
-
 async function loadSeriesLibrary() {
     const listSeries = document.getElementById('series-list');
     const listStandalones = document.getElementById('standalone-list');
@@ -4547,39 +4630,42 @@ function renderSeriesCard(s) {
     const renderPct = total > 0 ? Math.round((rendered / total) * 100) : 0;
     const uploadPct = total > 0 ? Math.round((uploaded / total) * 100) : 0;
     
-    return `
-    <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
-      <div style="display:flex; gap:12px; margin-bottom:12px;">
-        <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
-            ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">🎬</div>`}
-        </div>
-        <div style="flex:1; overflow:hidden;">
-            <h3 style="margin:0 0 6px; font-size:1rem; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${safeStr(s.series_name)}</h3>
-            <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Folder: <code>${safeStr(s.series_folder)}</code></div>
-            <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Episodes: <span class="badge badge-default">${total} downloaded</span> (Max: ${ep_max})</div>
-            <div style="font-size:0.8rem; color:var(--text-dim);">Latest update: ${safeStr(latest.created_at || '')}</div>
-            ${(s.registered && total < (s.episode_max || total)) ? `<button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="resumeSeries('${safeStr(s.series_folder)}', event)">▶ Resume</button>` : ''}
-        </div>
-      </div>
+    
+      const hasSavedUrls = s.reg_info && Array.isArray(s.reg_info.urls) && s.reg_info.urls.length > 0;
       
-      <div>
-          <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
-              <span>Rendered: ${rendered}/${total}</span>
-              <span>${renderPct}%</span>
+      return `
+      <div class="project-card" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between;" onclick="openSeriesInProjects('${safeStr(s.series_folder)}')">
+        <div style="display:flex; gap:12px; margin-bottom:12px;">
+          <div style="width:100px; height:140px; border-radius:6px; background:#1e1e1e; overflow:hidden; flex-shrink:0;">
+              ${thumb ? `<img src="${thumb}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#666;font-size:2rem">🎬</div>`}
           </div>
-          <div class="progress-bar" style="height:6px; margin-bottom:8px;"><div class="progress-fill" style="width:${renderPct}%; background:var(--accent);"></div></div>
-          
-          <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
-              <span>Uploaded: ${uploaded}/${total}</span>
-              <span>${uploadPct}%</span>
+          <div style="flex:1; overflow:hidden;">
+              <h3 style="margin:0 0 6px; font-size:1rem; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${safeStr(s.series_name)}</h3>
+              <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Folder: <code>${safeStr(s.series_folder)}</code></div>
+              <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:4px;">Episodes: <span class="badge badge-default">${total} downloaded</span> (Max: ${ep_max})</div>
+              <div style="font-size:0.8rem; color:var(--text-dim);">Latest update: ${safeStr(latest.created_at || '')}</div>
           </div>
-          <div class="progress-bar" style="height:6px;"><div class="progress-fill" style="width:${uploadPct}%; background:var(--primary);"></div></div>
-          <div style="margin-top: 12px; text-align: right;">
-             <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openSeriesGlossaryModal('${safeStr(s.series_folder)}', '${safeStr(s.series_name).replace(/'/g, "\\'")}')">📖 Từ Điển (Glossary)</button>
-          </div>
+        </div>
+        
+        <div>
+            <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
+                <span>Rendered: ${rendered}/${total}</span>
+                <span>${renderPct}%</span>
+            </div>
+            <div class="progress-bar" style="height:6px; margin-bottom:8px;"><div class="progress-fill" style="width:${renderPct}%; background:var(--accent);"></div></div>
+            
+            <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
+                <span>Uploaded: ${uploaded}/${total}</span>
+                <span>${uploadPct}%</span>
+            </div>
+            <div class="progress-bar" style="height:6px;"><div class="progress-fill" style="width:${uploadPct}%; background:var(--primary);"></div></div>
+            <div style="margin-top: 12px; text-align: right; display:flex; gap:8px; justify-content:flex-end;">
+               ${hasSavedUrls ? `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); resumeSavedSeriesQueue('${safeStr(s.series_folder)}')">▶ Resume Series</button>` : ''}
+               <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openSeriesGlossaryModal('${safeStr(s.series_folder)}', '${safeStr(s.series_name).replace(/'/g, "\\'")}')">📖 Từ Điển (Glossary)</button>
+            </div>
+        </div>
       </div>
-    </div>
-    `;
+      `;
 }
 
 function renderStandaloneCard(p) {
@@ -4630,7 +4716,14 @@ function openSeriesInProjects(filterText) {
 }
 
 
-function addSeriesToQueue(idx, newOnly = false) {
+function updateSeriesName(idx, val) {
+  if (scrapeSeriesGroups[idx]) {
+    scrapeSeriesGroups[idx].series_name_vi = val;
+    scrapeSeriesGroups[idx].series_name = val;
+  }
+}
+
+async function addSeriesToQueueLocal(idx, newOnly = false) {
   const group = scrapeSeriesGroups[idx];
   if (!group) {
     toast('Series not found', 'error');
@@ -4648,6 +4741,10 @@ function addSeriesToQueue(idx, newOnly = false) {
   const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
   const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
   group.folder = finalFolder;
+  
+  if (urls.length && finalFolder) {
+      api('/api/series/save-urls', { method: 'POST', body: { series_folder: finalFolder, urls: urls } }).catch(e => console.warn('save-urls optional:', e));
+  }
   
   const groupContexts = buildSeriesContextMap(group, urls);
   urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
@@ -4668,31 +4765,36 @@ function selectAllSeriesGroups(checked) {
   (scrapeSeriesGroups || []).forEach((_, idx) => toggleSeriesGroupSelect(idx, checked));
 }
 
-function addSelectedSeriesToQueueLocal(newOnly = false) {
+async function addSelectedSeriesToQueueLocal(newOnly = false) {
   if (!scrapeSeriesSelected.size) {
     toast('No series selected', 'error');
     return;
   }
   let totalAdded = 0;
-  scrapeSeriesSelected.forEach(idx => {
+  for (let idx of Array.from(scrapeSeriesSelected)) {
     const group = scrapeSeriesGroups[idx];
-    if (!group) return;
+    if (!group) continue;
     let urls = Array.isArray(group.urls) ? group.urls.filter(Boolean) : [];
-    if (newOnly && scrapeCompletedUrls instanceof Set) {
-      urls = urls.filter(u => !scrapeCompletedUrls.has(u));
-    }
-    if (!urls.length) return;
     
     const folderInput = document.querySelector(`.series-folder-input[data-idx="${idx}"]`);
     const finalFolder = folderInput ? folderInput.value.trim() : group.folder;
     group.folder = finalFolder;
+    
+    if (urls.length && finalFolder) {
+       api('/api/series/save-urls', { method: 'POST', body: { series_folder: finalFolder, urls: urls } }).catch(e => console.warn('save-urls optional:', e));
+    }
+
+    if (newOnly && scrapeCompletedUrls instanceof Set) {
+      urls = urls.filter(u => !scrapeCompletedUrls.has(u));
+    }
+    if (!urls.length) continue;
     
     const groupContexts = buildSeriesContextMap(group, urls);
     urls.forEach(u => { if (groupContexts[u]) groupContexts[u].series_folder = finalFolder; });
 
     const addedCount = enqueueUrlsToPipelineInput(urls, `series:${finalFolder || idx}`, groupContexts);
     totalAdded += addedCount;
-  });
+  }
   if (totalAdded > 0) {
     toast(`Added total ${totalAdded} URLs from ${scrapeSeriesSelected.size} series`);
   } else {
@@ -4705,9 +4807,7 @@ async function startSelectedSeriesQueueLocal() {
     toast('No series selected', 'error');
     return;
   }
-  // Add new only for selected series
-  addSelectedSeriesToQueueLocal(true);
-  // Then start batch!
+  await addSelectedSeriesToQueueLocal(true);
   await startBatchPipeline();
 }
 
@@ -4794,11 +4894,11 @@ function miubonCheckAuth() {
   const main = document.getElementById('main-app-content');
   if (wall && main) {
     if (token) {
-      wall.classList.add('hidden-fade');
-      main.classList.add('visible');
+      wall.style.display = 'none';
+      main.style.display = 'block';
     } else {
-      wall.classList.remove('hidden-fade');
-      main.classList.remove('visible');
+      wall.style.display = 'flex';
+      main.style.display = 'none';
     }
   }
 }
@@ -5316,355 +5416,199 @@ async function extractGlossaryAI() {
 }
 
 
-function backendUrl(path) {
-  const s = String(path || '');
-  if (/^https?:\/\//i.test(s)) return s;
-  const base = String(API || '').replace(/\/+$/, '');
-  return base ? `${base}${s.startsWith('/') ? s : `/${s}`}` : s;
-}
-
-/* =========================================
-   WATCH VIDEO UI LOGIC (Ported from MiuBonWatch-iOS)
-========================================= */
-
-let watchLibrary = { series: [], standalone: [] };
-let watchCurrentItem = null;
-let watchEpisodes = [];
-let watchCurrentIndex = 0;
-let watchProgressMap = {};
-let watchSaveTimer = null;
-
-const metadata = (ep) => ep?.metadata || ep?.meta || {};
-const seriesContext = (ep) => ep?.series_context || metadata(ep).series_context || {};
-const parseEpisodeFromText = (text) => {
-  const s = String(text || '');
-  const m = s.match(/(?:Tập|Tap|Ep|Episode|第)\s*(\d{1,5})/i);
-  return m ? Number(m[1]) : null;
-};
-const episodeNo = (ep, fallback) => {
-  const ctx = seriesContext(ep);
-  const raw = ep?._ep_no || ep?.episode_no || ep?.episode || ep?.ep || ep?.episode_number || ctx.episode_no || metadata(ep).episode_no || parseEpisodeFromText(ep?.title || metadata(ep).title || metadata(ep).episode_tag || ep?.douyin_meta?.douyin_title || '');
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : fallback + 1;
-};
-const folderKey = (item) => item?.series_folder || seriesContext(item).series_folder || item?.folder || item?.project_id || item?.project_name || item?.name || 'unknown';
-const driveFileId = (ep) => ep.gdrive_file_id || ep.drive_file_id || metadata(ep).gdrive_file_id || metadata(ep).drive_file_id || '';
-const finalExists = (ep) => ep.final_video || metadata(ep).final_video || ep.is_complete || ep.progress >= 100;
-
-async function loadProgress() {
+// ═══ GLOSSARY MANAGEMENT ═══
+async function loadGlossary() {
   try {
-    const data = await api('/api/user/progress');
-    watchProgressMap = data.progress || data.items || data || {};
+    const res = await api('/api/series');
+    if (!res || res.error) throw new Error(res?.error || 'Failed to load series');
+    
+    const series = res.series || [];
+    const sel = document.getElementById('glos-series-select');
+    if (!sel) return;
+    
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="">-- Vui lòng chọn Series --</option>' + 
+      series.map(s => `<option value="${safeStr(s.folder)}">${safeStr(s.title || s.folder)}</option>`).join('');
+    
+    if (currentVal && series.find(s => s.folder === currentVal)) {
+      sel.value = currentVal;
+    }
   } catch (e) {
-    console.warn("Could not load watch progress", e);
+    console.error('loadGlossary series fetch error:', e);
   }
 }
 
-async function loadWatchLibrary() {
-  document.getElementById('tab-watch').innerHTML = '<div id="watch-series-grid" class="library-grid" style="padding:16px;"></div>';
-  const grid = document.getElementById('watch-series-grid');
-  grid.innerHTML = '<div style="color:var(--text-dim); padding:20px;">Đang tải dữ liệu...</div>';
-  await loadProgress();
-
-  try {
-    const data = await api('/api/series');
-    const series = Array.isArray(data.series) ? data.series : [];
-    const renderedSeries = series.map((s) => {
-      const eps = (s.episodes || []).filter(finalExists).sort((a, b) => episodeNo(a, 0) - episodeNo(b, 0));
-      return Object.assign({}, s, { episodes: eps, rendered_count: eps.length });
-    }).filter((s) => s.episodes.length > 0);
-
-    let standalone = [];
-    try {
-      const pData = await api('/api/projects');
-      const all = Array.isArray(pData.projects) ? pData.projects : [];
-      standalone = all.filter((p) => {
-        const ctx = seriesContext(p);
-        return finalExists(p) && !ctx.series_folder && !p.series_name && !p.series_folder;
-      });
-    } catch (e) {}
-
-    watchLibrary = { series: renderedSeries, standalone };
-    renderWatchGrid();
-  } catch (e) {
-    document.getElementById('watch-series-grid').innerHTML = '<div style="color:var(--error);">Lỗi: ' + e.message + '</div>';
-  }
-}
-
-function renderWatchGrid() {
-  const items = watchLibrary.series || [];
-  const grid = document.getElementById('watch-series-grid');
+async function loadGlossaryForSelectedSeries() {
+  const sel = document.getElementById('glos-series-select');
+  const ws = document.getElementById('glos-workspace');
+  if (!sel || !ws) return;
   
-  if (items.length === 0) {
-    grid.innerHTML = '<div class="empty">Chưa có video nào.</div>';
+  const folder = sel.value;
+  if (!folder) {
+    ws.classList.add('hidden');
     return;
   }
-
-  grid.innerHTML = items.map((item, idx) => {
-    const title = item.series_name || item.name || item.title || item.project_name || 'Phim';
-    const eps = item.episodes || [];
-    const first = eps[0] || item;
-    const thumb = backendUrl(`/api/project/${encodeURIComponent(first.project_id || first.project_name || first.name)}/stream/thumbnail.jpg`);
-    const key = folderKey(item);
-    const p = watchProgressMap[key] || {};
-    const watchedEp = p.ep_no || (p.ep_index != null && eps[p.ep_index] ? episodeNo(eps[p.ep_index], Number(p.ep_index)) : null);
-    const watched = watchedEp ? `Đã xem tập ${watchedEp}` : 'Chưa xem';
-    
-    return `<button class="card watch-series-card" onclick="openWatchPlayer(${idx})" style="padding:0; text-align:left; cursor:pointer; background:transparent; border:none; display:flex; flex-direction:column; gap:8px;">
-      <div style="position:relative; width:100%; aspect-ratio:16/9; overflow:hidden; border-radius:12px;">
-        <img src="${thumb}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='static/placeholder.jpg'" />
-        <div style="position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.7); color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold;">${eps.length} Tập</div>
-      </div>
-      <div style="padding: 4px 8px;">
-        <h3 style="font-size:15px; margin:0; line-height:1.3; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; color:var(--text);">${title}</h3>
-        <p style="font-size:12px; color:var(--text-dim); margin:4px 0 0 0;">${watched}</p>
-      </div>
-    </button>`;
-  }).join('');
-}
-
-function openWatchPlayer(index) {
-  const item = watchLibrary.series[index];
-  if (!item) return;
-  watchCurrentItem = item;
-  watchEpisodes = [...(item.episodes || [])];
-  watchEpisodes.sort((a, b) => episodeNo(a, 0) - episodeNo(b, 0));
   
-  const p = watchProgressMap[folderKey(item)] || {};
-  watchCurrentIndex = Math.min(Math.max(Number(p.ep_index || 0), 0), watchEpisodes.length - 1);
-  
-  document.getElementById('watchPanel').classList.remove('hidden');
-  document.getElementById('watchKind').textContent = 'SERIES';
-  document.getElementById('watchTitle').textContent = item.series_name || item.name || 'Video';
-  document.getElementById('watchMeta').textContent = `${watchEpisodes.length} video render`;
-  
-  renderEpisodes();
-  playCurrent(Number(p.time || 0));
-}
-
-function episodeTitle(ep, idx) {
-  const title = ep.title || metadata(ep).title || watchCurrentItem?.series_name || 'Video';
-  const no = episodeNo(ep, idx);
-  return `Tập ${no} | ${title.replace(/^Tập\s*\d+\s*\|\s*/i, '')}`;
-}
-
-function renderEpisodes() {
-  const q = document.getElementById('episodeSearch').value.trim().toLowerCase();
-  document.getElementById('episodeGrid').innerHTML = watchEpisodes.map((ep, idx) => ({ ep, idx, title: episodeTitle(ep, idx) }))
-    .filter((x) => !q || x.title.toLowerCase().includes(q) || String(episodeNo(x.ep, x.idx)).includes(q))
-    .map((x) => `<button class="episode ${x.idx === watchCurrentIndex ? 'active' : ''}" data-index="${x.idx}" onclick="watchCurrentIndex=${x.idx}; playCurrent(0); renderEpisodes();">${episodeNo(x.ep, x.idx)}</button>`)
-    .join('');
-  
-  document.getElementById('prevBtn').disabled = watchCurrentIndex <= 0;
-  document.getElementById('nextBtn').disabled = watchCurrentIndex >= watchEpisodes.length - 1;
-}
-
-function selectedServer() {
-  return document.querySelector('input[name="serverMode"]:checked')?.value || 'cloudflare';
-}
-
-function videoSource(ep) {
-  const project = encodeURIComponent(ep.project_id || ep.project_name || ep.name);
-  if (selectedServer() === 'gdrive') {
-    const fileId = driveFileId(ep);
-    if (fileId) return backendUrl(`/api/gdrive/file/${encodeURIComponent(fileId)}/stream`);
-    document.getElementById('serverHint').textContent = 'Video chưa có file Google Drive, đang dùng Cloudflare.';
-  } else {
-    document.getElementById('serverHint').textContent = '';
-  }
-  return backendUrl(`/api/project/${project}/stream/final_video.mp4?v=faststart`);
-}
-
-function playCurrent(seekTime = 0) {
-  const ep = watchEpisodes[watchCurrentIndex];
-  if (!ep) return;
-  const player = document.getElementById('videoPlayer');
-  document.getElementById('watchMeta').textContent = `${episodeTitle(ep, watchCurrentIndex)} | vị trí ${watchCurrentIndex + 1}/${watchEpisodes.length}`;
-  document.getElementById('serverHint').textContent = '';
-  
-  player.src = videoSource(ep);
-  player.load();
-  player.onloadedmetadata = () => {
-    if (seekTime > 0 && Number.isFinite(player.duration)) player.currentTime = Math.min(seekTime, Math.max(player.duration - 2, 0));
-    player.play().catch(e => console.warn('Auto-play blocked', e));
-  };
-  renderEpisodes();
-}
-
-function playNextEpisode() {
-  if (watchCurrentIndex < watchEpisodes.length - 1) {
-    saveProgress(true);
-    watchCurrentIndex++;
-    playCurrent(0);
-  }
-}
-
-function playPrevEpisode() {
-  if (watchCurrentIndex > 0) {
-    saveProgress(true);
-    watchCurrentIndex--;
-    playCurrent(0);
-  }
-}
-
-function closeWatchPlayer() {
-  saveProgress(true);
-  const player = document.getElementById('videoPlayer');
-  if (player) player.pause();
-  document.getElementById('watchPanel').classList.add('hidden');
-}
-
-async function saveProgress(force = false) {
-  if (!watchCurrentItem || !watchEpisodes[watchCurrentIndex]) return;
-  const player = document.getElementById('videoPlayer');
-  if (!force && (!player.currentTime || player.currentTime < 2)) return;
-  
-  const key = folderKey(watchCurrentItem);
-  const epNo = episodeNo(watchEpisodes[watchCurrentIndex], watchCurrentIndex);
-  watchProgressMap[key] = { 
-    ep_index: watchCurrentIndex, 
-    ep_no: epNo, 
-    time: Math.floor(player.currentTime || 0), 
-    updated_at: new Date().toISOString() 
-  };
+  ws.classList.remove('hidden');
+  const tbody = document.getElementById('glossary-tbody');
+  tbody.innerHTML = `<tr><td colspan="3" style="padding:15px;text-align:center;color:var(--text-dim)">Đang tải từ điển...</td></tr>`;
   
   try {
-    await api('/api/user/progress', {
-      method: 'POST',
-      body: { folder: key, ep_index: watchCurrentIndex, ep_no: epNo, time: Math.floor(player.currentTime || 0) }
-    });
+    const d = await api(`/api/series/${encodeURIComponent(folder)}/glossary`);
+    window.glossaryData = d.glossary || {};
+    renderGlossary();
   } catch (e) {
-    console.warn('Lưu tiến độ lỗi', e);
+    toast('Lỗi tải từ điển: ' + e.message, 'error');
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const player = document.getElementById('videoPlayer');
-  if (player) {
-    player.addEventListener('timeupdate', () => { 
-      if (!watchSaveTimer) watchSaveTimer = setTimeout(() => { watchSaveTimer = null; saveProgress(false); }, 5000); 
-    });
-    player.addEventListener('pause', () => saveProgress(true));
-    player.addEventListener('ended', () => { 
-      saveProgress(true); 
-      playNextEpisode();
-    });
+function renderGlossary(filterText = '') {
+  const tbody = document.getElementById('glossary-tbody');
+  if (!tbody || !window.glossaryData) return;
+  
+  let entries = Object.entries(window.glossaryData);
+  if (filterText) {
+    filterText = filterText.toLowerCase();
+    entries = entries.filter(([src, tgt]) => src.toLowerCase().includes(filterText) || tgt.toLowerCase().includes(filterText));
   }
-});
+  
+  if (entries.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="3" style="padding:15px;text-align:center;color:var(--text-dim)">Không có từ vựng nào.</td></tr>`;
+    return;
+  }
+  
+  tbody.innerHTML = entries.map(([src, tgt]) => `
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+      <td style="padding:10px; font-weight:bold; color:var(--accent)">${safeHtml(src)}</td>
+      <td style="padding:10px;">${safeHtml(tgt)}</td>
+      <td style="padding:10px; text-align:center;">
+        <button class="btn btn-danger btn-sm" onclick="deleteGlossaryItem('${safeHtml(src).replace(/'/g, "\\'")}')">Xóa</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterGlossary() {
+  const term = document.getElementById('glos-search').value.trim();
+  renderGlossary(term);
+}
+
+async function addGlossaryItem() {
+  const sel = document.getElementById('glos-series-select');
+  const srcInput = document.getElementById('glos-source');
+  const tgtInput = document.getElementById('glos-target');
+  if (!sel || !sel.value) return toast('Vui lòng chọn Series trước', 'error');
+  
+  const src = srcInput.value.trim();
+  const tgt = tgtInput.value.trim();
+  const folder = sel.value;
+  
+  if (!src || !tgt) return toast('Vui lòng nhập cả tiếng Trung và tiếng Việt', 'error');
+  
+  try {
+    if (!window.glossaryData) window.glossaryData = {};
+    window.glossaryData[src] = tgt;
+    
+    const d = await api(`/api/series/${encodeURIComponent(folder)}/glossary`, { 
+      method: 'POST', 
+      body: { glossary: window.glossaryData } 
+    });
+    
+    if (d.ok) {
+      toast('Đã lưu vào từ điển!', 'success');
+      srcInput.value = '';
+      tgtInput.value = '';
+      loadGlossaryForSelectedSeries();
+    } else {
+      toast('Lỗi: ' + d.error, 'error');
+    }
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  }
+}
+
+async function deleteGlossaryItem(src) {
+  const sel = document.getElementById('glos-series-select');
+  if (!sel || !sel.value) return;
+  const folder = sel.value;
+  
+  if (!confirm(`Bạn có chắc muốn xóa từ "${src}" khỏi từ điển không?`)) return;
+  
+  try {
+    if (window.glossaryData && window.glossaryData[src]) {
+      delete window.glossaryData[src];
+    }
+    
+    const d = await api(`/api/series/${encodeURIComponent(folder)}/glossary`, { 
+      method: 'POST', 
+      body: { glossary: window.glossaryData } 
+    });
+    
+    if (d.ok) {
+      toast('Đã xóa thành công', 'success');
+      loadGlossaryForSelectedSeries();
+    } else {
+      toast('Lỗi: ' + d.error, 'error');
+    }
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  }
+}
+
+
+
+
+
+
+
+
 
 async function loadScrapeHistory() {
   const box = document.getElementById('scrape-history');
   if (!box) return;
+  box.innerHTML = '<div style="color:var(--text-dim);">Đang tải lịch sử...</div>';
   try {
     const data = await api('/api/douyin/scrape/history');
+    // data is a list
     if (!data || data.length === 0) {
       box.innerHTML = '<div style="color:var(--text-dim);">Không có lịch sử quét nào.</div>';
       return;
     }
-    box.innerHTML = data.map(job => {
-      const d = new Date(job.start_time * 1000).toLocaleString('vi-VN');
-      let statusColor = 'var(--text-dim)';
-      let statusText = 'Unknown';
-      if (job.status === 'running') { statusColor = 'var(--info)'; statusText = 'Đang chạy'; }
-      if (job.status === 'done') { statusColor = 'var(--success)'; statusText = 'Hoàn thành'; }
-      if (job.status === 'error') { statusColor = 'var(--error)'; statusText = 'Lỗi'; }
-      return `
-        <div class="flex" style="align-items:center; border-bottom: 1px solid var(--border); padding: 8px 0; font-size: 0.9rem;">
+    
+    // Sort by start_time descending
+    data.sort((a, b) => (b.start_time || 0) - (a.start_time || 0));
+
+    let html = '';
+    data.forEach(job => {
+      const ts = new Date((job.start_time || 0) * 1000).toLocaleString('vi-VN');
+      const author = job.author || job.url || 'Unknown';
+      const count = job.total_videos || 0;
+      let statusHtml = '';
+      if (job.status === 'done') statusHtml = '<span class="badge badge-success" style="padding: 4px 8px; border-radius: 4px;">Done</span>';
+      else if (job.status === 'error') statusHtml = '<span class="badge badge-error" style="padding: 4px 8px; border-radius: 4px;">Error</span>';
+      else statusHtml = '<span class="badge badge-info" style="padding: 4px 8px; border-radius: 4px;">' + job.status + '</span>';
+      
+      html += `
+        <div style="padding:12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; transition: background 0.2s;">
           <div style="flex:1">
-            <div style="font-weight: 500; color: var(--text)">${job.url.substring(0, 40)}...</div>
-            <div style="color: var(--text-dim); font-size: 0.8rem;">
-              <span style="color: ${statusColor}">${statusText}</span> • ${d}
-              ${job.total_videos ? `• ${job.total_videos} videos (${job.author})` : ''}
+            <div style="font-weight:bold; font-size: 1.05rem; margin-bottom: 4px; color: var(--accent);">${author}</div>
+            <div style="font-size:0.85rem; color:var(--text-dim); display:flex; align-items:center; gap:10px;">
+                <span>🕒 ${ts}</span> 
+                <span>🎞️ ${count} videos</span> 
+                ${statusHtml}
             </div>
           </div>
-          <div>
-            <button class="btn btn-sm btn-outline" onclick="deleteScrapeJob('${job.job_id}')" style="color:var(--error); border-color:var(--error); margin-right:4px;">Xóa</button>
-            <button class="btn btn-sm btn-primary" onclick="resumeScrapeJob('${job.job_id}', '${job.status}')">Xem</button>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-sm btn-outline" onclick="deleteScrapeJob('${job.job_id}')" style="color:var(--error); border-color:var(--error);">🗑 Xóa</button>
+            <button class="btn btn-sm btn-primary" onclick="resumeScrapeJob('${job.job_id}', '${job.status}')">▶ Xem / Resume</button>
           </div>
         </div>
       `;
-    }).join('');
+    });
+    box.innerHTML = html;
   } catch (e) {
-    box.innerHTML = '<div style="color:var(--error);">Lỗi tải lịch sử</div>';
+    box.innerHTML = '<div style="color:var(--error);">Lỗi: ' + e.message + '</div>';
   }
-}
-
-async function resumeScrapeJob(jobId, status) {
-  // Same logic as polling
-  const btn = document.getElementById('btn-scrape');
-  btn.disabled = true;
-  document.getElementById('scrape-progress').classList.remove('hidden');
-  document.getElementById('scrape-results').classList.add('hidden');
-  document.getElementById('scrape-logs').innerHTML = '';
-  scrapeSeriesGroups = [];
-  scrapeSeriesSelected = new Set();
-  const seriesBox = document.getElementById('scrape-series-results');
-  if (seriesBox) {
-    seriesBox.classList.add('hidden');
-    seriesBox.innerHTML = '';
-  }
-  
-  toast('Loading job data...');
-  
-  // if done or error, we just fetch once
-  if (status !== 'running') {
-    const s = await api(`/api/douyin/scrape/${jobId}`);
-    const logBox = document.getElementById('scrape-logs');
-    logBox.innerHTML = (s.logs || []).map(l => `<div class="log-line log-default"><span class="log-msg">${l}</span></div>`).join('');
-    logBox.scrollTop = logBox.scrollHeight;
-    const badge = document.getElementById('scrape-status-badge');
-    
-    if (s.status === 'done') {
-      badge.className = 'badge badge-success'; badge.textContent = 'DONE';
-      if (s.result) {
-        scrapeVideos = s.result.videos || [];
-        renderScrapeResults(s.result);
-      }
-      toast('Loaded completed job.');
-    } else {
-      badge.className = 'badge badge-error'; badge.textContent = 'ERROR';
-      toast('Job failed: ' + (s.error || ''), 'error');
-    }
-    btn.disabled = false;
-    return;
-  }
-  
-  // if running, we start polling
-  const pollId = setInterval(async () => {
-    try {
-      const s = await api(`/api/douyin/scrape/${jobId}`);
-      const logBox = document.getElementById('scrape-logs');
-      logBox.innerHTML = (s.logs || []).map(l => `<div class="log-line log-default"><span class="log-msg">${l}</span></div>`).join('');
-      logBox.scrollTop = logBox.scrollHeight;
-      const badge = document.getElementById('scrape-status-badge');
-      
-      if (s.status === 'done') {
-        clearInterval(pollId);
-        badge.className = 'badge badge-success'; badge.textContent = 'DONE';
-        btn.disabled = false;
-        if (s.result) {
-          scrapeVideos = s.result.videos || [];
-          renderScrapeResults(s.result);
-          // AUTO-GROUP SERIES AFTER RENDER
-          setTimeout(() => { 
-            groupSeriesByAI(); 
-          }, 1500);
-        }
-        toast(`Found ${scrapeVideos.length} videos! Grouping series...`);
-        loadScrapeHistory();
-      } else if (s.status === 'error') {
-        clearInterval(pollId);
-        badge.className = 'badge badge-error'; badge.textContent = 'ERROR';
-        btn.disabled = false;
-        toast('Scrape failed: ' + (s.error || ''), 'error');
-        loadScrapeHistory();
-      }
-    } catch(e) {
-      clearInterval(pollId);
-      btn.disabled = false;
-      toast('Error polling: ' + e.message, 'error');
-    }
-  }, 3000);
 }
 
 async function deleteScrapeJob(jobId) {
@@ -5692,3 +5636,315 @@ async function clearScrapeHistory() {
     }
   } catch(e) { toast('Lỗi: ' + e.message, 'error'); }
 }
+
+async function resumeScrapeJob(jobId, status) {
+  const btn = document.getElementById('btn-scrape');
+  if(btn) btn.disabled = true;
+  document.getElementById('scrape-progress').classList.remove('hidden');
+  document.getElementById('scrape-results').classList.add('hidden');
+  document.getElementById('scrape-logs').innerHTML = '';
+  scrapeSeriesGroups = [];
+  scrapeSeriesSelected = new Set();
+  const seriesBox = document.getElementById('scrape-series-results');
+  if (seriesBox) {
+    seriesBox.classList.add('hidden');
+    seriesBox.innerHTML = '';
+  }
+  
+  toast('Loading job data...');
+  
+  if (status !== 'running') {
+    const s = await api(`/api/douyin/scrape/${jobId}`);
+    const logBox = document.getElementById('scrape-logs');
+    logBox.innerHTML = (s.logs || []).map(l => `<div class="log-line log-default"><span class="log-msg">${l}</span></div>`).join('');
+    logBox.scrollTop = logBox.scrollHeight;
+    const badge = document.getElementById('scrape-status-badge');
+    
+    if (s.status === 'done') {
+      badge.className = 'badge badge-success'; badge.textContent = 'DONE';
+      if (s.result) {
+        scrapeVideos = s.result.videos || [];
+        renderScrapeResults(s.result);
+      }
+      toast('Loaded completed job.');
+    } else {
+      badge.className = 'badge badge-error'; badge.textContent = 'ERROR';
+      toast('Job failed: ' + (s.error || ''), 'error');
+    }
+    if(btn) btn.disabled = false;
+    return;
+  }
+  
+  const pollId = setInterval(async () => {
+    try {
+      const s = await api(`/api/douyin/scrape/${jobId}`);
+      const logBox = document.getElementById('scrape-logs');
+      logBox.innerHTML = (s.logs || []).map(l => `<div class="log-line log-default"><span class="log-msg">${l}</span></div>`).join('');
+      logBox.scrollTop = logBox.scrollHeight;
+      const badge = document.getElementById('scrape-status-badge');
+      
+      if (s.status === 'done') {
+        clearInterval(pollId);
+        badge.className = 'badge badge-success'; badge.textContent = 'DONE';
+        if(btn) btn.disabled = false;
+        if (s.result) {
+          scrapeVideos = s.result.videos || [];
+          renderScrapeResults(s.result);
+          setTimeout(() => { groupSeriesByAI(); }, 1500);
+        }
+        toast(`Found ${scrapeVideos.length} videos!`);
+        loadScrapeHistory();
+      } else if (s.status === 'error') {
+        clearInterval(pollId);
+        badge.className = 'badge badge-error'; badge.textContent = 'ERROR';
+        if(btn) btn.disabled = false;
+        toast('Scrape failed: ' + (s.error || ''), 'error');
+        loadScrapeHistory();
+      }
+    } catch(e) {
+      clearInterval(pollId);
+      if(btn) btn.disabled = false;
+      toast('Error polling: ' + e.message, 'error');
+    }
+  }, 3000);
+}
+
+async function resumeSavedSeriesQueue(folder) {
+    if (!confirm(`Bạn có muốn đẩy các tập chưa làm của Series [${folder}] vào Hàng đợi không?`)) return;
+    try {
+        const res = await api('/api/series');
+        const watchLibraryData = res.series || [];
+        const s = watchLibraryData.find(x => x.series_folder === folder);
+        if (!s || !s.reg_info || !s.reg_info.urls) return toast('Không tìm thấy danh sách link đã lưu của series này!', 'error');
+        
+        let urls = s.reg_info.urls;
+        // filter out completed
+        if (scrapeCompletedUrls instanceof Set) {
+            urls = urls.filter(u => !scrapeCompletedUrls.has(u));
+        } else {
+            // try fetching it
+            const doneRes = await api('/api/projects/completed-urls');
+            if (doneRes.ok && Array.isArray(doneRes.completed)) {
+                scrapeCompletedUrls = new Set(doneRes.completed);
+                urls = urls.filter(u => !scrapeCompletedUrls.has(u));
+            }
+        }
+        
+        if (!urls.length) return toast('Tất cả các tập của Series này đã hoàn thành!', 'error');
+        
+        enqueueUrlsToPipelineInput(urls, `series:${folder}`, {});
+        await startBatchPipeline();
+        toast(`Đã thêm ${urls.length} tập vào Hàng đợi!`);
+    } catch(e) {
+        toast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+async function restartServer() {
+    if(!confirm("Bạn có chắc muốn khởi động lại server không?")) return;
+    try {
+        let res = await fetch('/api/restart', {method: 'POST'});
+        let data = await res.json();
+        toast("Đang khởi động lại server...", "info");
+        setTimeout(() => window.location.reload(), 3000);
+    } catch(e) {
+        toast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+async function shutdownServer() {
+    if(!confirm("Bạn có chắc muốn tắt server không?")) return;
+    try {
+        let res = await fetch('/api/shutdown', {method: 'POST'});
+        let data = await res.json();
+        toast("Đang tắt server...", "info");
+    } catch(e) {
+        toast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// VPN IP Rotation Controls
+// ══════════════════════════════════════════════════════════════
+let vpnPollTimer = null;
+
+async function vpnToggle(enabled) {
+  const toggle = document.getElementById('vpn-toggle');
+  const btn = document.getElementById('vpn-btn-rotate');
+  try {
+    if (enabled) {
+      const interval = parseInt(document.getElementById('vpn-interval').value) || 10;
+      const d = await api('/api/vpn/start', { method: 'POST', body: { interval_minutes: interval } });
+      if (d.error) {
+        toast(d.error, 'error');
+        toggle.checked = false;
+        return;
+      }
+      toast(`VPN rotation started! Interval: ${interval} min, ${d.total_configs} servers`);
+      btn.disabled = false;
+      updateVpnToggleUI(true);
+    } else {
+      await api('/api/vpn/stop', { method: 'POST' });
+      toast('VPN rotation stopping...');
+      btn.disabled = true;
+      updateVpnToggleUI(false);
+    }
+  } catch (e) {
+    toast('VPN error: ' + e.message, 'error');
+    toggle.checked = !enabled;
+  }
+}
+
+function updateVpnToggleUI(enabled) {
+  const text = document.getElementById('vpn-toggle-text');
+  const sub = document.getElementById('vpn-toggle-sub');
+  if (text) {
+    text.textContent = enabled ? 'VPN BẬT' : 'VPN TẮT';
+    text.style.color = enabled ? '#00ff88' : 'var(--text-light)';
+  }
+  if (sub) sub.textContent = enabled ? 'Đang xoay vòng IP tự động' : 'Bấm để bật xoay vòng IP';
+}
+
+async function vpnRotateNow() {
+  try {
+    const d = await api('/api/vpn/rotate-now', { method: 'POST' });
+    if (d.error) return toast(d.error, 'error');
+    toast('Đang đổi IP...', 'info');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function vpnCheckIp() {
+  try {
+    const d = await api('/api/vpn/check-ip');
+    const el = document.getElementById('vpn-current-ip');
+    if (el) el.textContent = d.ip || 'N/A';
+    toast('IP hiện tại: ' + (d.ip || 'N/A'), 'info');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function pollVpnStatus() {
+  try {
+    const d = await api('/api/vpn/status');
+    // Update toggle
+    const toggle = document.getElementById('vpn-toggle');
+    if (toggle && toggle.checked !== d.enabled) {
+      toggle.checked = d.enabled;
+      updateVpnToggleUI(d.enabled);
+    }
+    const btn = document.getElementById('vpn-btn-rotate');
+    if (btn) btn.disabled = !d.enabled;
+
+    // Update stats
+    const ip = document.getElementById('vpn-current-ip');
+    const server = document.getElementById('vpn-current-server');
+    const next = document.getElementById('vpn-next-rotate');
+    const count = document.getElementById('vpn-rotate-count');
+    const total = document.getElementById('vpn-total-servers');
+    if (ip) ip.textContent = d.current_ip || '—';
+    if (server) server.textContent = d.current_server || '—';
+    if (next) next.textContent = d.next_rotate_at || '—';
+    if (count) count.textContent = d.rotate_count || 0;
+    if (total) total.textContent = d.total_servers || 0;
+
+    // Update logs
+    const logBox = document.getElementById('vpn-log-box');
+    if (logBox && d.logs && d.logs.length) {
+      const wasAtBottom = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 30;
+      logBox.innerHTML = d.logs.map(l => {
+        let cls = '';
+        if (l.includes('CONNECTED') || l.includes('THANH CONG')) cls = 'style="color:#00ff88"';
+        else if (l.includes('ERROR') || l.includes('WARNING')) cls = 'style="color:#ff6b6b"';
+        else if (l.includes('Manual rotate') || l.includes('Stopping') || l.includes('Watchdog')) cls = 'style="color:#ffd93d"';
+        return `<div ${cls}>${l.replace(/</g,'&lt;')}</div>`;
+      }).join('');
+      if (wasAtBottom) logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // Also poll watchdog
+    pollWatchdogStatus();
+  } catch (e) { console.warn('VPN poll error', e); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// IP Watchdog Controls
+// ══════════════════════════════════════════════════════════════
+
+async function watchdogToggle(enabled) {
+  const toggle = document.getElementById('watchdog-toggle');
+  try {
+    if (enabled) {
+      const defaultIp = document.getElementById('watchdog-default-ip').value.trim();
+      if (!defaultIp) {
+        toast('Cần nhập IP mặc định trước!', 'error');
+        toggle.checked = false;
+        return;
+      }
+      const triggerMin = parseInt(document.getElementById('watchdog-trigger-min').value) || 15;
+      const d = await api('/api/vpn/watchdog', { method: 'POST', body: { action: 'start', default_ip: defaultIp, trigger_minutes: triggerMin } });
+      if (d.error) {
+        toast(d.error, 'error');
+        toggle.checked = false;
+        return;
+      }
+      toast(`Watchdog đã bật! IP gốc: ${defaultIp}, trigger: ${triggerMin} phút`);
+      updateWatchdogToggleUI(true);
+    } else {
+      await api('/api/vpn/watchdog', { method: 'POST', body: { action: 'stop' } });
+      toast('Watchdog đã tắt');
+      updateWatchdogToggleUI(false);
+    }
+  } catch (e) {
+    toast('Watchdog error: ' + e.message, 'error');
+    toggle.checked = !enabled;
+  }
+}
+
+function updateWatchdogToggleUI(enabled) {
+  const text = document.getElementById('watchdog-toggle-text');
+  const sub = document.getElementById('watchdog-toggle-sub');
+  const badge = document.getElementById('watchdog-status-badge');
+  if (text) {
+    text.textContent = enabled ? 'Watchdog BẬT' : 'Watchdog TẮT';
+    text.style.color = enabled ? '#ffd93d' : 'var(--text)';
+  }
+  if (sub) sub.textContent = enabled ? 'Đang giám sát IP...' : 'Bấm để bật';
+  if (badge) {
+    badge.textContent = enabled ? 'ĐANG CHẠY' : 'TẮT';
+    badge.className = enabled ? 'badge badge-warning' : 'badge badge-error';
+  }
+}
+
+async function pollWatchdogStatus() {
+  try {
+    const d = await api('/api/vpn/watchdog');
+    const toggle = document.getElementById('watchdog-toggle');
+    if (toggle && toggle.checked !== d.enabled) {
+      toggle.checked = d.enabled;
+      updateWatchdogToggleUI(d.enabled);
+    }
+
+    // Populate default IP if we have it from server and field is empty
+    const ipInput = document.getElementById('watchdog-default-ip');
+    if (ipInput && !ipInput.value && d.default_ip) ipInput.value = d.default_ip;
+
+    // Update stats
+    const lastCheck = document.getElementById('watchdog-last-check');
+    const lastIp = document.getElementById('watchdog-last-ip');
+    const elapsed = document.getElementById('watchdog-elapsed');
+
+    if (lastCheck) lastCheck.textContent = d.last_check || '—';
+    if (lastIp) lastIp.textContent = d.last_ip || '—';
+    if (elapsed) {
+      if (d.same_ip_elapsed_sec > 0) {
+        const min = Math.floor(d.same_ip_elapsed_sec / 60);
+        const sec = d.same_ip_elapsed_sec % 60;
+        elapsed.textContent = `${min}p ${sec}s`;
+        elapsed.style.color = min >= 10 ? '#ff6b6b' : '#ffd93d';
+      } else {
+        elapsed.textContent = '—';
+        elapsed.style.color = '';
+      }
+    }
+  } catch (e) { /* silent */ }
+}
+

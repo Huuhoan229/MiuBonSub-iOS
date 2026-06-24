@@ -8,17 +8,14 @@
 <link rel="apple-touch-icon" href="/static/app-icon.svg">
 <title>MiuBon Vietsub Pipeline — Douyin → YouTube Auto</title>
 <meta name="description" content="MiuBon Vietsub Pipeline — Full auto: Douyin download, vocal separation, translation, TTS dubbing, render and upload to YouTube">
-<link rel="stylesheet" href="/static/css/style.css?v=20260606-113338">
+<link rel="stylesheet" href="/static/css/style.css?v=20260602-084327">
 </head>
 <body>
-<div class="glow-orb glow-1"></div>
-<div class="glow-orb glow-2"></div>
-
-<div id="login-wall">
+<div id="login-wall" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-app); z-index:9999; align-items:center; justify-content:center; flex-direction:column; padding:20px;">
   <div class="glow-orb glow-1"></div>
   <div class="glow-orb glow-2"></div>
-  <div class="card" style="width:100%; max-width:400px; text-align:center; position:relative; z-index:10; border-radius: 24px;">
-    <h2 style="margin-bottom:5px; font-size:2rem; font-weight:800; background:linear-gradient(135deg, var(--primary), var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; justify-content:center;">MiuBon Tool</h2>
+  <div class="card" style="width:100%; max-width:400px; text-align:center; position:relative; z-index:10;">
+    <h2 style="margin-bottom:5px; font-size:1.8rem; background:linear-gradient(90deg, #fff, var(--primary)); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">MiuBon Tool</h2>
     <p style="color:var(--text-dim); margin-bottom:20px; font-size:0.9rem;">Vui lòng đăng nhập để sử dụng phần mềm</p>
     
     <div style="display:flex; gap:10px; margin-bottom:20px; background:rgba(255,255,255,0.05); padding:5px; border-radius:12px;">
@@ -39,13 +36,17 @@
     <div id="wall-error" style="color:var(--error); margin-top:15px; font-size:0.85rem; min-height:20px;"></div>
   </div>
 </div>
-<div id="main-app-content">
+<div id="main-app-content" style="display:none; height:100%; overflow:auto;">
+<div class="glow-orb glow-1"></div>
+<div class="glow-orb glow-2"></div>
+
 <div class="app">
-  <!-- Backend Button moved to Settings -->
+  <button class="ios-backend-button" onclick="changeBackendUrl()" title="Đổi Backend PC IP">⚙️ Đổi IP Server</button>
+
   <!-- Demo Sandbox Banner -->
   <div id="demo-banner" class="hidden" style="background: linear-gradient(135deg, rgba(255, 179, 0, 0.15), rgba(255, 81, 0, 0.15)); border: 1px solid rgba(255, 145, 0, 0.25); border-radius: 12px; padding: 14px 20px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #ffe3b3; font-size: 0.88rem; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
     <div style="display: flex; align-items: center; gap: 12px;">
-      <span style="font-size: 1.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">⚡</span>
+      <span style="font-size: 1.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">âš¡</span>
       <div style="line-height: 1.5; text-align: left;">
         <strong style="color: #ffb300; font-weight: 700;">Demo & Reviewer Sandbox Active:</strong> Since the local backend server is offline, the app has entered sandbox mode. You can test the full TikTok & Facebook integration using the interactive OAuth simulators.
       </div>
@@ -53,26 +54,42 @@
     <button class="btn btn-accent btn-sm" onclick="resetDemoModeData()" style="white-space: nowrap; background: linear-gradient(135deg, #ff9100, #ff5100); border: none; color: #fff; font-weight: 600; padding: 6px 14px; border-radius: 6px; box-shadow: 0 4px 12px rgba(255,81,0,0.2); cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1.0)'">Reset Sandbox</button>
   </div>
 
-<!-- Top Header -->
-<header class="glass-header">
-  <div class="header-content">
-    <h1>MiuBon Vietsub</h1>
-    <p>Douyin → YouTube Auto Pipeline</p>
-  </div>
+<header>
+  <h1>🎬 MiuBon Vietsub Pipeline</h1>
+  <p>Douyin → Download → Demucs → Whisper → Translate → TTS → Render → YouTube</p>
 </header>
 
-<!-- Main App Area -->
-<main class="app-content-area">
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" data-tab="pipeline">🚀 Pipeline</button>
+  <button class="tab" data-tab="running">🧭 Running</button>
+  <button class="tab" data-tab="scraper">🔍 Scraper</button>
+  <button class="tab" data-tab="projects">📁 Projects</button>
+  <button class="tab" data-tab="series">📚 Thư viện Series</button>
+  <button class="tab" data-tab="workers" style="display:none;">🪚 Worker Manager</button>
+  <button class="tab" data-tab="watch" onclick="loadWatchLibrary()">▶ Xem Video</button>
+  
+  <button class="tab" data-tab="auth">🔐 Auth</button>
+  <button class="tab" data-tab="glossary">📖 Từ điển</button>
+  <button class="tab" data-tab="ytmanager">🎛 YT Manager</button>
+  <button class="tab" data-tab="ytqueue">📤 YT Queue</button>
+  <button class="tab" data-tab="tiktok">🎵 TikTok</button>
+  <button class="tab" data-tab="facebook">📘 Facebook Reels</button>
+  <button class="tab" data-tab="vpn">🌐 VPN Rotate</button>
+  <button class="tab" data-tab="settings">⚙️ Settings</button>
+</div>
 
 <!-- ═══ PIPELINE TAB ═══ -->
-<div id="tab-pipeline" class="tab-content fade-in active-tab">
-  <div class="segmented-control" style="margin-bottom:16px;">
-    <button class="segment active" onclick="switchTab('pipeline')">Tạo mới</button>
-    <button class="segment" onclick="switchTab('running')">Đang chạy</button>
-  </div>
+<div id="tab-pipeline" class="tab-content fade-in">
   <!-- Status -->
   <div class="card">
-    <h2><span>📊</span> System Status</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+      <h2 style="margin:0"><span>📊</span> System Status</h2>
+      <div class="btn-group" style="margin:0">
+        <button class="btn btn-outline btn-sm" onclick="restartServer()">🔄 Restart</button>
+        <button class="btn btn-danger btn-sm" onclick="shutdownServer()">🛑 Shutdown</button>
+      </div>
+    </div>
     <div id="health-status"><div class="status-row">Loading...</div></div>
   </div>
 
@@ -148,12 +165,8 @@
   <div id="pipeline-result" class="card hidden"></div>
 </div>
 
-<!-- ═══ RUNNING TAB (NOW A SUB-PAGE) ═══ -->
-<div id="tab-running" class="tab-content hidden sub-page">
-  <div class="sub-page-header">
-    <button class="btn btn-outline btn-sm" onclick="switchTab('pipeline')">❮ Back</button>
-    <h3>Đang chạy</h3>
-  </div>
+<!-- ═══ RUNNING TAB ═══ -->
+<div id="tab-running" class="tab-content hidden">
   <div class="card">
     <h2><span>🧭</span> Running Pipelines</h2>
     <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:10px">
@@ -193,6 +206,12 @@
         <label>Pipeline mode</label>
         <input value="Run from old videos first" disabled />
       </div>
+      <div class="form-group">
+        <label>Skip Premium Videos</label>
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input id="scrape-skip-premium" type="checkbox" checked /> Tự động loại bỏ bản Preview/Premium
+        </label>
+      </div>
     </div>
     <div class="btn-group">
       <button class="btn btn-primary" id="btn-scrape" onclick="startScrape()">🔍 Scan Videos</button>
@@ -230,7 +249,7 @@
       <button class="btn btn-accent btn-sm" onclick="translateAllCaptions()">🌐 Translate Captions</button>
       <button class="btn btn-outline btn-sm" id="btn-group-series" onclick="groupSeriesByAI()">AI Group Series (9router)</button>
       <button class="btn btn-outline btn-sm" id="btn-load-ai-group" onclick="loadSavedAIGroup()">Load Saved AI Group</button>
-      <button class="btn btn-outline btn-sm" id="btn-start-series-queue" onclick="startSelectedSeriesQueue()">▶ Start Queue (Selected Series)</button>
+      <button class="btn btn-outline btn-sm" id="btn-start-series-queue" onclick="startSelectedSeriesQueue()">â–¶ Start Queue (Selected Series)</button>
       <button class="btn btn-primary" id="btn-scrape-batch" onclick="startScrapeBatch()">+ Add Selected to Queue (<span id="selected-count">0</span>)</button>
       <button class="btn btn-primary" onclick="startScrapeNewBatch()">+ Add New to Queue (<span id="selected-new-count">0</span>)</button>
     </div>
@@ -272,25 +291,21 @@
   </div>
 </div>
 
-<!-- ═══ SERIES LIBRARY TAB (SUB-PAGE OF PROJECTS) ═══ -->
-<div id="tab-series" class="tab-content hidden sub-page">
-  <div class="sub-page-header">
-    <button class="btn btn-outline btn-sm" onclick="switchTab('projects')">❮ Back</button>
-    <h3>Thư viện Series</h3>
-  </div>
+<!-- ═══ SERIES LIBRARY TAB ═══ -->
+<div id="tab-series" class="tab-content hidden">
   <div class="card">
     <h2><span>📚</span> Thư viện Series <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="loadSeriesLibrary()">🔄 Refresh</button></h2>
     <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">Quản lý tổng quan các Phim Bộ (Series) và Phim Lẻ (Standalone).</p>
-
+    
     <div class="tabs" style="border-bottom:1px solid var(--border); margin-bottom:16px; padding-bottom:0">
       <button class="sub-tab series-sub-tab active" data-subtab="series-list" onclick="switchSeriesSubTab('series-list')" style="border-radius:6px 6px 0 0; border-bottom:none">📺 Phim Bộ (Series) <span id="series-count-badge" class="badge badge-info">0</span></button>
       <button class="sub-tab series-sub-tab" data-subtab="standalone-list" onclick="switchSeriesSubTab('standalone-list')" style="border-radius:6px 6px 0 0; border-bottom:none">🎞 Phim Lẻ (Standalone) <span id="standalone-count-badge" class="badge badge-info">0</span></button>
     </div>
-
+    
     <div id="series-list" class="series-sub-content grid-2">
        <div style="color:var(--text-dim); font-size:0.9rem;">Đang tải Thư viện Series...</div>
     </div>
-
+    
     <div id="standalone-list" class="series-sub-content hidden grid-2">
        <div style="color:var(--text-dim); font-size:0.9rem;">Đang tải Phim lẻ...</div>
     </div>
@@ -299,10 +314,6 @@
 
 <!-- ═══ PROJECTS TAB ═══ -->
 <div id="tab-projects" class="tab-content hidden">
-  <div class="segmented-control" style="margin-bottom:16px;">
-    <button class="segment active" onclick="switchTab('projects')">Projects</button>
-    <button class="segment" onclick="switchTab('series')">Thư viện Series</button>
-  </div>
   <!-- Resume Queue -->
   <div id="resume-queue-card" class="card hidden">
     <h2><span>📋</span> Resume Queue <span id="resume-queue-count" class="badge badge-info">0</span>
@@ -310,7 +321,7 @@
     </h2>
     <div id="resume-queue-list" class="queue-items"></div>
     <div class="btn-group" style="margin-top:12px">
-      <button class="btn btn-primary" id="btn-start-resume-queue" onclick="startResumeQueue()">▶ Start Resume Queue</button>
+      <button class="btn btn-primary" id="btn-start-resume-queue" onclick="startResumeQueue()">> Start Resume Queue</button>
     </div>
   </div>
 
@@ -392,8 +403,20 @@
 <div id="tab-watch" class="tab-content hidden">
   <!-- Grid View -->
   <div id="watch-grid-view">
-    <h3 style="margin-top:0; color:var(--accent);">📺 Thư viện Video</h3>
-    <div id="watch-series-grid" class="watch-grid"></div>
+    <h2 style="margin-top:0; color:var(--accent); display:flex; align-items:center;"><span>📺</span> Thư viện Video <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="loadWatchLibrary()">🔄 Refresh</button></h2>
+    
+    <div class="tabs" style="border-bottom:1px solid var(--border); margin-bottom:16px; padding-bottom:0">
+      <button class="sub-tab watch-sub-tab active" data-subtab="watch-series-list" onclick="switchWatchSubTab('watch-series-list')" style="border-radius:6px 6px 0 0; border-bottom:none">🎬 Phim Bộ (Series) <span id="watch-series-count" class="badge badge-info">0</span></button>
+      <button class="sub-tab watch-sub-tab" data-subtab="watch-standalone-list" onclick="switchWatchSubTab('watch-standalone-list')" style="border-radius:6px 6px 0 0; border-bottom:none">🎥 Phim Lẻ (Standalone) <span id="watch-standalone-count" class="badge badge-info">0</span></button>
+    </div>
+
+    <div id="watch-series-list" class="watch-sub-content">
+      <div id="watch-series-grid" class="watch-grid"></div>
+    </div>
+    
+    <div id="watch-standalone-list" class="watch-sub-content hidden">
+      <div id="watch-standalone-grid" class="watch-grid"></div>
+    </div>
   </div>
 
   <!-- Player View -->
@@ -408,7 +431,7 @@
         <div class="watch-video-container">
           <video id="watch-video-element" controls controlsList="nodownload"></video>
         </div>
-
+        
         <div class="watch-controls-bar">
           <div class="watch-controls-left">
             <button class="watch-ctrl-btn" id="watch-btn-prev" onclick="playPrevEpisode()">❮ Tập trước</button>
@@ -416,7 +439,7 @@
           </div>
         </div>
       </div>
-
+      
       <!-- Right Column (Episodes) -->
       <div class="watch-episodes-panel">
         <div class="watch-episodes-header">
@@ -431,11 +454,79 @@
 </div>
 </div>
 
-<div id="tab-auth" class="tab-content hidden sub-page">
-  <div class="sub-page-header">
-    <button class="btn btn-outline btn-sm" onclick="switchTab('settings')">❮ Back</button>
-    <h3>Auth & Logins</h3>
+<!-- ═══ GLOSSARY TAB ═══ -->
+<div id="tab-glossary" class="tab-content hidden">
+  <div class="card">
+    <h2><span>📖</span> Từ Điển (Glossary)</h2>
+    <p style="font-size:.85rem;color:var(--text-dim);margin-bottom:12px">Quản lý từ điển dịch thuật theo từng bộ phim (Series). Chọn Series để xem và sửa từ điển.</p>
+    
+    <div class="form-group" style="margin-bottom:15px;">
+      <label>Chọn Series (Phim Bộ)</label>
+      <select id="glos-series-select" onchange="loadGlossaryForSelectedSeries()">
+        <option value="">-- Vui lòng chọn Series --</option>
+      </select>
+    </div>
+
+    <div id="glos-workspace" class="hidden">
+      <div class="grid-2" style="margin-bottom:15px; background:rgba(255,255,255,0.05); padding:15px; border-radius:8px;">
+        <div class="form-group">
+          <label>Từ tiếng Trung (Gốc)</label>
+          <input id="glos-source" placeholder="VD: 师傅">
+        </div>
+        <div class="form-group">
+          <label>Nghĩa tiếng Việt (Đích)</label>
+          <input id="glos-target" placeholder="VD: Sư phụ">
+        </div>
+        <div class="btn-group" style="grid-column: span 2; justify-content:flex-end;">
+          <button class="btn btn-primary btn-sm" onclick="addGlossaryItem()">➕ Thêm / Cập nhật</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+        <button class="btn btn-outline btn-sm" onclick="loadGlossaryForSelectedSeries()">🔄 Làm mới</button>
+        <input type="text" id="glos-search" placeholder="Tìm kiếm từ..." onkeyup="filterGlossary()" style="max-width:200px; padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-dark); color:var(--text-light);">
+      </div>
+
+      <div style="max-height:400px;overflow:auto;border:1px solid var(--border);border-radius:8px">
+        <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+          <thead>
+            <tr style="background:rgba(255,255,255,0.04)">
+              <th style="text-align:left;padding:10px">Tiếng Trung</th>
+              <th style="text-align:left;padding:10px">Tiếng Việt</th>
+              <th style="text-align:center;padding:10px;width:100px">Hành động</th>
+            </tr>
+          </thead>
+          <tbody id="glossary-tbody">
+            <tr><td colspan="3" style="padding:15px;text-align:center;color:var(--text-dim)">Vui lòng chọn Series...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
+</div>
+
+<div id="tab-auth" class="tab-content hidden">
+  <!-- MiuBon Account -->
+  <div class="card">
+    <h2><span>👤</span> Tài khoản MiuBon (Watch Progress)</h2>
+    <p style="font-size:.85rem;color:var(--text-dim);margin-bottom:12px">Đăng nhập để lưu và đồng bộ trạng thái xem video (tự động tạo tài khoản nếu chưa có).</p>
+    <div class="grid-2">
+      <div class="form-group">
+        <label>Tên đăng nhập</label>
+        <input id="miubon-username" placeholder="Nhập username..." />
+      </div>
+      <div class="form-group">
+        <label>Mật khẩu</label>
+        <input id="miubon-password" type="password" placeholder="Nhập mật khẩu..." />
+      </div>
+    </div>
+    <div class="btn-group" style="margin-top:10px">
+      <button class="btn btn-primary" onclick="miubonLogin()">🔐 Đăng Nhập</button>
+      <button class="btn btn-outline" onclick="miubonLogout()">Đăng Xuất</button>
+    </div>
+    <div id="miubon-auth-status" style="margin-top:10px;font-size:0.85rem;color:var(--accent);">Chưa đăng nhập.</div>
+  </div>
+
   <!-- Douyin -->
   <div class="card">
     <h2><span>🎵</span> Douyin Login</h2>
@@ -481,17 +572,14 @@
       <button class="btn btn-outline btn-sm" onclick="checkGDriveStatus()">Check Drive</button>
       <button class="btn btn-primary btn-sm" onclick="gdriveLogin()">Login Google Drive</button>
       <button class="btn btn-accent btn-sm" onclick="syncProjectsFromGDrive()">Sync Projects From Drive</button>
+      <button class="btn btn-accent btn-sm" onclick="massUploadVideosGDrive()">Đẩy toàn bộ Video lên Drive</button>
       <button class="btn btn-outline btn-sm" onclick="importGDriveSecrets()">Import Drive JSON</button>
     </div>
   </div>
 </div>
 
 <!-- ═══ YT MANAGER TAB ═══ -->
-<div id="tab-ytmanager" class="tab-content hidden sub-page">
-  <div class="sub-page-header">
-    <button class="btn btn-outline btn-sm" onclick="switchTab('settings')">❮ Back</button>
-    <h3>YouTube Manager</h3>
-  </div>
+<div id="tab-ytmanager" class="tab-content hidden">
   <div class="card">
     <h2><span>🎛</span> YouTube Video Manager</h2>
     <div class="grid-3">
@@ -591,15 +679,11 @@
 </div>
 
 <!-- ═══ YT QUEUE TAB ═══ -->
-<div id="tab-ytqueue" class="tab-content hidden sub-page">
-  <div class="sub-page-header">
-    <button class="btn btn-outline btn-sm" onclick="switchTab('settings')">❮ Back</button>
-    <h3>YouTube Queue</h3>
-  </div>
+<div id="tab-ytqueue" class="tab-content hidden">
   <div class="card">
     <h3>📤 YouTube Upload Queue</h3>
     <p style="font-size:0.9rem; color:var(--text-dim)">Danh sách các video đang chờ tải lên YouTube (do vượt quá Quota hoặc đang được xử lý ngầm).</p>
-
+    
     <div style="margin: 12px 0;">
       <button class="btn btn-outline btn-sm" onclick="loadYTQueue()">🔄 Refresh</button>
       <span id="ytqueue-status" style="font-size:0.8rem; margin-left:10px; color:var(--text-dim);"></span>
@@ -626,11 +710,7 @@
 </div>
 
 <!-- ═══ TIKTOK TAB ═══ -->
-<div id="tab-tiktok" class="tab-content hidden sub-page">
-  <div class="sub-page-header">
-    <button class="btn btn-outline btn-sm" onclick="switchTab('settings')">❮ Back</button>
-    <h3>TikTok Upload</h3>
-  </div>
+<div id="tab-tiktok" class="tab-content hidden">
   <div class="card">
     <h2><span>🎵</span> TikTok Upload Manager</h2>
     <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">
@@ -715,11 +795,7 @@
 </div>
 
 <!-- ═══ FACEBOOK REELS TAB ═══ -->
-<div id="tab-facebook" class="tab-content hidden sub-page">
-  <div class="sub-page-header">
-    <button class="btn btn-outline btn-sm" onclick="switchTab('settings')">❮ Back</button>
-    <h3>Facebook Reels</h3>
-  </div>
+<div id="tab-facebook" class="tab-content hidden">
   <div class="card">
     <h2><span>📘</span> Facebook Reels Upload</h2>
     <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">
@@ -798,25 +874,149 @@
   </div>
 </div>
 
+<!-- ═══ VPN ROTATE TAB ═══ -->
+<div id="tab-vpn" class="tab-content hidden">
+
+  <!-- Control Card -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
+      <h2 style="margin:0"><span>🌐</span> VPN IP Rotation</h2>
+      <button class="btn btn-outline btn-sm" onclick="vpnCheckIp()">🔍 Check IP</button>
+    </div>
+
+    <div class="grid-3">
+      <div class="form-group" style="display:flex; align-items:center; gap:10px;">
+        <label class="vpn-toggle" id="vpn-toggle-label" style="margin:0; flex-shrink:0;">
+          <input type="checkbox" id="vpn-toggle" onchange="vpnToggle(this.checked)">
+          <span class="vpn-toggle-slider"></span>
+        </label>
+        <div>
+          <div id="vpn-toggle-text" style="font-weight:600; font-size:.85rem; color:var(--text)">VPN TẮT</div>
+          <div id="vpn-toggle-sub" style="font-size:.7rem; color:var(--text-dim)">Bấm để bật</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Chu kỳ (phút)</label>
+        <input id="vpn-interval" type="number" min="1" max="120" value="10">
+      </div>
+      <div class="form-group" style="display:flex; align-items:flex-end;">
+        <button class="btn btn-primary btn-sm" onclick="vpnRotateNow()" id="vpn-btn-rotate" disabled>🔄 Đổi IP Ngay</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Card -->
+  <div class="card">
+    <h2 style="margin-bottom:12px"><span>📊</span> Trạng thái</h2>
+    <div class="grid-3" style="grid-template-columns: repeat(5, 1fr);">
+      <div class="form-group" style="text-align:center; background:var(--surface); border-radius:8px; padding:10px 8px; border:1px solid var(--border);">
+        <label style="margin-bottom:4px">🌍 IP hiện tại</label>
+        <div id="vpn-current-ip" style="font-weight:700; font-size:.85rem; color:var(--accent); font-family:'Cascadia Code','Fira Code',monospace; word-break:break-all;">—</div>
+      </div>
+      <div class="form-group" style="text-align:center; background:var(--surface); border-radius:8px; padding:10px 8px; border:1px solid var(--border);">
+        <label style="margin-bottom:4px">🖥 Server</label>
+        <div id="vpn-current-server" style="font-weight:600; font-size:.78rem; color:var(--text); word-break:break-all;">—</div>
+      </div>
+      <div class="form-group" style="text-align:center; background:var(--surface); border-radius:8px; padding:10px 8px; border:1px solid var(--border);">
+        <label style="margin-bottom:4px">⏱ Đổi IP lúc</label>
+        <div id="vpn-next-rotate" style="font-weight:700; font-size:.85rem; color:var(--text);">—</div>
+      </div>
+      <div class="form-group" style="text-align:center; background:var(--surface); border-radius:8px; padding:10px 8px; border:1px solid var(--border);">
+        <label style="margin-bottom:4px">🔄 Số lần đổi</label>
+        <div id="vpn-rotate-count" style="font-weight:700; font-size:.85rem; color:var(--text);">0</div>
+      </div>
+      <div class="form-group" style="text-align:center; background:var(--surface); border-radius:8px; padding:10px 8px; border:1px solid var(--border);">
+        <label style="margin-bottom:4px">📡 Tổng servers</label>
+        <div id="vpn-total-servers" style="font-weight:700; font-size:.85rem; color:var(--text);">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VPN Logs -->
+  <div class="card">
+    <h2 style="margin-bottom:10px"><span>📋</span> VPN Logs</h2>
+    <div class="log-box" id="vpn-log-box" style="max-height:300px; min-height:150px"></div>
+  </div>
+
+  <!-- IP Watchdog -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
+      <h2 style="margin:0"><span>🐕</span> IP Watchdog</h2>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span id="watchdog-status-badge" class="badge badge-error" style="font-size:.7rem">TẮT</span>
+      </div>
+    </div>
+    <p style="font-size:.8rem; color:var(--text-dim); margin-bottom:14px">
+      Tự động giám sát IP. Nếu IP = IP gốc trong một khoảng thời gian → auto bật VPN rotate. Nếu IP ≠ IP gốc → auto tắt VPN.
+    </p>
+    <div class="grid-3">
+      <div class="form-group" style="display:flex; align-items:center; gap:10px;">
+        <label class="vpn-toggle" style="margin:0; flex-shrink:0;">
+          <input type="checkbox" id="watchdog-toggle" onchange="watchdogToggle(this.checked)">
+          <span class="vpn-toggle-slider"></span>
+        </label>
+        <div>
+          <div id="watchdog-toggle-text" style="font-weight:600; font-size:.85rem; color:var(--text)">Watchdog TẮT</div>
+          <div id="watchdog-toggle-sub" style="font-size:.7rem; color:var(--text-dim)">Bấm để bật</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>IP mặc định (gốc)</label>
+        <input id="watchdog-default-ip" placeholder="Nhập IP gốc của bạn, vd: 42.118.149.81" value="42.118.149.81">
+      </div>
+      <div class="form-group">
+        <label>Kích hoạt VPN sau (phút)</label>
+        <input id="watchdog-trigger-min" type="number" min="1" max="120" value="15">
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top:8px; grid-template-columns: repeat(3, 1fr);">
+      <div class="form-group" style="text-align:center; background:var(--surface); border-radius:8px; padding:8px; border:1px solid var(--border);">
+        <label style="margin-bottom:2px">🕐 Check lần cuối</label>
+        <div id="watchdog-last-check" style="font-weight:600; font-size:.82rem;">—</div>
+      </div>
+      <div class="form-group" style="text-align:center; background:var(--surface); border-radius:8px; padding:8px; border:1px solid var(--border);">
+        <label style="margin-bottom:2px">🌐 IP phát hiện</label>
+        <div id="watchdog-last-ip" style="font-weight:600; font-size:.82rem; color:var(--accent); word-break:break-all;">—</div>
+      </div>
+      <div class="form-group" style="text-align:center; background:var(--surface); border-radius:8px; padding:8px; border:1px solid var(--border);">
+        <label style="margin-bottom:2px">⏳ IP gốc liên tục</label>
+        <div id="watchdog-elapsed" style="font-weight:600; font-size:.82rem;">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ WORKER MANAGER TAB ═══ -->
+<div id="tab-workers" class="tab-content fade-in">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+      <h2 style="margin:0"><span>🪚</span> Quản lý Thợ (Background Workers)</h2>
+      <button class="btn btn-outline btn-sm" onclick="fetchWorkers()">🔄 Làm mới</button>
+    </div>
+    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:12px">
+      Danh sách các tiến trình "Thợ" đang chạy ngầm trong hệ thống. Hệ thống tự động bật/tắt thợ nếu bạn chọn chế độ Master-Worker.
+    </p>
+    <div id="workers-list" style="display:flex; flex-direction:column; gap:8px;">
+      <!-- Nơi hiển thị các Worker -->
+    </div>
+  </div>
+</div>
+
 <!-- ═══ SETTINGS TAB ═══ -->
 <div id="tab-settings" class="tab-content hidden">
-  <div class="card settings-menu-card">
-    <h2 style="margin-bottom:16px;">Tùy chọn & Menu</h2>
-    <button class="btn btn-outline w-full text-left" style="justify-content: flex-start; margin-bottom: 8px;" onclick="switchTab('auth')">🔐 Đăng nhập & Auth</button>
-    <button class="btn btn-outline w-full text-left" style="justify-content: flex-start; margin-bottom: 8px;" onclick="switchTab('ytmanager')">🎛 YouTube Manager</button>
-    <button class="btn btn-outline w-full text-left" style="justify-content: flex-start; margin-bottom: 8px;" onclick="switchTab('ytqueue')">📤 YouTube Queue</button>
-    <button class="btn btn-outline w-full text-left" style="justify-content: flex-start; margin-bottom: 8px;" onclick="switchTab('tiktok')">🎵 TikTok Upload</button>
-    <button class="btn btn-outline w-full text-left" style="justify-content: flex-start; margin-bottom: 8px;" onclick="switchTab('facebook')">📘 Facebook Reels</button>
-    <button class="btn btn-accent w-full text-left" style="justify-content: flex-start; margin-bottom: 8px; margin-top: 16px;" onclick="changeBackendUrl()">⚙️ Đổi IP Máy Chủ (Backend)</button>
-  </div>
   <div class="card">
     <h2><span>🔑</span> API & General</h2>
-    <div class="grid-2">
-      <div class="form-group"><label>Gemini API Key (primary)</label><div style="display:flex;gap:8px;align-items:center"><input id="cfg-api_key" type="password" placeholder="AIza..." style="flex:1"><button class="btn btn-outline btn-sm" id="btn-check-api" onclick="checkApiKey()" style="white-space:nowrap">🔑 Check</button><button class="btn btn-outline btn-sm" id="btn-check-adc" onclick="checkADC()" style="white-space:nowrap" title="Check Google Cloud ADC (Vertex AI)">☁️ Check ADC</button></div><div id="api-key-status" style="margin-top:6px;font-size:.78rem"></div></div>
+    <div class="grid-3">
+      <div class="form-group" style="grid-column: 1 / -1; background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+        <label style="color: var(--accent); font-weight: bold; font-size: 1.05rem;">Cách vận hành hệ thống (System Architecture)</label>
+        <select id="cfg-operation_mode" onchange="toggleWorkerTab()" style="font-size: 1rem; padding: 8px;">
+          <option value="all_in_one" selected>All-in-One (Cổ điển, gộp chung tất cả vào 1 cửa sổ)</option>
+          <option value="master_worker">Master-Worker (Khuyên dùng: Tự động quản lý các "Thợ" ẩn chạy ngầm)</option>
+        </select>
+      </div>
+
       <div class="form-group"><label>Channel Name</label><input id="cfg-channel_name" value="MiuBonVietsub"></div>
-      <div class="form-group"><label>YouTube Title Mode</label><select id="cfg-youtube_title_mode"><option value="ai" selected>AI Clickbait (current)</option><option value="series_template">Series Template (dong bo)</option></select></div>
-      <div class="form-group"><label>YouTube Series Name (for template)</label><input id="cfg-youtube_series_name" placeholder="Dai Su Huynh Van Dao Tong"></div>
-      <div class="form-group"><label>YouTube Title Suffix (for template)</label><input id="cfg-youtube_title_suffix" placeholder="2K Sub"></div>
+      <div class="form-group"><label>YouTube Title Mode</label><select id="cfg-youtube_title_mode"><option value="ai" selected>AI Clickbait (current)</option></select></div>
       <div class="form-group">
         <label>YouTube Upload Strategy</label>
         <select id="cfg-youtube_upload_strategy">
@@ -824,25 +1024,49 @@
           <option value="sequential_fallback">Sequential Fallback (Dùng cạn từng kênh)</option>
         </select>
       </div>
-      <div class="form-group"><label>Gemini Model</label><select id="cfg-gemini_model"><option>gemini-2.5-flash</option><option>gemini-2.0-flash</option><option>gemini-2.5-pro</option></select></div>
+
       <div class="form-group"><label>Whisper Model</label><select id="cfg-whisper_model"><option>tiny</option><option>base</option><option>small</option><option selected>medium</option><option>large-v2</option><option>large-v3</option></select></div>
       <div class="form-group"><label>Source Language</label><input id="cfg-source_lang" value="zh"></div>
       <div class="form-group"><label>Target Language</label><input id="cfg-target_lang" value="vi"></div>
-      <div class="form-group"><label>Translation Style</label><select id="cfg-translation_style"><option>Mặc định</option><option>Bựa, Hài</option><option>Nghiêm túc</option><option>Tu tiên, Kiếm hiệp</option><option>Hệ thống, Võng du</option><option>Gen Z</option></select></div>
-      <div class="form-group"><label>Translation Provider</label><select id="cfg-translation_provider"><option value="auto">Auto Fallback (Cloud → Local)</option><option value="azure">Azure Translator (Cloud)</option><option value="deepl">DeepL (Cloud)</option><option value="9router" selected>9Router (Cloud Proxy)</option><option value="gemini">Gemini (Cloud)</option><option value="ollama">Ollama (Local/Free)</option></select></div>
-      <div class="form-group"><label>Provider Order (for Auto)</label><input id="cfg-translation_provider_order" value="9router,ollama,azure,deepl,gemini" placeholder="9router,ollama,azure,deepl,gemini"></div>
-      <div class="form-group"><label>Local Translation Model (Ollama)</label><input id="cfg-local_translation_model" value="qwen3:8b" placeholder="qwen3:8b"></div>
-      <div class="form-group"><label>Local Translation API URL</label><input id="cfg-local_translation_api_url" value="http://127.0.0.1:11434/api/chat" placeholder="http://127.0.0.1:11434/api/chat"></div>
-      <div class="form-group"><label>Local Translation Timeout (sec)</label><input id="cfg-local_translation_timeout" type="number" value="180" min="30" max="1200"></div>
-      <div class="form-group"><label>Azure Translator Key</label><input id="cfg-azure_translator_key" type="password" placeholder="Azure key..."></div>
-      <div class="form-group"><label>Azure Translator Endpoint</label><input id="cfg-azure_translator_endpoint" value="https://api.cognitive.microsofttranslator.com" placeholder="https://api.cognitive.microsofttranslator.com"></div>
-      <div class="form-group"><label>Azure Translator Region</label><input id="cfg-azure_translator_region" placeholder="eastus (nếu resource yêu cầu)"></div>
-      <div class="form-group"><label>DeepL API Key</label><input id="cfg-deepl_api_key" type="password" placeholder="DeepL key..."></div>
-      <div class="form-group"><label>DeepL API URL</label><input id="cfg-deepl_api_url" value="https://api-free.deepl.com/v2/translate" placeholder="https://api-free.deepl.com/v2/translate"></div>
+      <div class="form-group"><label>Translation Style</label><select id="cfg-translation_style"><option>Mặc định</option><option>Bựa, Hài</option><option>Tu tiên bựa</option><option>Nghiêm túc</option><option>Tu tiên, Kiếm hiệp</option><option>Hệ thống, Võng du</option><option>Gen Z</option></select></div>
+      <div class="form-group"><label>Translation Provider</label><select id="cfg-translation_provider"><option value="auto">Auto Fallback (Cloud → Local)</option><option value="9router" selected>9Router (Cloud Proxy)</option><option value="webai">WebAI-to-API (Local Proxy)</option></select></div>
+      <div class="form-group"><label>Provider Order (for Auto)</label><input id="cfg-translation_provider_order" value="9router,webai" placeholder="9router,webai"></div>
+
       <div class="form-group"><label>9Router URL</label><input id="cfg-ninerouter_url" value="http://127.0.0.1:20128" placeholder="http://127.0.0.1:20128"></div>
       <div class="form-group"><label>9Router API Key (optional)</label><input id="cfg-ninerouter_key" type="password" placeholder="9router key (nếu có)"></div>
       <div class="form-group"><label>9Router Model (optional)</label><input id="cfg-ninerouter_model" placeholder="để trống = tự lấy model combo/đầu tiên"></div>
       <div class="form-group"><label>9Router Timeout (sec)</label><input id="cfg-ninerouter_timeout" type="number" value="180" min="30" max="1200"></div>
+      
+      <!-- WebAI-to-API Integration -->
+      <div style="grid-column: 1 / -1; margin-top: 15px; border-bottom: 1px solid var(--border); padding-bottom: 5px;">
+        <h3 style="color: var(--accent); font-size: 0.95rem;">WebAI-to-API (Fallback)</h3>
+      </div>
+      <div class="form-group">
+        <label>Bật Tự động Fallback</label>
+        <div style="display:flex; align-items:center;">
+          <input type="checkbox" id="cfg-enable_webai_fallback" style="width:20px;height:20px;margin-right:10px;">
+          <span style="font-size:13px; color:#666;">Tự động chuyển sang WebAI khi 9Router Timeout/Lỗi</span>
+        </div>
+      </div>
+      <div class="form-group"><label>WebAI URL</label><input id="cfg-webai_url" value="http://127.0.0.1:6969" placeholder="http://127.0.0.1:6969"></div>
+      <div class="form-group">
+        <label>WebAI Model</label>
+        <div style="display:flex;gap:8px">
+          <input id="cfg-webai_model" value="gemini-3-flash" placeholder="Ví dụ: gemini-3-flash" style="flex:1" list="webai-model-list">
+          <datalist id="webai-model-list"></datalist>
+          <button class="btn btn-outline btn-sm" onclick="fetchWebAIModels()" style="white-space:nowrap" title="Lấy danh sách model từ WebAI">🔄 Get Models</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="grid-column: 1 / -1; display:flex; align-items:center; gap:10px; margin-top:10px; margin-bottom: 20px;">
+        <button id="btn-test-translation" onclick="testTranslationApi()" class="btn btn-outline btn-sm" style="height:36px;white-space:nowrap">🌐 Test Translation API</button>
+        <div id="translation-test-status" style="font-size:.8rem;color:var(--text-dim);line-height:1.4"></div>
+      </div>
+
+
+      <div style="grid-column: 1 / -1; margin-top: 15px; border-bottom: 1px solid var(--border); padding-bottom: 5px;">
+        <h3 style="color: var(--primary); font-size: 0.95rem;">TikTok / Facebook Upload</h3>
+      </div>
       <div class="form-group"><label>TikTok Upload Provider</label><select id="cfg-tiktok_upload_provider"><option value="official_api">Official API (recommended)</option><option value="playwright">Browser Automation</option></select></div>
       <div class="form-group"><label>TikTok API Client Key</label><input id="cfg-tiktok_api_client_key" placeholder="TikTok client key"></div>
       <div class="form-group"><label>TikTok API Client Secret</label><input id="cfg-tiktok_api_client_secret" type="password" placeholder="TikTok client secret"></div>
@@ -866,13 +1090,10 @@
       <div class="form-group"><label>Facebook API Proxy (optional)</label><input id="cfg-facebook_api_proxy" placeholder="socks5://127.0.0.1:40000"></div>
       <div class="form-group"><label>Facebook Reels Max Minutes / Part</label><input id="cfg-facebook_reels_max_minutes" type="number" min="1" max="120" value="10"></div>
       <div class="form-group"><label>Facebook Reels Auto Split</label><select id="cfg-facebook_reels_auto_split"><option value="true">true</option><option value="false">false</option></select></div>
-      <div class="form-group" style="display:flex;align-items:flex-end;gap:10px">
-        <button id="btn-test-translation" onclick="testTranslationApi()" class="btn btn-outline btn-sm" style="height:36px;white-space:nowrap">🌐 Test Translation API</button>
-        <div id="translation-test-status" style="font-size:.8rem;color:var(--text-dim);line-height:1.4"></div>
-      </div>
-      <div class="form-group"><label>TTS Engine</label><select id="cfg-tts_engine" onchange="toggleTtsOptions()"><option value="gemini" selected>🤖 Gemini TTS (API)</option><option value="vieneu">🏠 VieNeu (Local/Offline)</option><option value="xtts">🔊 XTTS v2 (Local/Free — Voice Clone)</option><option value="capcut">✂️ CapCut TTS (Local Server)</option></select></div>
-      <div class="form-group"><label>TTS Voice (Gemini)</label><input id="cfg-tts_voice" value="Zephyr" placeholder="Zephyr, Kore, Puck..."></div>
+      <div class="form-group"><label>TTS Engine</label><select id="cfg-tts_engine" onchange="toggleTtsOptions()"><option value="vieneu" selected>🏠 VieNeu (Local/Offline)</option><option value="capcut">✂️ CapCut TTS (Local Server)</option><option value="capcut_native">✂️ CapCut TTS (Native PC - Nhanh/Ổn định)</option></select></div>
       <div class="form-group" id="capcut-voice-group" style="display:none"><label>CapCut Voice ID</label><input id="cfg-capcut_voice" list="capcut-voices" value="BV074_streaming" placeholder="BV074_streaming"><datalist id="capcut-voices"><optgroup label="Giọng Mới / Hot (CapCut)"><option value="BV561_streaming">Duy Bắc (Nam)</option><option value="BV563_streaming">Hà Nữ (Nữ)</option><option value="BV564_streaming">Sài Nữ (Nữ)</option><option value="BV560_streaming">Anh Dũng (Nam)</option><option value="BV562_streaming">Chí Mai (Nữ)</option><option value="BV075_streaming">Giọng nam tự tin</option><option value="BV074_streaming">Cô Gái Hoạt Ngôn (Cute Female)</option></optgroup><optgroup label="Giọng Cơ Bản"><option value="BV016_streaming">Giọng nữ phổ thông</option><option value="BV011_streaming">Nam Trầm (Kể chuyện)</option><option value="BV012_streaming">Nam Thanh Niên</option></optgroup></datalist></div>
+      <div class="form-group" id="capcut-workers-group" style="display:none"><label>CapCut Workers (Số luồng đồng thời)</label><input id="cfg-capcut_tts_workers" type="number" min="1" max="10" value="2" placeholder="2"></div>
+      <div class="form-group" id="capcut-pipeline-limit-group" style="display:none"><label>Giới hạn luồng Pipeline CapCut TTS</label><input id="cfg-capcut_tts_pipeline_limit" type="number" min="1" max="10" value="2" placeholder="2"></div>
       <div class="form-group" id="vieneu-mode-group" style="display:none">
         <label>VieNeu Mode</label>
         <select id="cfg-vieneu_mode" onchange="toggleTtsOptions()">
@@ -892,8 +1113,9 @@
         </select>
       </div>
       <div class="form-group"><label>Demucs Model</label><select id="cfg-demucs_model"><option selected>htdemucs</option><option>htdemucs_ft</option></select></div>
+
       <div class="form-group" id="vieneu-ref-group" style="display:none"><label>VieNeu Reference Voice (WAV/MP3, 5-10s)</label><input id="cfg-vieneu_ref_voice" value="sample.WAV" placeholder="sample.WAV"></div>
-      <div class="form-group" id="xtts-ref-group" style="display:none"><label>🔊 XTTS Reference Voice (WAV/MP3, 5-30s — for voice clone)</label><input id="cfg-xtts_ref_voice" value="sample.WAV" placeholder="sample.WAV"></div>
+
       <div class="form-group"><label>🎚️ TTS Speed (0.5 - 2.5x)</label><input id="cfg-tts_speed" type="number" min="0.5" max="2.5" step="0.05" value="1.00" placeholder="1.00"></div>
       <div class="form-group"><label>🎵 TTS Pitch / Cao độ (0.7 - 1.5x)</label><input id="cfg-tts_pitch" type="number" min="0.7" max="1.5" step="0.05" value="1.00" placeholder="1.00"></div>
       <div class="form-group"><label>🔊 TTS Volume / Âm lượng (0.2 - 3.0x)</label><input id="cfg-tts_volume" type="number" min="0.2" max="3.0" step="0.05" value="1.00" placeholder="1.00"></div>
@@ -911,11 +1133,7 @@
         <audio id="tts-test-audio" controls style="margin-left:12px;height:32px;vertical-align:middle;display:none"></audio>
       </div>
     </div>
-    <div class="form-group" style="margin-top:12px">
-      <label>🔑 Extra API Keys (for TTS/Translation rotation — one key per line)</label>
-      <textarea id="cfg-api_keys" rows="3" placeholder="AIzaSy...key2&#10;AIzaSy...key3&#10;AIzaSy...key4" style="font-family:monospace;font-size:.8rem"></textarea>
-      <p style="font-size:.72rem;color:var(--text-dim);margin-top:4px">Add multiple free Gemini API keys to avoid rate limits. Keys rotate automatically when one hits 429.</p>
-    </div>
+
   </div>
 
   <div class="card" style="border:1px solid rgba(255,127,0,0.25);background:rgba(255,127,0,0.04)">
@@ -954,8 +1172,23 @@
       <div class="form-group"><label>Blur Sigma</label><input id="cfg-blur_sigma" type="number" value="20"></div>
       <div class="form-group"><label>Mask Height (px)</label><input id="cfg-mask_h" type="number" value="100"></div>
       <div class="form-group"><label>Mask Y Position (%)</label><input id="cfg-mask_y_pct" type="number" step="0.1" value="83.5"></div>
+      <div class="form-group" style="display:flex;align-items:flex-end;margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0" title="Tự động quét để tìm vị trí sub tiếng Trung và thay thế Mask Y/Height">
+          <input type="checkbox" id="cfg-auto_mask_position">
+          Auto Detect Subtitles Pos
+        </label>
+      </div>
       <div class="form-group"><label>Font Video</label><input id="cfg-font_name" value="UTM_Bebas.ttf"></div>
       <div class="form-group"><label>Font Thumbnail</label><input id="cfg-font_name_thumb" value="FS Boom Boom.ttf"></div>
+      <div class="form-group">
+        <label>Thumbnail Mode</label>
+        <select id="cfg-thumbnail_mode">
+          <option value="webai_full">WebAI: Tạo Full (Cả Nền + Nhân vật + Chữ)</option>
+          <option value="ai_rembg">Rembg + AI: Tạo Nền + Cắt Nhân vật</option>
+          <option value="ai_background_only">Background AI: Tạo Nền + Không Cắt + Chữ</option>
+          <option value="smart_frame">Video Frame: Cắt cảnh + Chữ</option>
+        </select>
+      </div>
       <div class="form-group"><label>Font Size</label><input id="cfg-font_size" type="number" value="28"></div>
       <div class="form-group"><label>Margin V</label><input id="cfg-margin_v" type="number" value="16"></div>
       <div class="form-group"><label>Rotate (°)</label><input id="cfg-rotate_deg" type="number" step="0.1" value="0.5"></div>
@@ -964,6 +1197,7 @@
       <div class="form-group"><label>Số pipeline chạy đồng thời</label><input id="cfg-batch_pipeline_concurrency" type="number" min="1" max="8" value="2"></div>
       <div class="form-group"><label>Số URL download tối đa</label><input id="cfg-download_concurrency" type="number" min="1" max="4" value="2"></div>
       <div class="form-group"><label>Số tiến trình GPU tối đa</label><input id="cfg-gpu_heavy_concurrency" type="number" min="1" max="4" value="1"></div>
+
       <div class="form-group"><label>Retry tối đa / URL</label><input id="cfg-pipeline_retry_max" type="number" min="1" max="10" value="2"></div>
     </div>
     <div style="display:flex;gap:20px;margin-top:8px">
@@ -1042,7 +1276,7 @@
       <h2 style="font-size: 1.45rem; color: #fff; margin-bottom: 6px; font-weight: 700; letter-spacing: -0.02em;">Authorize MiuBon Pipeline</h2>
       <p style="font-size: 0.88rem; color: var(--text-dim); line-height: 1.4;">The application requests authorization to connect your TikTok creator account.</p>
     </div>
-
+    
     <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 12px; padding: 18px; margin-bottom: 24px;">
       <h4 style="font-size: 0.92rem; color: #fff; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-weight: 600;">
         <span style="font-size: 1rem;">📋</span> Requested Scopes:
@@ -1062,7 +1296,7 @@
         </li>
       </ul>
     </div>
-
+    
     <p style="font-size: 0.78rem; color: rgba(255,255,255,0.4); margin-bottom: 24px; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; text-align: center;">
       🔒 Authorization occurs via secure simulated callback. No real credentials or sensitive data are stored.
     </p>
@@ -1074,78 +1308,53 @@
   </div>
 </div>
 
-<!-- ═══ WATCH PANEL MODAL (Ported from MiuBonWatch-iOS) ═══ -->
-<section id="watchPanel" class="watch-modal hidden">
-  <div class="watch-modal-backdrop" id="closeWatchBackdrop" onclick="closeWatchPlayer()"></div>
-  <div class="watch-modal-content">
-    <div class="drag-handle"></div>
-    <div class="watch-head">
-      <div class="titles">
-        <span class="eyebrow" id="watchKind">SERIES</span>
-        <h2 id="watchTitle">Tên Phim</h2>
-        <p id="watchMeta" class="muted">Meta</p>
+</div>
+
+<script src="/static/js/app.js?v=20260602-084327"></script>
+
+<!-- ═══ SERIES GLOSSARY MODAL ═══ -->
+<div id="series-glossary-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeSeriesGlossaryModal()">
+  <div class="modal-content" style="max-width: 600px;">
+    <div class="modal-header">
+      <h2><span>📖</span> Từ Điển (Glossary): <span id="glossary-series-name"></span></h2>
+      <button class="modal-close" onclick="closeSeriesGlossaryModal()">✕</button>
+    </div>
+    <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:12px">
+      Thêm các cụm từ cần dịch thống nhất (Ví dụ: Tên nhân vật, chiêu thức, địa danh...). Cột bên trái là từ gốc (Tiếng Trung/Pinyin), cột bên phải là nghĩa Tiếng Việt.
+    </p>
+    
+    <div style="max-height: 400px; overflow-y: auto; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; padding: 10px;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <th style="padding: 8px; text-align: left; width: 45%;">Từ gốc (Tiếng Trung)</th>
+            <th style="padding: 8px; text-align: left; width: 45%;">Nghĩa Tiếng Việt</th>
+            <th style="padding: 8px; text-align: center; width: 10%;">Xoá</th>
+          </tr>
+        </thead>
+        <tbody id="glossary-table-body">
+          <!-- Rows injected here -->
+        </tbody>
+      </table>
+      <div style="margin-top: 10px; text-align: center;">
+        <button class="btn btn-outline btn-sm" onclick="addGlossaryRow()">➕ Thêm Từ</button>
+        <button class="btn btn-accent btn-sm" id="btn-extract-glossary" onclick="extractGlossaryAI()">✨ Nhờ AI tự động trích xuất</button>
       </div>
-      <button id="closeWatchBtn" class="close-btn" aria-label="Close" onclick="closeWatchPlayer()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-      </button>
     </div>
-
-    <div class="server-pills">
-      <label class="pill"><input type="radio" name="serverMode" value="cloudflare" checked onchange="playCurrent()" /><span>Cloudflare</span></label>
-      <label class="pill"><input type="radio" name="serverMode" value="gdrive" onchange="playCurrent()" /><span>Drive</span></label>
-    </div>
-    <p id="serverHint" class="hint"></p>
-
-    <div class="video-container">
-      <video id="videoPlayer" playsinline webkit-playsinline controls preload="metadata"></video>
-    </div>
-
-    <div class="episode-actions">
-      <button id="prevBtn" class="sec-btn" onclick="playPrevEpisode()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="15 18 9 12 15 6"></polyline></svg> Tập trước
-      </button>
-      <button id="nextBtn" class="sec-btn" onclick="playNextEpisode()">
-        Tập tiếp <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="9 18 15 12 9 6"></polyline></svg>
-      </button>
-    </div>
-
-    <div class="episode-list-section">
-      <div class="episode-search-box">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input id="episodeSearch" placeholder="Tìm kiếm tập..." onkeyup="renderEpisodes()" />
-      </div>
-      <div id="episodeGrid" class="episode-grid"></div>
+    
+    <div class="modal-actions" style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px;">
+      <button class="btn btn-outline" onclick="closeSeriesGlossaryModal()">Hủy</button>
+      <button class="btn btn-primary" onclick="saveSeriesGlossary()">💾 Lưu Lại</button>
     </div>
   </div>
-</section>
-
-<!-- BOTTOM NAVIGATION BAR -->
-<nav class="bottom-tabs glass-nav" aria-label="Main tabs">
-  <button class="tab active" data-tab="pipeline" onclick="switchTab('pipeline')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-    <span>Pipeline</span>
-  </button>
-  <button class="tab" data-tab="scraper" onclick="switchTab('scraper')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-    <span>Scraper</span>
-  </button>
-  <button class="tab" data-tab="projects" onclick="switchTab('projects')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-    <span>Projects</span>
-  </button>
-  <button class="tab" data-tab="watch" onclick="switchTab('watch')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-    <span>Phim</span>
-  </button>
-  <button class="tab" data-tab="settings" onclick="switchTab('settings')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-    <span>Cài đặt</span>
-  </button>
-</nav>
-
-</main> <!-- /app-content-area -->
-
-<script src="/static/js/app.js?v=20260606-113338"></script>
 </div>
+
 </body>
 </html>
+
+
+
+
+
+
+
