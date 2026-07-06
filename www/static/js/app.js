@@ -7,6 +7,7 @@
     // Nếu chạy trên localhost hoặc Vercel, dùng đường dẫn tương đối (để Vercel tự proxy)
     // Nếu chạy trên host khác (miubon.xyz), trỏ thẳng về Backend nhà
     const apiBase = (isLocal || isVercel) ? '' : 'https://api-mbvietsub.miubon.xyz';
+    window.MBV_API_BASE = apiBase;
     
     if (apiBase !== '') {
         const originalFetch = window.fetch;
@@ -44,6 +45,19 @@ window.changeBackendUrl = function() {
         window.location.reload();
     }
 };
+
+function apiAssetUrl(path) {
+  if (!path) return path;
+  const raw = String(path);
+  if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
+  const normalizedPath = raw.startsWith('/') ? raw : '/' + raw;
+  const base = (API || window.MBV_API_BASE || '').replace(/\/+$/, '');
+  return base ? base + normalizedPath : normalizedPath;
+}
+
+function projectApiPath(projectId, suffix = '') {
+  return `/api/project/${encodeURIComponent(projectId || '')}${suffix}`;
+}
 
 const safeStr = (s) => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -1315,7 +1329,7 @@ function showResult(r) {
       <div class="status-row">📤 YouTube: ${r.youtube?.url || 'Not uploaded'}</div>
     </div>
     <div class="btn-group">
-      ${r.final_video ? `<a href="/api/project/${r.project_id}/file/final_video.mp4" class="btn btn-primary btn-sm">⬇ Download Video</a>` : ''}
+      ${r.final_video ? `<a href="${apiAssetUrl(projectApiPath(r.project_id, '/file/final_video.mp4'))}" class="btn btn-primary btn-sm">⬇ Download Video</a>` : ''}
       ${r.youtube?.url ? `<a href="${r.youtube.url}" target="_blank" class="btn btn-accent btn-sm">â–¶ Watch on YouTube</a>` : ''}
     </div>
   `;
@@ -1639,7 +1653,7 @@ async function openProjectDetail(projectName) {
         <div class="file-icon">${icons[f.type] || '📄'}</div>
         <div class="file-name" title="${f.name}">${f.name}</div>
         <div class="file-size">${f.size_human}</div>
-        <a class="file-dl" href="/api/project/${pid}/file/${f.name}" download>⬇</a>
+        <a class="file-dl" href="${apiAssetUrl(projectApiPath(pid, '/file/' + encodeURIComponent(f.name || '')))}" download>⬇</a>
       </div>
     `).join('') || '<p style="color:var(--text-dim);padding:12px">No files</p>';
 
@@ -1674,7 +1688,7 @@ function closeProjectModal() {
 function watchProjectVideo() {
   if (!currentProjectName) return;
   // Assume final_video.mp4 is the main output. If not, open any video.
-  const url = `/api/project/${currentProjectName}/stream/preview`;
+  const url = apiAssetUrl(projectApiPath(currentProjectName, '/stream/preview'));
   window.open(url, '_blank');
 }
 
@@ -4625,7 +4639,7 @@ function renderSeriesCard(s) {
     const ep_max = s.episode_max || '?';
     
     const latest = s.latest_episode || {};
-    const thumb = latest.thumbnail ? `/api/project/${encodeURIComponent(latest.project_name)}/file/thumbnail.jpg` : '';
+    const thumb = latest.thumbnail ? apiAssetUrl(projectApiPath(latest.project_name, '/file/thumbnail.jpg')) : '';
     
     const renderPct = total > 0 ? Math.round((rendered / total) * 100) : 0;
     const uploadPct = total > 0 ? Math.round((uploaded / total) * 100) : 0;
@@ -4671,7 +4685,7 @@ function renderSeriesCard(s) {
 function renderStandaloneCard(p) {
     const meta = p.metadata || {};
     const title = meta.title || p.douyin_meta?.douyin_title || p.project_name;
-    const thumb = p.thumbnail ? `/api/project/${encodeURIComponent(p.project_name)}/file/thumbnail.jpg` : '';
+    const thumb = p.thumbnail ? apiAssetUrl(projectApiPath(p.project_name, '/file/thumbnail.jpg')) : '';
     
     let statusText = 'Downloaded';
     let statusColor = 'var(--text-dim)';
@@ -5027,7 +5041,7 @@ async function loadWatchLibrary() {
         let thumbUrl = '/static/placeholder.jpg';
         let latestEp = s.episodes[0];
         if (latestEp && latestEp.thumbnail) {
-          thumbUrl = '/api/project/' + latestEp.project_id + '/stream/thumbnail.jpg';
+          thumbUrl = apiAssetUrl(projectApiPath(latestEp.project_id, '/stream/thumbnail.jpg'));
         } else if (latestEp && latestEp.youtube && latestEp.youtube.videoId) {
           thumbUrl = 'https://img.youtube.com/vi/' + latestEp.youtube.videoId + '/maxresdefault.jpg';
         }
@@ -5057,7 +5071,7 @@ async function loadWatchLibrary() {
       } else {
         standaloneGrid.innerHTML = '';
         standaloneEps.forEach((p, index) => {
-          let thumbUrl = '/api/project/' + p.project_name + '/stream/thumbnail.jpg';
+          let thumbUrl = apiAssetUrl(projectApiPath(p.project_name, '/stream/thumbnail.jpg'));
           let title = p.metadata && p.metadata.title ? p.metadata.title : p.project_name;
           
           let card = document.createElement('div');
@@ -5157,7 +5171,7 @@ function playEpisodeByIndex(index) {
   });
   
   let videoEl = document.getElementById('watch-video-element');
-  videoEl.src = '/api/project/' + ep.project_id + '/stream/preview?v=faststart';
+  videoEl.src = apiAssetUrl(projectApiPath(ep.project_id, '/stream/preview?v=faststart'));
   
   // Seek to saved time if applicable
   videoEl.onloadedmetadata = () => {
@@ -5947,4 +5961,3 @@ async function pollWatchdogStatus() {
     }
   } catch (e) { /* silent */ }
 }
-

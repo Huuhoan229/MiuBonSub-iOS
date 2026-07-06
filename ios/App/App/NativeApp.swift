@@ -163,12 +163,78 @@ struct ProjectRow: Identifiable {
     var facebook: Bool
 }
 
+enum UploadQueuePlatform: String, CaseIterable, Identifiable, Hashable {
+    case youtube
+    case tiktok
+    case facebook
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .youtube: return "YouTube"
+        case .tiktok: return "TikTok"
+        case .facebook: return "Facebook"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .youtube: return "play.tv.fill"
+        case .tiktok: return "music.note"
+        case .facebook: return "f.circle.fill"
+        }
+    }
+
+    var queuePath: String {
+        switch self {
+        case .youtube: return "/api/youtube/queue"
+        case .tiktok: return "/api/tiktok/queue"
+        case .facebook: return "/api/facebook/queue"
+        }
+    }
+
+    var tone: Color {
+        switch self {
+        case .youtube: return .blue
+        case .tiktok: return .pink
+        case .facebook: return .indigo
+        }
+    }
+}
+
+struct UploadQueueControlState {
+    var platform: UploadQueuePlatform = .youtube
+    var enabled = false
+    var paused = false
+    var count = 0
+    var workerRunning = false
+    var workerAction = ""
+    var nextUploadInSeconds = 0
+    var quotaBlockSeconds = 0
+
+    var waitingText: String {
+        if platform == .youtube && quotaBlockSeconds > 0 {
+            return "quota \(quotaBlockSeconds / 60)m"
+        }
+        if nextUploadInSeconds > 0 {
+            return "next \(nextUploadInSeconds / 60)m"
+        }
+        return "\(count) item"
+    }
+}
+
 struct UploadQueueRow: Identifiable {
     let id = UUID()
+    var platform: UploadQueuePlatform
     var project: String
+    var projectDir: String
+    var title: String
     var status: String
     var channel: String
     var message: String
+    var attempts: Int
+    var created: String
 }
 
 struct ScrapeVideo: Identifiable {
@@ -188,6 +254,8 @@ struct SeriesRow: Identifiable {
     var total: Int
     var rendered: Int
     var uploaded: Int
+    var savedURLs: [String] = []
+    var savedContexts: [String: [String: Any]] = [:]
     var episodes: [SeriesEpisode] = []
 }
 
@@ -314,8 +382,18 @@ final class MiuBonAPI {
         self.baseURL = baseURL
     }
 
-    func request(_ path: String, method: String = "GET", body: Any? = nil, authToken: String? = nil, timeout: TimeInterval = 30) async throws -> [String: Any] {
+    private func normalizedBaseURL() -> String {
         let cleanBase = baseURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let candidate = cleanBase.contains("://") ? cleanBase : "https://\(cleanBase)"
+        if let host = URL(string: candidate)?.host?.lowercased(),
+           host == "tool.miubon.xyz" || host == "www.tool.miubon.xyz" || host == "miubon.xyz" || host == "www.miubon.xyz" {
+            return "https://api-mbvietsub.miubon.xyz"
+        }
+        return cleanBase
+    }
+
+    func request(_ path: String, method: String = "GET", body: Any? = nil, authToken: String? = nil, timeout: TimeInterval = 30) async throws -> [String: Any] {
+        let cleanBase = normalizedBaseURL()
         guard !cleanBase.isEmpty, let url = URL(string: cleanBase + path) else {
             throw NSError(domain: "MiuBonAPI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Backend URL chua hop le"])
         }
@@ -354,7 +432,7 @@ final class MiuBonAPI {
     }
 
     func requestData(_ path: String, method: String = "GET", body: Any? = nil, timeout: TimeInterval = 120) async throws -> Data {
-        let cleanBase = baseURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let cleanBase = normalizedBaseURL()
         guard !cleanBase.isEmpty, let url = URL(string: cleanBase + path) else {
             throw NSError(domain: "MiuBonAPI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Backend URL chua hop le"])
         }
@@ -426,6 +504,8 @@ final class AppModel: ObservableObject {
     @Published var runningQueues: [QueueSnapshot] = []
     @Published var projects: [ProjectRow] = []
     @Published var seriesRows: [SeriesRow] = []
+    @Published var uploadQueuePlatform: UploadQueuePlatform = .youtube
+    @Published var uploadQueueControls: [String: UploadQueueControlState] = [:]
     @Published var uploadRows: [UploadQueueRow] = []
     @Published var workers: [WorkerProcess] = []
     @Published var scrapeURL = ""
@@ -539,6 +619,10 @@ final class AppModel: ObservableObject {
         return scrapeVideos.isEmpty ? 0 : 0.65
     }
 
+    var selectedUploadQueueControl: UploadQueueControlState {
+        uploadQueueControls[uploadQueuePlatform.rawValue] ?? UploadQueueControlState(platform: uploadQueuePlatform)
+    }
+
     func startPolling() {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
@@ -580,6 +664,7 @@ final class AppModel: ObservableObject {
         await refreshProjects()
         await refreshSeries()
         await refreshUploadQueue()
+        await refreshUploadQueueControls()
         if configValues.isEmpty { await refreshConfig() }
     }
 
@@ -846,20 +931,89 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func refreshUploadQueue() async {
+    func refreshUploadQueue(platform: UploadQueuePlatform? = nil) async {
+        let target = platform ?? uploadQueuePlatform
         do {
-            let result = try await api.request("/api/youtube/queue")
+            let result = try await api.request(target.queuePath)
+            uploadQueueControls[target.rawValue] = parseUploadQueueControl(target, data: result)
             let rows = (result["items"] as? [[String: Any]]) ?? []
-            uploadRows = rows.map {
-                UploadQueueRow(
-                    project: string($0["project_name"], fallback: string($0["project"])),
-                    status: string($0["status"], fallback: "pending"),
-                    channel: string($0["channel_key"], fallback: string($0["channel"])),
-                    message: string($0["message"], fallback: string($0["error"]))
-                )
+            uploadRows = rows.map { parseUploadQueueRow($0, platform: target) }
+            uploadStatus = "\(target.label): \(uploadRows.count) item"
+        } catch {
+            if target == uploadQueuePlatform {
+                uploadRows = []
+                uploadStatus = "\(target.label) queue error: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func refreshUploadQueueControls() async {
+        do {
+            let result = try await api.request("/api/upload-queues/control")
+            let queues = (result["queues"] as? [String: Any]) ?? [:]
+            for platform in UploadQueuePlatform.allCases {
+                if let raw = queues[platform.rawValue] as? [String: Any] {
+                    var state = parseUploadQueueControl(platform, data: ["control": raw])
+                    if let current = uploadQueueControls[platform.rawValue] {
+                        state.count = current.count
+                        state.workerRunning = current.workerRunning
+                        state.workerAction = current.workerAction
+                        state.nextUploadInSeconds = current.nextUploadInSeconds
+                        state.quotaBlockSeconds = current.quotaBlockSeconds
+                    }
+                    uploadQueueControls[platform.rawValue] = state
+                }
             }
         } catch {
-            uploadRows = []
+            uploadStatus = "Queue control error: \(error.localizedDescription)"
+        }
+    }
+
+    func selectUploadQueuePlatform(_ platform: UploadQueuePlatform) async {
+        uploadQueuePlatform = platform
+        await refreshUploadQueue(platform: platform)
+        await refreshUploadQueueControls()
+    }
+
+    func setUploadQueueControl(enabled: Bool? = nil, paused: Bool? = nil) async {
+        var body: [String: Any] = ["platform": uploadQueuePlatform.rawValue]
+        if let enabled { body["enabled"] = enabled }
+        if let paused { body["paused"] = paused }
+        do {
+            let result = try await api.request("/api/upload-queues/control", method: "POST", body: body)
+            let queues = (result["queues"] as? [String: Any]) ?? [:]
+            for platform in UploadQueuePlatform.allCases {
+                if let raw = queues[platform.rawValue] as? [String: Any] {
+                    uploadQueueControls[platform.rawValue] = parseUploadQueueControl(platform, data: ["control": raw])
+                }
+            }
+            uploadStatus = "Updated \(uploadQueuePlatform.label) queue"
+            await refreshUploadQueue()
+        } catch {
+            uploadStatus = "Control error: \(error.localizedDescription)"
+        }
+    }
+
+    func forceUploadQueueItem(_ row: UploadQueueRow) async {
+        guard !row.projectDir.isEmpty else {
+            uploadStatus = "Missing project_dir"
+            return
+        }
+        do {
+            let path: String
+            let body: [String: Any]
+            if row.platform == .youtube {
+                path = "/api/youtube/queue/upload_now"
+                body = ["project_dir": row.projectDir]
+            } else {
+                path = "/api/queue/force_upload"
+                body = ["platform": row.platform.rawValue, "project_dir": row.projectDir]
+            }
+            let result = try await api.request(path, method: "POST", body: body)
+            uploadStatus = string(result["message"], fallback: string(result["status"], fallback: "Upload requested"))
+            await refreshUploadQueue()
+        } catch {
+            uploadStatus = "Upload now error: \(error.localizedDescription)"
         }
     }
 
@@ -1421,6 +1575,7 @@ final class AppModel: ObservableObject {
             return
         }
         appendURLsToPipeline(prepared.urls, contexts: prepared.contexts)
+        Task { await self.saveSelectedAIGroupSeriesURLs() }
         selectedTab = .pipeline
         aiGroupMessage = "Đã thêm \(prepared.urls.count) URL series vào Pipeline"
     }
@@ -1432,6 +1587,7 @@ final class AppModel: ObservableObject {
             return
         }
         do {
+            await saveSelectedAIGroupSeriesURLs()
             let result = try await api.request(
                 "/api/pipeline/batch",
                 method: "POST",
@@ -1449,6 +1605,75 @@ final class AppModel: ObservableObject {
             await refreshAll(silent: true)
         } catch {
             aiGroupMessage = "Chạy queue đã chọn lỗi: \(error.localizedDescription)"
+        }
+    }
+
+    func saveSelectedAIGroupSeriesURLs() async {
+        var savedCount = 0
+        for group in aiSeriesGroups where selectedAIGroupIDs.contains(group.id) {
+            let folder = group.folder.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !folder.isEmpty else { continue }
+            let sourceURLs = (group.uniqueURLs.isEmpty ? group.urls : group.uniqueURLs)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            guard !sourceURLs.isEmpty else { continue }
+            let contexts = buildSeriesContextMap(group: group, urls: sourceURLs)
+            do {
+                _ = try await api.request(
+                    "/api/series/save-urls",
+                    method: "POST",
+                    body: [
+                        "series_folder": folder,
+                        "urls": sourceURLs,
+                        "contexts": contexts
+                    ]
+                )
+                savedCount += 1
+            } catch {
+                aiGroupMessage = "Save series URLs skipped: \(error.localizedDescription)"
+            }
+        }
+        if savedCount > 0 {
+            await refreshSeries()
+        }
+    }
+
+    func resumeSavedSeriesQueue(_ series: SeriesRow, newOnly: Bool = true) async {
+        guard !series.savedURLs.isEmpty else {
+            aiGroupMessage = "Series has no saved URLs"
+            return
+        }
+        if newOnly { await loadCompletedScrapeURLs() }
+        let urls = series.savedURLs.filter { url in
+            !newOnly || !completedScrapeURLs.contains(url)
+        }
+        guard !urls.isEmpty else {
+            aiGroupMessage = "All saved URLs in this series are already done"
+            return
+        }
+        let contexts = urls.reduce(into: [String: [String: Any]]()) { out, url in
+            if let context = series.savedContexts[url] {
+                out[url] = context
+            }
+        }
+        do {
+            let result = try await api.request(
+                "/api/pipeline/batch",
+                method: "POST",
+                body: [
+                    "urls": urls.joined(separator: "\n"),
+                    "contexts": contexts
+                ]
+            )
+            activeQueueId = string(result["queue_id"])
+            queue.id = activeQueueId
+            pipelineStatus = "Queue running"
+            pipelineMessage = "Resumed \(series.name): \(urls.count) URL"
+            aiGroupMessage = pipelineMessage
+            selectedTab = .running
+            await refreshAll(silent: true)
+        } catch {
+            aiGroupMessage = "Resume series queue error: \(error.localizedDescription)"
         }
     }
 
@@ -1564,6 +1789,11 @@ final class AppModel: ObservableObject {
     func backendURLFor(_ path: String) -> URL? {
         let cleanBase = backendURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !cleanBase.isEmpty else { return nil }
+        let candidate = cleanBase.contains("://") ? cleanBase : "https://\(cleanBase)"
+        if let host = URL(string: candidate)?.host?.lowercased(),
+           host == "tool.miubon.xyz" || host == "www.tool.miubon.xyz" || host == "miubon.xyz" || host == "www.miubon.xyz" {
+            return URL(string: "https://api-mbvietsub.miubon.xyz" + path)
+        }
         return URL(string: cleanBase + path)
     }
 
@@ -2967,6 +3197,161 @@ struct LogConsole: View {
     }
 }
 
+struct UploadsView: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        ScreenScroll {
+            SectionCard(title: "Accounts & status", symbol: "person.crop.circle.badge.checkmark") {
+                if model.toolStatuses.isEmpty {
+                    EmptyState(text: "Tap Refresh to check YouTube, TikTok, Facebook, Drive, and watchdog.")
+                }
+                ForEach(model.toolStatuses) { row in
+                    HStack {
+                        Text(row.title).font(.subheadline.weight(.semibold))
+                        Spacer()
+                        StatusPill(text: row.value, tone: row.tone)
+                    }
+                    .padding(10)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                Text(model.toolMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    SmallButton(title: "Refresh", symbol: "arrow.clockwise") {
+                        Task {
+                            await model.refreshToolStatuses()
+                            await model.refreshUploadQueue()
+                            await model.refreshUploadQueueControls()
+                        }
+                    }
+                    SmallButton(title: "YouTube login", symbol: "play.tv") {
+                        Task { await model.runToolAction(title: "YouTube login", path: "/api/youtube/login") }
+                    }
+                    SmallButton(title: "TikTok OAuth", symbol: "music.note") {
+                        Task { await model.openURLFromEndpoint(title: "TikTok OAuth", path: "/api/tiktok/oauth/start") }
+                    }
+                    SmallButton(title: "Drive login", symbol: "externaldrive") {
+                        model.openBackendPath("/api/gdrive/login")
+                    }
+                }
+            }
+
+            SectionCard(title: "Upload queue", symbol: "list.bullet.clipboard") {
+                Picker("Queue", selection: $model.uploadQueuePlatform) {
+                    ForEach(UploadQueuePlatform.allCases) { platform in
+                        Text(platform.label).tag(platform)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: model.uploadQueuePlatform) { platform in
+                    Task { await model.selectUploadQueuePlatform(platform) }
+                }
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    MetricTile(title: "Queue", value: model.selectedUploadQueueControl.waitingText, tone: model.uploadQueuePlatform.tone)
+                    MetricTile(title: "Worker", value: model.selectedUploadQueueControl.workerRunning ? "Running" : "Idle", tone: model.selectedUploadQueueControl.workerRunning ? .green : .gray)
+                    MetricTile(title: "Upload", value: model.selectedUploadQueueControl.enabled ? "Enabled" : "Disabled", tone: model.selectedUploadQueueControl.enabled ? .green : .red)
+                    MetricTile(title: "Pause", value: model.selectedUploadQueueControl.paused ? "Paused" : "Live", tone: model.selectedUploadQueueControl.paused ? .orange : .green)
+                }
+                if !model.selectedUploadQueueControl.workerAction.isEmpty {
+                    Text("Worker action: \(model.selectedUploadQueueControl.workerAction)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    SmallButton(title: model.selectedUploadQueueControl.enabled ? "Disable upload" : "Enable upload", symbol: model.selectedUploadQueueControl.enabled ? "power.circle" : "power.circle.fill") {
+                        Task { await model.setUploadQueueControl(enabled: !model.selectedUploadQueueControl.enabled) }
+                    }
+                    SmallButton(title: model.selectedUploadQueueControl.paused ? "Resume upload" : "Pause upload", symbol: model.selectedUploadQueueControl.paused ? "play.fill" : "pause.fill") {
+                        Task { await model.setUploadQueueControl(paused: !model.selectedUploadQueueControl.paused) }
+                    }
+                    SmallButton(title: "Refresh queue", symbol: "arrow.clockwise") {
+                        Task { await model.refreshUploadQueue() }
+                    }
+                    if model.uploadQueuePlatform == .youtube {
+                        SmallButton(title: "Sort episodes", symbol: "arrow.up.arrow.down") {
+                            Task {
+                                await model.runToolAction(title: "Sort YouTube queue", path: "/api/youtube/queue/sort", body: ["mode": "episode_asc"])
+                                await model.refreshUploadQueue()
+                            }
+                        }
+                    }
+                }
+
+                if model.uploadQueuePlatform == .youtube {
+                    SmallButton(title: "Run YouTube watchdog", symbol: "shield.lefthalf.filled") {
+                        Task { await model.runToolAction(title: "YouTube watchdog", path: "/api/youtube/watchdog/run-once") }
+                    }
+                }
+
+                Text(model.uploadStatus)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if model.uploadRows.isEmpty {
+                    EmptyState(text: "\(model.uploadQueuePlatform.label) queue is empty")
+                }
+                ForEach(model.uploadRows) { row in
+                    UploadRowView(row: row) {
+                        Task { await model.forceUploadQueueItem(row) }
+                    }
+                }
+            }
+
+            SectionCard(title: "Quick upload", symbol: "arrow.up.circle") {
+                Picker("Project", selection: $model.selectedProject) {
+                    ForEach(model.projects) { project in
+                        Text(project.displayName).tag(project.folderName)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    SmallButton(title: "TikTok", symbol: "music.note") { Task { await model.uploadSelected(to: "tiktok") } }
+                    SmallButton(title: "Facebook", symbol: "f.circle.fill") { Task { await model.uploadSelected(to: "facebook") } }
+                    SmallButton(title: "Drive", symbol: "externaldrive.fill") { Task { await model.uploadSelected(to: "drive") } }
+                    SmallButton(title: "YouTube queue", symbol: "play.tv.fill") {
+                        Task {
+                            await model.selectUploadQueuePlatform(.youtube)
+                        }
+                    }
+                }
+            }
+
+            SectionCard(title: "Sync & watchdog", symbol: "antenna.radiowaves.left.and.right") {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    SmallButton(title: "Drive sync", symbol: "arrow.triangle.2.circlepath") {
+                        Task { await model.runToolAction(title: "Drive sync", path: "/api/gdrive/sync_projects_async") }
+                    }
+                    SmallButton(title: "Drive mass upload", symbol: "icloud.and.arrow.up") {
+                        Task { await model.runToolAction(title: "Drive mass upload", path: "/api/gdrive/mass_upload_videos") }
+                    }
+                    SmallButton(title: "Douyin watchdog", symbol: "magnifyingglass.circle") {
+                        Task { await model.runToolAction(title: "Douyin watchdog", path: "/api/douyin/watchdog/run-once") }
+                    }
+                    SmallButton(title: "Facebook status", symbol: "f.circle") {
+                        Task { await model.runToolAction(title: "Facebook status", path: "/api/facebook/reels/status", method: "GET") }
+                    }
+                }
+            }
+        }
+        .task {
+            await model.refreshToolStatuses()
+            await model.refreshUploadQueue()
+            await model.refreshUploadQueueControls()
+            if model.projects.isEmpty { await model.refreshProjects() }
+        }
+    }
+}
+
 struct ProjectCard: View {
     var project: ProjectRow
     var onResume: (() -> Void)? = nil
@@ -3339,6 +3724,7 @@ struct VideoPlayerSheet: View {
 
 struct SeriesCard: View {
     var series: SeriesRow
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -3353,9 +3739,17 @@ struct SeriesCard: View {
                 StatusPill(text: series.episodeRange, tone: .blue)
                 StatusPill(text: "\(series.rendered)/\(series.total) render", tone: series.rendered == series.total ? .green : .orange)
                 StatusPill(text: "\(series.uploaded) uploaded", tone: series.uploaded > 0 ? .green : .gray)
+                if !series.savedURLs.isEmpty {
+                    StatusPill(text: "\(series.savedURLs.count) saved", tone: .indigo)
+                }
             }
             ProgressView(value: series.total > 0 ? Double(series.rendered) / Double(series.total) : 0)
                 .tint(.green)
+            if !series.savedURLs.isEmpty {
+                SmallButton(title: "Resume saved", symbol: "play.fill") {
+                    Task { await model.resumeSavedSeriesQueue(series) }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
@@ -3492,20 +3886,56 @@ struct ScrapeVideoCard: View {
 
 struct UploadRowView: View {
     var row: UploadQueueRow
+    var onForce: (() -> Void)? = nil
 
     var body: some View {
+        let lowerStatus = row.status.lowercased()
+        let tone: Color = lowerStatus.contains("done") || lowerStatus.contains("success")
+            ? .green
+            : lowerStatus.contains("fail") || lowerStatus.contains("error")
+                ? .red
+                : lowerStatus.contains("upload")
+                    ? .orange
+                    : row.platform.tone
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(row.project)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
+                if !row.title.isEmpty && row.title != row.project {
+                    Text(row.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(row.platform.tone)
+                        .lineLimit(2)
+                }
                 Text([row.channel, row.message].filter { !$0.isEmpty }.joined(separator: " - "))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                HStack {
+                    if row.attempts > 0 {
+                        StatusPill(text: "try \(row.attempts)", tone: .orange)
+                    }
+                    if !row.created.isEmpty {
+                        Text(row.created)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
             }
             Spacer()
-            StatusPill(text: row.status, tone: row.status.contains("done") ? .green : row.status.contains("fail") ? .red : .blue)
+            VStack(alignment: .trailing, spacing: 8) {
+                StatusPill(text: row.status, tone: tone)
+                if let onForce, !row.projectDir.isEmpty {
+                    Button(action: onForce) {
+                        Label("Upload now", systemImage: "bolt.fill")
+                            .font(.caption.weight(.bold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(row.platform.tone)
+                }
+            }
         }
         .padding(12)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -3878,6 +4308,58 @@ func parseQueue(_ data: [String: Any], knownId: String) -> QueueSnapshot {
     )
 }
 
+func parseUploadQueueControl(_ platform: UploadQueuePlatform, data: [String: Any]) -> UploadQueueControlState {
+    let control = (data["control"] as? [String: Any]) ?? data
+    let worker = (data["worker"] as? [String: Any]) ?? [:]
+    return UploadQueueControlState(
+        platform: platform,
+        enabled: bool(control["enabled"]),
+        paused: bool(control["paused"]),
+        count: int(data["count"]),
+        workerRunning: bool(worker["running"]),
+        workerAction: string(worker["last_action"], fallback: string(worker["status"])),
+        nextUploadInSeconds: int(data["next_upload_in_seconds"]),
+        quotaBlockSeconds: int(data["quota_block_seconds"])
+    )
+}
+
+func parseUploadQueueRow(_ data: [String: Any], platform: UploadQueuePlatform) -> UploadQueueRow {
+    let metadata = (data["metadata"] as? [String: Any]) ?? (data["meta"] as? [String: Any]) ?? [:]
+    let projectDir = string(data["project_dir"], fallback: string(data["project_path"]))
+    let projectName = string(
+        data["project_name"],
+        fallback: string(data["project"], fallback: pathTail(projectDir))
+    )
+    let title = string(
+        data["title"],
+        fallback: string(metadata["title"], fallback: string(data["description"], fallback: projectName))
+    )
+    let channel = string(
+        data["channel_key"],
+        fallback: string(data["channel"], fallback: string(data["account"], fallback: platform.label))
+    )
+    let message = string(
+        data["message"],
+        fallback: string(data["reason"], fallback: string(data["last_error"], fallback: string(data["error"])))
+    )
+    return UploadQueueRow(
+        platform: platform,
+        project: projectName.isEmpty ? title : projectName,
+        projectDir: projectDir,
+        title: title,
+        status: string(data["status"], fallback: "pending"),
+        channel: channel,
+        message: message,
+        attempts: int(data["attempts"]),
+        created: string(data["updated_at"], fallback: string(data["created_at"]))
+    )
+}
+
+func pathTail(_ value: String) -> String {
+    let normalized = value.replacingOccurrences(of: "\\", with: "/")
+    return normalized.split(separator: "/").last.map(String.init) ?? value
+}
+
 func parseProject(_ data: [String: Any]) -> ProjectRow {
     let steps = data["steps_completed"] as? [String] ?? []
     let youtube = data["youtube"] as? [String: Any]
@@ -3927,6 +4409,9 @@ func parseSeries(_ data: [String: Any]) -> SeriesRow {
     let maxEp = intOptional(data["episode_max"])
     let range = (minEp != nil || maxEp != nil) ? "Tap \(minEp.map(String.init) ?? "?")-\(maxEp.map(String.init) ?? "?")" : "Series"
     let episodesRaw = (data["episodes"] as? [[String: Any]]) ?? []
+    let regInfo = (data["reg_info"] as? [String: Any]) ?? [:]
+    let savedURLs = ((regInfo["urls"] as? [String]) ?? []).filter { !$0.isEmpty }
+    let savedContexts = parseContextMap(regInfo["contexts"])
     let episodes = episodesRaw.map { item -> SeriesEpisode in
         let metadata = item["metadata"] as? [String: Any] ?? [:]
         let ctx = (item["series_context"] as? [String: Any]) ?? (metadata["series_context"] as? [String: Any]) ?? [:]
@@ -3950,8 +4435,19 @@ func parseSeries(_ data: [String: Any]) -> SeriesRow {
         total: int(data["total_downloaded"], fallback: int(data["total"], fallback: (data["episodes"] as? [Any])?.count ?? 0)),
         rendered: int(data["rendered_count"]),
         uploaded: int(data["uploaded_count"]),
+        savedURLs: savedURLs,
+        savedContexts: savedContexts,
         episodes: episodes
     )
+}
+
+func parseContextMap(_ value: Any?) -> [String: [String: Any]] {
+    let raw = (value as? [String: Any]) ?? [:]
+    return raw.reduce(into: [String: [String: Any]]()) { out, entry in
+        if let context = entry.value as? [String: Any] {
+            out[entry.key] = context
+        }
+    }
 }
 
 func scrapeVideoPayload(_ video: ScrapeVideo) -> [String: Any] {

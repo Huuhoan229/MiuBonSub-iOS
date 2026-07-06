@@ -1,34 +1,52 @@
-name: Build Trollstore IPA
+name: Build iOS IPA
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Build iOS IPA
+    name: Build TrollStore IPA
     runs-on: macos-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
 
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
 
-      - name: Build IPA
+      - name: Install Capacitor dependencies
+        run: npm ci
+
+      - name: Sync iOS web assets
+        run: npx cap sync ios
+
+      - name: Build unsigned IPA
         run: |
-          chmod +x ./build_trollstore_ipa.sh
-          ./build_trollstore_ipa.sh
-        working-directory: ./
+          chmod +x build_trollstore_ipa.sh
+          bash build_trollstore_ipa.sh
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MiuBonVietsub-TrollStore
-          path: ./dist/MiuBonVietsub-TrollStore.ipa
-          retention-days: 7
+          path: dist/MiuBonVietsub-TrollStore.ipa
+          if-no-files-found: error
+          retention-days: 14
