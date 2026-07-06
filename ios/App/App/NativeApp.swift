@@ -2622,7 +2622,9 @@ struct VideosView: View {
             }
         }
     }
-}\n\nstruct DictionaryView: View {
+}
+
+struct DictionaryView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
@@ -2722,7 +2724,7 @@ struct SettingsView: View {
 
     var body: some View {
         ScreenScroll {
-\n            SectionCard(title: "Tài khoản xem phim", symbol: "person.crop.circle.fill") {
+            SectionCard(title: "Tài khoản xem phim", symbol: "person.crop.circle.fill") {
                 if model.authToken.isEmpty {
                     TextField("Tên đăng nhập", text: $model.authUsername)
                         .textInputAutocapitalization(.never)

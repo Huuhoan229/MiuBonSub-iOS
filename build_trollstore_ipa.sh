@@ -16,11 +16,13 @@ echo "Building native SwiftUI app (no Capacitor, no CocoaPods)..."
 
 xcodebuild \
   -project "$PROJECT" \
-  -scheme App \
+  -target App \
   -configuration Release \
   -sdk iphoneos \
   -derivedDataPath "$DERIVED" \
   CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGN_IDENTITY="" \
   build
 
 if [[ ! -d "$APP_PATH" ]]; then
