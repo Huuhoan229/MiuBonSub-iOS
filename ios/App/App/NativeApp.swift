@@ -2128,19 +2128,8 @@ struct MiuBonRootView: View {
             VStack(spacing: 0) {
                 HeaderView()
                     .environmentObject(model)
-                TabView(selection: $model.selectedTab) {
-                    PipelineView().tag(MainTab.pipeline)
-                    RunningView().tag(MainTab.running)
-                    ScraperView().tag(MainTab.scraper)
-                    ProjectsView().tag(MainTab.projects)
-                    VideosView().tag(MainTab.videos)
-                    UploadsView().tag(MainTab.uploads)
-                    DictionaryView().tag(MainTab.dictionary)
-                    WorkersView().tag(MainTab.workers)
-                    SettingsView().tag(MainTab.settings)
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut(duration: 0.24), value: model.selectedTab)
+                selectedTabView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 BottomTabs()
                     .environmentObject(model)
             }
@@ -2165,6 +2154,30 @@ struct MiuBonRootView: View {
             }
         }
         .onDisappear { model.stopPolling() }
+    }
+
+    @ViewBuilder
+    private var selectedTabView: some View {
+        switch model.selectedTab {
+        case .pipeline:
+            PipelineView()
+        case .running:
+            RunningView()
+        case .scraper:
+            ScraperView()
+        case .projects:
+            ProjectsView()
+        case .videos:
+            VideosView()
+        case .uploads:
+            UploadsView()
+        case .dictionary:
+            DictionaryView()
+        case .workers:
+            WorkersView()
+        case .settings:
+            SettingsView()
+        }
     }
 }
 
@@ -2588,7 +2601,7 @@ struct ProjectsView: View {
 
 struct VideosView: View {
     @EnvironmentObject private var model: AppModel
-    private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+    private let columns = [GridItem(.flexible(minimum: 0), spacing: 12), GridItem(.flexible(minimum: 0), spacing: 12)]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2671,6 +2684,7 @@ struct VideosView: View {
                                         .environmentObject(model)
                                 }
                             }
+                            .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
                         }
                     } else {
@@ -2684,21 +2698,47 @@ struct VideosView: View {
                                         .environmentObject(model)
                                 }
                             }
+                            .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
                         }
                     }
                 }
                 .padding(.bottom, 120)
             }
+            .transaction { transaction in
+                transaction.animation = nil
+            }
         }
-        .fullScreenCover(item: $model.selectedVideo) { selection in
-            VideoPlayerSheet(selection: selection)
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { model.selectedVideo != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        model.selectedVideo = nil
+                    }
+                }
+            )
+        ) {
+            VideoPlayerSheetHost()
                 .environmentObject(model)
         }
         .task {
             if !model.authToken.isEmpty {
                 await model.loadWatchProgress()
             }
+        }
+    }
+}
+
+struct VideoPlayerSheetHost: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        if let selection = model.selectedVideo {
+            VideoPlayerSheet(selection: selection)
+                .environmentObject(model)
+        } else {
+            Color.black.ignoresSafeArea()
         }
     }
 }
@@ -3470,7 +3510,10 @@ struct ModernSeriesCard: View {
                    let url = model.episodeMediaURL(first, file: "thumbnail.jpg") {
                     AsyncImage(url: url) { phase in
                         if let image = phase.image {
-                            image.resizable().scaledToFill()
+                            image.resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .clipped()
                         } else {
                             Color.gray.opacity(0.3)
                         }
@@ -3484,10 +3527,14 @@ struct ModernSeriesCard: View {
                         .font(.system(.subheadline, design: .rounded).weight(.black))
                         .foregroundStyle(.cyan)
                         .lineLimit(2)
+                        .minimumScaleFactor(0.78)
+                        .allowsTightening(true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     
                     Text("\(series.rendered)/\(series.total) Rendered")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                     
                     if let progress = model.watchProgress[series.folder] {
                         Text("Đã xem: tập \(progress.episodeIndex + 1)")
@@ -3496,7 +3543,8 @@ struct ModernSeriesCard: View {
                     }
                 }
                 .padding(12)
-                
+                .frame(maxWidth: .infinity, alignment: .leading)
+                 
                 VStack {
                     HStack {
                         Spacer()
@@ -3511,9 +3559,12 @@ struct ModernSeriesCard: View {
                 }
                 .padding(8)
             }
-            .frame(height: 220)
+            .frame(maxWidth: .infinity)
+            .frame(height: 190)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipped()
         }
+        .frame(maxWidth: .infinity)
         .buttonStyle(.plain)
     }
 }
@@ -3533,7 +3584,10 @@ struct ModernStandaloneCard: View {
                 if let url = model.projectMediaURL(project, file: "thumbnail.jpg") {
                     AsyncImage(url: url) { phase in
                         if let image = phase.image {
-                            image.resizable().scaledToFill()
+                            image.resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .clipped()
                         } else {
                             Color.gray.opacity(0.3)
                         }
@@ -3547,12 +3601,19 @@ struct ModernStandaloneCard: View {
                         .font(.system(.subheadline, design: .rounded).weight(.black))
                         .foregroundStyle(.cyan)
                         .lineLimit(2)
+                        .minimumScaleFactor(0.78)
+                        .allowsTightening(true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: 220)
+            .frame(maxWidth: .infinity)
+            .frame(height: 190)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipped()
         }
+        .frame(maxWidth: .infinity)
         .buttonStyle(.plain)
     }
 }
