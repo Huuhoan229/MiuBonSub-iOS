@@ -164,6 +164,7 @@ struct ProjectRow: Identifiable {
     var gdriveFileID: String = ""
     var gdriveThumbID: String = ""
     var storageStatus: String = ""
+    var isFullVersion: Bool = false
 }
 
 enum UploadQueuePlatform: String, CaseIterable, Identifiable, Hashable {
@@ -271,6 +272,8 @@ struct SeriesEpisode: Identifiable {
     var created: String
     var gdriveFileID: String = ""
     var gdriveThumbID: String = ""
+    var displayEpisode: String = ""
+    var isFullVersion: Bool = false
 }
 
 struct WatchProgress {
@@ -595,28 +598,37 @@ final class AppModel: ObservableObject {
             project.seriesFolder.isEmpty ? project.series : project.seriesFolder
         }
         return grouped.map { key, rows in
-            let sorted = rows.sorted { ($0.episodeNo ?? 0) < ($1.episodeNo ?? 0) }
-            let episodeNumbers = sorted.compactMap(\.episodeNo)
+            let sorted = rows.sorted { lhs, rhs in
+                if lhs.isFullVersion != rhs.isFullVersion { return lhs.isFullVersion && !rhs.isFullVersion }
+                if lhs.isFullVersion { return lhs.created < rhs.created }
+                if (lhs.episodeNo ?? 0) == (rhs.episodeNo ?? 0) { return lhs.created < rhs.created }
+                return (lhs.episodeNo ?? 0) < (rhs.episodeNo ?? 0)
+            }
+            let normalRows = sorted.filter { !$0.isFullVersion }
+            let episodeNumbers = normalRows.compactMap(\.episodeNo)
             let minEp = episodeNumbers.min()
             let maxEp = episodeNumbers.max()
             let episodes = sorted.map { project in
+                let displayEpisode = watchEpisodeLabel(title: project.displayName, episodeNo: project.episodeNo, isFullVersion: project.isFullVersion)
                 SeriesEpisode(
                     projectName: project.folderName,
                     title: project.displayName,
-                    episodeNo: project.episodeNo ?? 1,
+                    episodeNo: project.episodeNo ?? 0,
                     rendered: project.rendered,
                     created: project.created,
                     gdriveFileID: project.gdriveFileID,
-                    gdriveThumbID: project.gdriveThumbID
+                    gdriveThumbID: project.gdriveThumbID,
+                    displayEpisode: displayEpisode,
+                    isFullVersion: project.isFullVersion
                 )
             }
             return SeriesRow(
                 folder: key,
                 name: rows.first?.series.isEmpty == false ? rows.first?.series ?? key : key,
                 episodeRange: (minEp != nil || maxEp != nil) ? "Tap \(minEp.map(String.init) ?? "?")-\(maxEp.map(String.init) ?? "?")" : "Series",
-                total: rows.count,
-                rendered: rows.filter(\.rendered).count,
-                uploaded: rows.filter { $0.youtube || $0.tiktok || $0.facebook }.count,
+                total: normalRows.count,
+                rendered: normalRows.filter(\.rendered).count,
+                uploaded: normalRows.filter { $0.youtube || $0.tiktok || $0.facebook }.count,
                 episodes: episodes
             )
         }
@@ -873,6 +885,44 @@ final class AppModel: ObservableObject {
             await refreshAll(silent: true)
         } catch {
             statusMessage = error.localizedDescription
+        }
+    }
+
+    func cancelUploadQueueItem(_ row: UploadQueueRow) async {
+        guard row.platform == .youtube else {
+            uploadStatus = "Cancel item is only available for YouTube queue"
+            return
+        }
+        guard !row.projectDir.isEmpty else {
+            uploadStatus = "Missing project_dir"
+            return
+        }
+        do {
+            let result = try await api.request("/api/youtube/queue/cancel", method: "POST", body: ["project_dir": row.projectDir])
+            uploadStatus = string(result["message"], fallback: string(result["status"], fallback: "Removed from upload queue"))
+            await refreshUploadQueue()
+            await refreshUploadQueueControls()
+        } catch {
+            uploadStatus = "Cancel item error: \(error.localizedDescription)"
+        }
+    }
+
+    func resumeUploadQueueItem(_ row: UploadQueueRow) async {
+        guard row.platform == .youtube else {
+            uploadStatus = "Resume item is only available for YouTube queue"
+            return
+        }
+        guard !row.projectDir.isEmpty else {
+            uploadStatus = "Missing project_dir"
+            return
+        }
+        do {
+            let result = try await api.request("/api/youtube/queue/reupload", method: "POST", body: ["project_dir": row.projectDir])
+            uploadStatus = string(result["message"], fallback: string(result["status"], fallback: "Item resumed"))
+            await refreshUploadQueue()
+            await refreshUploadQueueControls()
+        } catch {
+            uploadStatus = "Resume item error: \(error.localizedDescription)"
         }
     }
 
@@ -1868,7 +1918,8 @@ final class AppModel: ObservableObject {
             facebook: false,
             gdriveFileID: episode.gdriveFileID,
             gdriveThumbID: episode.gdriveThumbID,
-            storageStatus: episode.gdriveFileID.isEmpty ? "" : "gdrive"
+            storageStatus: episode.gdriveFileID.isEmpty ? "" : "gdrive",
+            isFullVersion: episode.isFullVersion
         )
         return projectMediaURL(project, file: file)
     }
@@ -1924,7 +1975,8 @@ final class AppModel: ObservableObject {
             facebook: false,
             gdriveFileID: episode.gdriveFileID,
             gdriveThumbID: episode.gdriveThumbID,
-            storageStatus: episode.gdriveFileID.isEmpty ? "" : "gdrive"
+            storageStatus: episode.gdriveFileID.isEmpty ? "" : "gdrive",
+            isFullVersion: episode.isFullVersion
         )
         guard
             let previewURL = projectMediaURL(pseudoProject, file: "preview"),
@@ -1936,7 +1988,9 @@ final class AppModel: ObservableObject {
         let progress = watchProgress[series.folder]
         selectedVideo = VideoSelection(
             title: episode.title,
-            subtitle: "\(series.name) - Tap \(episode.episodeNo)",
+            subtitle: episode.isFullVersion
+                ? "\(series.name) - FullVersion \(episodeDisplayLabel(episode))"
+                : "\(series.name) - Tập \(episodeDisplayLabel(episode))",
             folderName: episode.projectName,
             url: previewURL,
             previewURL: previewURL,
@@ -1963,6 +2017,8 @@ final class AppModel: ObservableObject {
         series.episodes
             .filter(\.rendered)
             .sorted { lhs, rhs in
+                if lhs.isFullVersion != rhs.isFullVersion { return lhs.isFullVersion && !rhs.isFullVersion }
+                if lhs.isFullVersion { return lhs.created < rhs.created }
                 if lhs.episodeNo == rhs.episodeNo { return lhs.created < rhs.created }
                 return lhs.episodeNo < rhs.episodeNo
             }
@@ -1973,7 +2029,8 @@ final class AppModel: ObservableObject {
         let query = videoEpisodeSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !query.isEmpty else { return episodes }
         return episodes.filter { episode in
-            String(episode.episodeNo).contains(query)
+            episodeDisplayLabel(episode).lowercased().contains(query)
+                || String(episode.episodeNo).contains(query)
                 || episode.title.lowercased().contains(query)
                 || episode.projectName.lowercased().contains(query)
         }
@@ -2054,7 +2111,8 @@ final class AppModel: ObservableObject {
             facebook: false,
             gdriveFileID: episode.gdriveFileID,
             gdriveThumbID: episode.gdriveThumbID,
-            storageStatus: episode.gdriveFileID.isEmpty ? "" : "gdrive"
+            storageStatus: episode.gdriveFileID.isEmpty ? "" : "gdrive",
+            isFullVersion: episode.isFullVersion
         )
         guard
             let previewURL = projectMediaURL(pseudoProject, file: "preview"),
@@ -2063,7 +2121,9 @@ final class AppModel: ObservableObject {
         let progress = watchProgress[series.folder]
         return VideoSelection(
             title: episode.title,
-            subtitle: "\(series.name) - Tap \(episode.episodeNo)",
+            subtitle: episode.isFullVersion
+                ? "\(series.name) - FullVersion \(episodeDisplayLabel(episode))"
+                : "\(series.name) - Tập \(episodeDisplayLabel(episode))",
             folderName: episode.projectName,
             url: previewURL,
             previewURL: previewURL,
@@ -2346,6 +2406,7 @@ struct RunningView: View {
                     ) { item in
                         Task { await model.selectRuntimeItem(queueId: model.queue.id, itemIndex: item.index) }
                     }
+                    queueActionBar(model.queue.id)
                 }
                 if model.runningQueues.isEmpty && model.queue.id.isEmpty {
                     EmptyState(text: "Chưa có queue đang chạy")
@@ -2357,17 +2418,7 @@ struct RunningView: View {
                     ) { item in
                         Task { await model.selectRuntimeItem(queueId: queue.id, itemIndex: item.index) }
                     }
-                    HStack {
-                        SmallButton(title: "Tạm dừng", symbol: "pause.fill") {
-                            Task { await model.queueAction("pause", id: queue.id) }
-                        }
-                        SmallButton(title: "Tiếp tục", symbol: "play.fill") {
-                            Task { await model.queueAction("resume", id: queue.id) }
-                        }
-                        SmallButton(title: "Bỏ qua", symbol: "forward.fill") {
-                            Task { await model.queueAction("skip", id: queue.id) }
-                        }
-                    }
+                    queueActionBar(queue.id)
                 }
             }
 
@@ -2381,6 +2432,23 @@ struct RunningView: View {
                 } else {
                     LogConsole(lines: model.runtimeLogLines, maxHeight: 360)
                 }
+            }
+        }
+    }
+
+    private func queueActionBar(_ queueID: String) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            SmallButton(title: "Tạm dừng", symbol: "pause.fill") {
+                Task { await model.queueAction("pause", id: queueID) }
+            }
+            SmallButton(title: "Tiếp tục", symbol: "play.fill") {
+                Task { await model.queueAction("resume", id: queueID) }
+            }
+            SmallButton(title: "Bỏ qua", symbol: "forward.fill") {
+                Task { await model.queueAction("skip", id: queueID) }
+            }
+            SmallButton(title: "Hủy queue", symbol: "xmark.circle.fill") {
+                Task { await model.queueAction("cancel", id: queueID) }
             }
         }
     }
@@ -2601,7 +2669,16 @@ struct ProjectsView: View {
 
 struct VideosView: View {
     @EnvironmentObject private var model: AppModel
-    private let columns = [GridItem(.flexible(minimum: 0), spacing: 12), GridItem(.flexible(minimum: 0), spacing: 12)]
+    private var columns: [GridItem] {
+        let spacing: CGFloat = 12
+        let horizontalPadding: CGFloat = 32
+        let availableWidth = max(0, UIScreen.main.bounds.width - horizontalPadding)
+        let minCardWidth: CGFloat = 156
+        let maxColumns = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 2
+        let count = max(1, min(maxColumns, Int((availableWidth + spacing) / (minCardWidth + spacing))))
+        let cardWidth = max(140, floor((availableWidth - CGFloat(count - 1) * spacing) / CGFloat(count)))
+        return Array(repeating: GridItem(.fixed(cardWidth), spacing: spacing), count: count)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -3354,17 +3431,17 @@ struct UploadsView: View {
                 }
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    SmallButton(title: model.selectedUploadQueueControl.enabled ? "Disable upload" : "Enable upload", symbol: model.selectedUploadQueueControl.enabled ? "power.circle" : "power.circle.fill") {
+                    SmallButton(title: model.selectedUploadQueueControl.enabled ? "Tắt upload" : "Bật upload", symbol: model.selectedUploadQueueControl.enabled ? "power.circle" : "power.circle.fill") {
                         Task { await model.setUploadQueueControl(enabled: !model.selectedUploadQueueControl.enabled) }
                     }
-                    SmallButton(title: model.selectedUploadQueueControl.paused ? "Resume upload" : "Pause upload", symbol: model.selectedUploadQueueControl.paused ? "play.fill" : "pause.fill") {
+                    SmallButton(title: model.selectedUploadQueueControl.paused ? "Tiếp tục queue" : "Tạm dừng queue", symbol: model.selectedUploadQueueControl.paused ? "play.fill" : "pause.fill") {
                         Task { await model.setUploadQueueControl(paused: !model.selectedUploadQueueControl.paused) }
                     }
-                    SmallButton(title: "Refresh queue", symbol: "arrow.clockwise") {
+                    SmallButton(title: "Làm mới queue", symbol: "arrow.clockwise") {
                         Task { await model.refreshUploadQueue() }
                     }
                     if model.uploadQueuePlatform == .youtube {
-                        SmallButton(title: "Sort episodes", symbol: "arrow.up.arrow.down") {
+                        SmallButton(title: "Sắp xếp tập", symbol: "arrow.up.arrow.down") {
                             Task {
                                 await model.runToolAction(title: "Sort YouTube queue", path: "/api/youtube/queue/sort", body: ["mode": "episode_asc"])
                                 await model.refreshUploadQueue()
@@ -3388,9 +3465,12 @@ struct UploadsView: View {
                     EmptyState(text: "\(model.uploadQueuePlatform.label) queue is empty")
                 }
                 ForEach(model.uploadRows) { row in
-                    UploadRowView(row: row) {
-                        Task { await model.forceUploadQueueItem(row) }
-                    }
+                    UploadRowView(
+                        row: row,
+                        onForce: { Task { await model.forceUploadQueueItem(row) } },
+                        onResume: row.platform == .youtube ? { Task { await model.resumeUploadQueueItem(row) } } : nil,
+                        onCancel: row.platform == .youtube ? { Task { await model.cancelUploadQueueItem(row) } } : nil
+                    )
                 }
             }
 
@@ -3536,8 +3616,9 @@ struct ModernSeriesCard: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     
-                    if let progress = model.watchProgress[series.folder] {
-                        Text("Đã xem: tập \(progress.episodeIndex + 1)")
+                    if let progress = model.watchProgress[series.folder],
+                       let watchedEpisode = model.renderedEpisodes(in: series)[safe: progress.episodeIndex] {
+                        Text(watchedEpisode.isFullVersion ? "Đã xem: FullVersion \(episodeDisplayLabel(watchedEpisode))" : "Đã xem: Tập \(episodeDisplayLabel(watchedEpisode))")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.blue)
                     }
@@ -3637,6 +3718,42 @@ struct VideoPlayerSheet: View {
         return model.renderedEpisodes(in: s)
     }
 
+    var visibleEpisodes: [SeriesEpisode] {
+        let query = searchEpisode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return renderedEpisodes }
+        return renderedEpisodes.filter { episode in
+            episodeDisplayLabel(episode).lowercased().contains(query)
+                || episode.title.lowercased().contains(query)
+                || episode.projectName.lowercased().contains(query)
+        }
+    }
+
+    var currentEpisode: SeriesEpisode? {
+        renderedEpisodes[safe: selection.episodeIndex]
+    }
+
+    var currentEpisodeLine: String {
+        guard let episode = currentEpisode else { return selection.title }
+        let label = episodeDisplayLabel(episode)
+        if episode.isFullVersion {
+            return "FullVersion \(label) | \(selection.title)"
+        }
+        let normalEpisodes = renderedEpisodes.filter { !$0.isFullVersion }
+        let normalPosition = normalEpisodes.firstIndex(where: { $0.id == episode.id }).map { $0 + 1 } ?? max(1, selection.episodeIndex + 1)
+        let normalTotal = max(max(series?.total ?? normalEpisodes.count, normalEpisodes.count), 1)
+        return "Tập \(label) | \(selection.title) | vị trí \(normalPosition)/\(normalTotal)"
+    }
+
+    var episodeGridColumns: [GridItem] {
+        let spacing: CGFloat = 8
+        let availableWidth = max(0, UIScreen.main.bounds.width - 32)
+        let minCellWidth: CGFloat = 54
+        let maxColumns = UIDevice.current.userInterfaceIdiom == .pad ? 8 : 5
+        let count = max(3, min(maxColumns, Int((availableWidth + spacing) / (minCellWidth + spacing))))
+        let cellWidth = max(44, floor((availableWidth - CGFloat(count - 1) * spacing) / CGFloat(count)))
+        return Array(repeating: GridItem(.fixed(cellWidth), spacing: spacing), count: count)
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -3650,10 +3767,14 @@ struct VideoPlayerSheet: View {
                         Text(series?.name ?? selection.title)
                             .font(.title3.weight(.bold))
                             .foregroundStyle(.white)
-                        Text("Tập \(selection.episodeIndex + 1) | \(selection.title) | vị trí \(selection.episodeIndex + 1)/\(series?.total ?? 1)")
+                            .lineLimit(2)
+                        Text(currentEpisodeLine)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.85)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     Spacer()
                     Button {
                         player.pause()
@@ -3693,10 +3814,11 @@ struct VideoPlayerSheet: View {
                 
                 HStack(spacing: 16) {
                     Button {
-                        if let s = series, selection.episodeIndex > 0, let ep = renderedEpisodes.first(where: { $0.episodeNo == selection.episodeIndex }) {
+                        let previousIndex = selection.episodeIndex - 1
+                        if let s = series, previousIndex >= 0, let ep = renderedEpisodes[safe: previousIndex] {
                             Task {
                                 await saveCurrentProgress()
-                                model.playEpisode(ep, in: s, index: selection.episodeIndex - 1)
+                                model.playEpisode(ep, in: s, index: previousIndex)
                             }
                         }
                     } label: {
@@ -3743,8 +3865,8 @@ struct VideoPlayerSheet: View {
                         .padding(.horizontal, 16)
                         
                         ScrollView {
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
-                                ForEach(renderedEpisodes) { ep in
+                            LazyVGrid(columns: episodeGridColumns, spacing: 8) {
+                                ForEach(visibleEpisodes) { ep in
                                     let idx = renderedEpisodes.firstIndex(where: { $0.id == ep.id }) ?? 0
                                     let isCurrent = idx == selection.episodeIndex
                                     Button {
@@ -3753,13 +3875,15 @@ struct VideoPlayerSheet: View {
                                             model.playEpisode(ep, in: s, index: idx)
                                         }
                                     } label: {
-                                        Text("\(ep.episodeNo)")
+                                        Text(episodeDisplayLabel(ep))
                                             .font(.callout.weight(.bold))
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 16)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.7)
+                                            .frame(maxWidth: .infinity, minHeight: 48)
                                             .background(isCurrent ? Color.cyan : Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
                                             .foregroundStyle(isCurrent ? .black : .white)
                                     }
+                                    .buttonStyle(.plain)
                                 }
                             }
                             .padding(.horizontal, 16)
@@ -3999,6 +4123,8 @@ struct ScrapeVideoCard: View {
 struct UploadRowView: View {
     var row: UploadQueueRow
     var onForce: (() -> Void)? = nil
+    var onResume: (() -> Void)? = nil
+    var onCancel: (() -> Void)? = nil
 
     var body: some View {
         let lowerStatus = row.status.lowercased()
@@ -4041,11 +4167,27 @@ struct UploadRowView: View {
                 StatusPill(text: row.status, tone: tone)
                 if let onForce, !row.projectDir.isEmpty {
                     Button(action: onForce) {
-                        Label("Upload now", systemImage: "bolt.fill")
+                        Label("Upload ngay", systemImage: "bolt.fill")
                             .font(.caption.weight(.bold))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(row.platform.tone)
+                }
+                if let onResume, !row.projectDir.isEmpty {
+                    Button(action: onResume) {
+                        Label("Tiếp tục", systemImage: "arrow.clockwise")
+                            .font(.caption.weight(.bold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.orange)
+                }
+                if let onCancel, !row.projectDir.isEmpty {
+                    Button(action: onCancel) {
+                        Label("Hủy", systemImage: "xmark.circle.fill")
+                            .font(.caption.weight(.bold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.red)
                 }
             }
         }
@@ -4493,9 +4635,19 @@ func parseProject(_ data: [String: Any]) -> ProjectRow {
         data["gdrive_thumb_id"],
         fallback: string(data["drive_thumb_id"], fallback: string(metadata["gdrive_thumb_id"], fallback: string(metadata["drive_thumb_id"])))
     )
-    let epNo = intOptional(ctx["episode_no"]) ?? intOptional(data["episode_no"]) ?? extractEpisodeNo(metaTitle) ?? extractEpisodeNo(douyinTitle)
+    let titleEpisode = extractEpisodeNo(metaTitle) ?? extractEpisodeNo(douyinTitle) ?? extractEpisodeNo(folder)
+    let isFullVersion = isFullVersionTitle(metaTitle) || isFullVersionTitle(douyinTitle) || isFullVersionTitle(folder)
+    let epNo = isFullVersion
+        ? titleEpisode
+        : intOptional(ctx["episode_no"]) ?? intOptional(data["episode_no"]) ?? titleEpisode
     let display: String
-    if let episode = epNo, !seriesName.isEmpty {
+    if isFullVersion, !metaTitle.isEmpty {
+        display = metaTitle
+    } else if isFullVersion, !douyinTitle.isEmpty {
+        display = douyinTitle
+    } else if isFullVersion {
+        display = folder
+    } else if let episode = epNo, !seriesName.isEmpty {
         display = "Tap \(episode) | \(seriesName) | MiuBonVietSub"
     } else if !metaTitle.isEmpty {
         display = metaTitle
@@ -4523,22 +4675,22 @@ func parseProject(_ data: [String: Any]) -> ProjectRow {
         facebook: !(facebook?.isEmpty ?? true),
         gdriveFileID: gdriveFileID,
         gdriveThumbID: gdriveThumbID,
-        storageStatus: string(data["storage_status"], fallback: gdriveFileID.isEmpty ? "local" : "gdrive")
+        storageStatus: string(data["storage_status"], fallback: gdriveFileID.isEmpty ? "local" : "gdrive"),
+        isFullVersion: isFullVersion
     )
 }
 
 func parseSeries(_ data: [String: Any]) -> SeriesRow {
-    let minEp = intOptional(data["episode_min"])
-    let maxEp = intOptional(data["episode_max"])
-    let range = (minEp != nil || maxEp != nil) ? "Tap \(minEp.map(String.init) ?? "?")-\(maxEp.map(String.init) ?? "?")" : "Series"
     let episodesRaw = (data["episodes"] as? [[String: Any]]) ?? []
     let regInfo = (data["reg_info"] as? [String: Any]) ?? [:]
     let savedURLs = ((regInfo["urls"] as? [String]) ?? []).filter { !$0.isEmpty }
     let savedContexts = parseContextMap(regInfo["contexts"])
+    let seriesName = string(data["series_name"], fallback: string(data["name"], fallback: string(data["series_name_vi"], fallback: "Series")))
     let episodes = episodesRaw.map { item -> SeriesEpisode in
         let metadata = item["metadata"] as? [String: Any] ?? [:]
         let ctx = (item["series_context"] as? [String: Any]) ?? (metadata["series_context"] as? [String: Any]) ?? [:]
         let projectName = string(item["project_name"], fallback: string(item["name"], fallback: string(item["folder"])))
+        let rawTitle = string(metadata["title"], fallback: string(item["title"], fallback: projectName))
         let gdriveFileID = string(
             item["gdrive_file_id"],
             fallback: string(item["drive_file_id"], fallback: string(metadata["gdrive_file_id"], fallback: string(metadata["drive_file_id"])))
@@ -4547,27 +4699,51 @@ func parseSeries(_ data: [String: Any]) -> SeriesRow {
             item["gdrive_thumb_id"],
             fallback: string(item["drive_thumb_id"], fallback: string(metadata["gdrive_thumb_id"], fallback: string(metadata["drive_thumb_id"])))
         )
-        let episodeNo = int(item["_ep_no"], fallback: int(ctx["episode_no"], fallback: extractEpisodeNo(string(metadata["title"])) ?? 0))
-        let title = episodeNo > 0
-            ? "Tap \(episodeNo) | \(string(data["series_name"], fallback: "Series")) | MiuBonVietSub"
-            : string(metadata["title"], fallback: projectName)
+        let titleEpisode = extractEpisodeNo(rawTitle) ?? extractEpisodeNo(projectName)
+        let isFullVersion = isFullVersionTitle(rawTitle) || isFullVersionTitle(projectName)
+        let rawEpisodeNo = intOptional(item["_ep_no"]) ?? intOptional(ctx["episode_no"]) ?? titleEpisode
+        let episodeNo = isFullVersion ? (titleEpisode ?? 0) : (rawEpisodeNo ?? 0)
+        let title = isFullVersion
+            ? (rawTitle.isEmpty ? projectName : rawTitle)
+            : (episodeNo > 0 ? "Tap \(episodeNo) | \(seriesName) | MiuBonVietSub" : (rawTitle.isEmpty ? projectName : rawTitle))
+        let displayEpisode = watchEpisodeLabel(
+            title: title,
+            episodeNo: episodeNo > 0 ? episodeNo : nil,
+            isFullVersion: isFullVersion
+        )
         return SeriesEpisode(
             projectName: projectName,
             title: title,
-            episodeNo: episodeNo > 0 ? episodeNo : 1,
+            episodeNo: max(episodeNo, 0),
             rendered: !string(item["final_video"]).isEmpty || (item["steps_completed"] as? [String] ?? []).contains("render") || !gdriveFileID.isEmpty,
             created: string(item["created_at"], fallback: string(item["updated_at"])),
             gdriveFileID: gdriveFileID,
-            gdriveThumbID: gdriveThumbID
+            gdriveThumbID: gdriveThumbID,
+            displayEpisode: displayEpisode,
+            isFullVersion: isFullVersion
         )
+    }.sorted { lhs, rhs in
+        if lhs.isFullVersion != rhs.isFullVersion { return lhs.isFullVersion && !rhs.isFullVersion }
+        if lhs.isFullVersion { return lhs.created < rhs.created }
+        if lhs.episodeNo == rhs.episodeNo { return lhs.created < rhs.created }
+        return lhs.episodeNo < rhs.episodeNo
     }
+    let normalEpisodes = episodes.filter { !$0.isFullVersion }
+    let normalNumbers = normalEpisodes.map(\.episodeNo).filter { $0 > 0 }
+    let minEp = normalNumbers.min() ?? (episodesRaw.isEmpty ? intOptional(data["episode_min"]) : nil)
+    let maxEp = normalNumbers.max() ?? (episodesRaw.isEmpty ? intOptional(data["episode_max"]) : nil)
+    let range = (minEp != nil || maxEp != nil) ? "Tap \(minEp.map(String.init) ?? "?")-\(maxEp.map(String.init) ?? "?")" : "Series"
+    let fallbackTotal = int(data["total_downloaded"], fallback: int(data["total"], fallback: (data["episodes"] as? [Any])?.count ?? 0))
+    let total = episodesRaw.isEmpty ? fallbackTotal : normalEpisodes.count
+    let rendered = episodesRaw.isEmpty ? min(int(data["rendered_count"]), total) : normalEpisodes.filter(\.rendered).count
+    let uploaded = min(int(data["uploaded_count"]), max(total, 0))
     return SeriesRow(
         folder: string(data["series_folder"], fallback: string(data["folder"])),
-        name: string(data["series_name"], fallback: string(data["name"], fallback: string(data["series_name_vi"], fallback: "Series"))),
+        name: seriesName,
         episodeRange: range,
-        total: int(data["total_downloaded"], fallback: int(data["total"], fallback: (data["episodes"] as? [Any])?.count ?? 0)),
-        rendered: int(data["rendered_count"]),
-        uploaded: int(data["uploaded_count"]),
+        total: total,
+        rendered: rendered,
+        uploaded: uploaded,
         savedURLs: savedURLs,
         savedContexts: savedContexts,
         episodes: episodes
@@ -4696,16 +4872,62 @@ func intOptional(_ value: Any?) -> Int? {
     return nil
 }
 
+func isFullVersionTitle(_ text: String) -> Bool {
+    let normalized = text
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        .lowercased()
+    let compact = normalized
+        .replacingOccurrences(of: " ", with: "")
+        .replacingOccurrences(of: "-", with: "")
+        .replacingOccurrences(of: "_", with: "")
+    return compact.contains("fullversion")
+        || normalized.contains("tap ghep")
+        || normalized.contains("ban ghep")
+        || normalized.contains("merged")
+}
+
 func extractEpisodeNo(_ text: String) -> Int? {
-    let pattern = #"(?i)(?:tap|tập|ep|episode|第)\s*\.?\s*(\d{1,5})"#
-    guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-    let nsrange = NSRange(text.startIndex..<text.endIndex, in: text)
-    guard let match = regex.firstMatch(in: text, range: nsrange),
-          match.numberOfRanges > 1,
-          let range = Range(match.range(at: 1), in: text) else {
-        return nil
+    let normalized = text
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        .lowercased()
+    let patterns = [
+        #"(?:tap|ep|episode|第)\s*\.?\s*(\d{1,5})"#,
+        #"(?:full\s*version|fullversion|full-version).*?(\d{1,5})"#,
+        #"(?:tap\s*ghep|ban\s*ghep|merged).*?(\d{1,5})"#
+    ]
+    let nsrange = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+    for pattern in patterns {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+        guard let match = regex.firstMatch(in: normalized, range: nsrange),
+              match.numberOfRanges > 1,
+              let range = Range(match.range(at: 1), in: normalized) else {
+            continue
+        }
+        return Int(normalized[range])
     }
-    return Int(text[range])
+    return nil
+}
+
+func watchEpisodeLabel(title: String, episodeNo: Int?, isFullVersion: Bool) -> String {
+    if isFullVersion {
+        if let titleEpisode = extractEpisodeNo(title) {
+            return String(titleEpisode)
+        }
+        return "?"
+    }
+    guard let episodeNo, episodeNo > 0 else { return "?" }
+    return String(episodeNo)
+}
+
+func episodeDisplayLabel(_ episode: SeriesEpisode) -> String {
+    if !episode.displayEpisode.isEmpty {
+        return episode.displayEpisode
+    }
+    return watchEpisodeLabel(
+        title: episode.title,
+        episodeNo: episode.episodeNo > 0 ? episode.episodeNo : nil,
+        isFullVersion: episode.isFullVersion
+    )
 }
 
 func double(_ value: Any?, fallback: Double = 0) -> Double {
