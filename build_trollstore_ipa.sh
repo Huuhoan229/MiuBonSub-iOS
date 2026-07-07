@@ -16,7 +16,7 @@ echo "Building native SwiftUI app (no Capacitor, no CocoaPods)..."
 
 xcodebuild \
   -project "$PROJECT" \
-  -target App \
+  -scheme App \
   -configuration Release \
   -sdk iphoneos \
   -derivedDataPath "$DERIVED" \
