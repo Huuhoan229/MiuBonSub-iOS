@@ -610,7 +610,7 @@ final class AppModel: ObservableObject {
             let maxEp = episodeNumbers.max()
             let episodes = sorted.map { project in
                 let displayEpisode = watchEpisodeLabel(title: project.displayName, episodeNo: project.episodeNo, isFullVersion: project.isFullVersion)
-                SeriesEpisode(
+                return SeriesEpisode(
                     projectName: project.folderName,
                     title: project.displayName,
                     episodeNo: project.episodeNo ?? 0,
@@ -3465,11 +3465,17 @@ struct UploadsView: View {
                     EmptyState(text: "\(model.uploadQueuePlatform.label) queue is empty")
                 }
                 ForEach(model.uploadRows) { row in
+                    let onResume: (() -> Void)? = row.platform == .youtube
+                        ? { Task<Void, Never> { await model.resumeUploadQueueItem(row) } }
+                        : nil
+                    let onCancel: (() -> Void)? = row.platform == .youtube
+                        ? { Task<Void, Never> { await model.cancelUploadQueueItem(row) } }
+                        : nil
                     UploadRowView(
                         row: row,
-                        onForce: { Task { await model.forceUploadQueueItem(row) } },
-                        onResume: row.platform == .youtube ? { Task { await model.resumeUploadQueueItem(row) } } : nil,
-                        onCancel: row.platform == .youtube ? { Task { await model.cancelUploadQueueItem(row) } } : nil
+                        onForce: { Task<Void, Never> { await model.forceUploadQueueItem(row) } },
+                        onResume: onResume,
+                        onCancel: onCancel
                     )
                 }
             }
@@ -3836,7 +3842,7 @@ struct VideoPlayerSheet: View {
                     Button {
                         Task {
                             await saveCurrentProgress()
-                            await model.playNextVideo(after: selection)
+                            model.playNextVideo(after: selection)
                         }
                     } label: {
                         HStack {
@@ -3937,7 +3943,7 @@ struct VideoPlayerSheet: View {
         ) { _ in
             Task {
                 await saveCurrentProgress()
-                await model.playNextVideo(after: selection)
+                model.playNextVideo(after: selection)
             }
         }
         if autoplay { player.play() }
