@@ -161,6 +161,9 @@ struct ProjectRow: Identifiable {
     var youtube: Bool
     var tiktok: Bool
     var facebook: Bool
+    var gdriveFileID: String = ""
+    var gdriveThumbID: String = ""
+    var storageStatus: String = ""
 }
 
 enum UploadQueuePlatform: String, CaseIterable, Identifiable, Hashable {
@@ -266,6 +269,8 @@ struct SeriesEpisode: Identifiable {
     var episodeNo: Int
     var rendered: Bool
     var created: String
+    var gdriveFileID: String = ""
+    var gdriveThumbID: String = ""
 }
 
 struct WatchProgress {
@@ -600,7 +605,9 @@ final class AppModel: ObservableObject {
                     title: project.displayName,
                     episodeNo: project.episodeNo ?? 1,
                     rendered: project.rendered,
-                    created: project.created
+                    created: project.created,
+                    gdriveFileID: project.gdriveFileID,
+                    gdriveThumbID: project.gdriveThumbID
                 )
             }
             return SeriesRow(
@@ -1814,7 +1821,27 @@ final class AppModel: ObservableObject {
 
     func projectMediaURL(_ project: ProjectRow, file: String = "preview") -> URL? {
         guard !project.folderName.isEmpty else { return nil }
+        if let driveURL = driveMediaURL(project: project, file: file) {
+            return driveURL
+        }
         return projectMediaURL(projectName: project.folderName, file: file)
+    }
+
+    func driveMediaURL(project: ProjectRow, file: String) -> URL? {
+        let normalized = file.lowercased()
+        let driveID: String
+        if normalized == "thumbnail.jpg" || normalized == "thumbnail" {
+            driveID = project.gdriveThumbID
+        } else if normalized == "preview"
+                    || normalized == "final_video_preview.mp4"
+                    || normalized == "final_video.mp4" {
+            driveID = project.gdriveFileID
+        } else {
+            driveID = ""
+        }
+        guard !driveID.isEmpty else { return nil }
+        let encodedID = driveID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? driveID
+        return backendURLFor("/api/gdrive/file/\(encodedID)/stream")
     }
 
     func projectMediaURL(projectName: String, file: String = "preview") -> URL? {
@@ -1822,6 +1849,28 @@ final class AppModel: ObservableObject {
         let encodedProject = projectName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? projectName
         let encodedFile = file.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? file
         return backendURLFor("/api/project/\(encodedProject)/stream/\(encodedFile)")
+    }
+
+    func episodeMediaURL(_ episode: SeriesEpisode, file: String = "preview") -> URL? {
+        let project = ProjectRow(
+            folderName: episode.projectName,
+            displayName: episode.title,
+            subtitle: episode.projectName,
+            created: episode.created,
+            series: "",
+            seriesFolder: "",
+            episodeNo: episode.episodeNo,
+            progress: 100,
+            steps: ["render"],
+            rendered: episode.rendered,
+            youtube: false,
+            tiktok: false,
+            facebook: false,
+            gdriveFileID: episode.gdriveFileID,
+            gdriveThumbID: episode.gdriveThumbID,
+            storageStatus: episode.gdriveFileID.isEmpty ? "" : "gdrive"
+        )
+        return projectMediaURL(project, file: file)
     }
 
     func playProject(_ project: ProjectRow, file: String = "preview") {
@@ -1872,7 +1921,10 @@ final class AppModel: ObservableObject {
             rendered: true,
             youtube: false,
             tiktok: false,
-            facebook: false
+            facebook: false,
+            gdriveFileID: episode.gdriveFileID,
+            gdriveThumbID: episode.gdriveThumbID,
+            storageStatus: episode.gdriveFileID.isEmpty ? "" : "gdrive"
         )
         guard
             let previewURL = projectMediaURL(pseudoProject, file: "preview"),
@@ -1999,7 +2051,10 @@ final class AppModel: ObservableObject {
             rendered: true,
             youtube: false,
             tiktok: false,
-            facebook: false
+            facebook: false,
+            gdriveFileID: episode.gdriveFileID,
+            gdriveThumbID: episode.gdriveThumbID,
+            storageStatus: episode.gdriveFileID.isEmpty ? "" : "gdrive"
         )
         guard
             let previewURL = projectMediaURL(pseudoProject, file: "preview"),
@@ -3412,7 +3467,7 @@ struct ModernSeriesCard: View {
                     .fill(Color.black)
                 
                 if let first = model.renderedEpisodes(in: series).first,
-                   let url = model.projectMediaURL(projectName: first.projectName, file: "thumbnail.jpg") {
+                   let url = model.episodeMediaURL(first, file: "thumbnail.jpg") {
                     AsyncImage(url: url) { phase in
                         if let image = phase.image {
                             image.resizable().scaledToFill()
@@ -4369,6 +4424,14 @@ func parseProject(_ data: [String: Any]) -> ProjectRow {
     let douyinTitle = string(douyin["douyin_title"], fallback: string(douyin["title"]))
     let seriesName = string(ctx["series_name_vi"], fallback: string(ctx["series_name"], fallback: string(data["series_name"])))
     let seriesFolder = string(ctx["series_folder"], fallback: string(data["series_folder"]))
+    let gdriveFileID = string(
+        data["gdrive_file_id"],
+        fallback: string(data["drive_file_id"], fallback: string(metadata["gdrive_file_id"], fallback: string(metadata["drive_file_id"])))
+    )
+    let gdriveThumbID = string(
+        data["gdrive_thumb_id"],
+        fallback: string(data["drive_thumb_id"], fallback: string(metadata["gdrive_thumb_id"], fallback: string(metadata["drive_thumb_id"])))
+    )
     let epNo = intOptional(ctx["episode_no"]) ?? intOptional(data["episode_no"]) ?? extractEpisodeNo(metaTitle) ?? extractEpisodeNo(douyinTitle)
     let display: String
     if let episode = epNo, !seriesName.isEmpty {
@@ -4393,10 +4456,13 @@ func parseProject(_ data: [String: Any]) -> ProjectRow {
         episodeNo: epNo,
         progress: progress,
         steps: steps,
-        rendered: steps.contains("render") || !string(data["final_video"]).isEmpty,
+        rendered: steps.contains("render") || !string(data["final_video"]).isEmpty || !gdriveFileID.isEmpty,
         youtube: !(string(youtube?["videoId"]).isEmpty && string(youtube?["url"]).isEmpty),
         tiktok: !(tiktok?.isEmpty ?? true),
-        facebook: !(facebook?.isEmpty ?? true)
+        facebook: !(facebook?.isEmpty ?? true),
+        gdriveFileID: gdriveFileID,
+        gdriveThumbID: gdriveThumbID,
+        storageStatus: string(data["storage_status"], fallback: gdriveFileID.isEmpty ? "local" : "gdrive")
     )
 }
 
@@ -4412,6 +4478,14 @@ func parseSeries(_ data: [String: Any]) -> SeriesRow {
         let metadata = item["metadata"] as? [String: Any] ?? [:]
         let ctx = (item["series_context"] as? [String: Any]) ?? (metadata["series_context"] as? [String: Any]) ?? [:]
         let projectName = string(item["project_name"], fallback: string(item["name"], fallback: string(item["folder"])))
+        let gdriveFileID = string(
+            item["gdrive_file_id"],
+            fallback: string(item["drive_file_id"], fallback: string(metadata["gdrive_file_id"], fallback: string(metadata["drive_file_id"])))
+        )
+        let gdriveThumbID = string(
+            item["gdrive_thumb_id"],
+            fallback: string(item["drive_thumb_id"], fallback: string(metadata["gdrive_thumb_id"], fallback: string(metadata["drive_thumb_id"])))
+        )
         let episodeNo = int(item["_ep_no"], fallback: int(ctx["episode_no"], fallback: extractEpisodeNo(string(metadata["title"])) ?? 0))
         let title = episodeNo > 0
             ? "Tap \(episodeNo) | \(string(data["series_name"], fallback: "Series")) | MiuBonVietSub"
@@ -4420,8 +4494,10 @@ func parseSeries(_ data: [String: Any]) -> SeriesRow {
             projectName: projectName,
             title: title,
             episodeNo: episodeNo > 0 ? episodeNo : 1,
-            rendered: !string(item["final_video"]).isEmpty || (item["steps_completed"] as? [String] ?? []).contains("render"),
-            created: string(item["created_at"], fallback: string(item["updated_at"]))
+            rendered: !string(item["final_video"]).isEmpty || (item["steps_completed"] as? [String] ?? []).contains("render") || !gdriveFileID.isEmpty,
+            created: string(item["created_at"], fallback: string(item["updated_at"])),
+            gdriveFileID: gdriveFileID,
+            gdriveThumbID: gdriveThumbID
         )
     }
     return SeriesRow(
