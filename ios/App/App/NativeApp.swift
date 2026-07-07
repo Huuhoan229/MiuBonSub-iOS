@@ -504,6 +504,8 @@ final class AppModel: ObservableObject {
     @Published var runningQueues: [QueueSnapshot] = []
     @Published var projects: [ProjectRow] = []
     @Published var seriesRows: [SeriesRow] = []
+    @Published var projectLoadMessage = "Chưa tải project từ backend"
+    @Published var seriesLoadMessage = "Chưa tải series từ backend"
     @Published var uploadQueuePlatform: UploadQueuePlatform = .youtube
     @Published var uploadQueueControls: [String: UploadQueueControlState] = [:]
     @Published var uploadRows: [UploadQueueRow] = []
@@ -555,6 +557,7 @@ final class AppModel: ObservableObject {
     private var runtimeLogOffset = 0
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var pipelineURLContexts: [String: [String: Any]] = [:]
+    private var lastLibraryRefreshAt: Date = .distantPast
     private var api: MiuBonAPI { MiuBonAPI(baseURL: backendURL) }
 
     init() {
@@ -563,6 +566,9 @@ final class AppModel: ObservableObject {
         let savedPoll = UserDefaults.standard.integer(forKey: "miubon.pollSeconds")
         pollSeconds = savedPoll == 0 ? 3 : savedPoll
         authToken = UserDefaults.standard.string(forKey: "miubon.authToken") ?? ""
+        if !authToken.isEmpty {
+            authMessage = "Đã đăng nhập"
+        }
     }
 
     var theme: AppTheme {
@@ -661,11 +667,18 @@ final class AppModel: ObservableObject {
         if !activeJobId.isEmpty { await pollJob(activeJobId) }
         await pollSelectedRuntimeLogs()
         await refreshHealth(silent: silent)
-        await refreshProjects()
-        await refreshSeries()
+        await refreshLibraryIfNeeded()
         await refreshUploadQueue()
         await refreshUploadQueueControls()
         if configValues.isEmpty { await refreshConfig() }
+    }
+
+    func refreshLibraryIfNeeded(force: Bool = false) async {
+        let now = Date()
+        guard force || now.timeIntervalSince(lastLibraryRefreshAt) > 45 else { return }
+        lastLibraryRefreshAt = now
+        await refreshProjects()
+        await refreshSeries()
     }
 
     func refreshHealth(silent: Bool = false) async {
@@ -910,24 +923,26 @@ final class AppModel: ObservableObject {
 
     func refreshProjects() async {
         do {
-            let result = try await api.request("/api/projects")
+            let result = try await api.request("/api/projects?lite=1", timeout: 90)
             let rows = (result["projects"] as? [[String: Any]]) ?? []
             projects = rows.map(parseProject)
+            projectLoadMessage = projects.isEmpty ? "Backend chưa có project" : "Đã tải \(projects.count) project"
             if selectedProject.isEmpty, let first = projects.first {
                 selectedProject = first.folderName
             }
         } catch {
-            projects = []
+            projectLoadMessage = "Lỗi tải project: \(error.localizedDescription)"
         }
     }
 
     func refreshSeries() async {
         do {
-            let result = try await api.request("/api/series")
+            let result = try await api.request("/api/series?lite=1", timeout: 90)
             let rows = (result["series"] as? [[String: Any]]) ?? []
             seriesRows = rows.map(parseSeries)
+            seriesLoadMessage = effectiveSeriesRows.isEmpty ? "Backend chưa có series" : "Đã tải \(effectiveSeriesRows.count) series"
         } catch {
-            seriesRows = []
+            seriesLoadMessage = "Lỗi tải series: \(error.localizedDescription)"
         }
     }
 
@@ -2492,17 +2507,17 @@ struct ProjectsView: View {
     var body: some View {
         ScreenScroll {
             SectionCard(title: "Thư viện series", symbol: "play.square.stack.fill") {
-                if model.seriesRows.isEmpty {
-                    EmptyState(text: "Chưa có series hoặc backend chưa trả /api/series")
+                if model.effectiveSeriesRows.isEmpty {
+                    EmptyState(text: model.seriesLoadMessage)
                 }
-                ForEach(model.seriesRows) { series in
+                ForEach(model.effectiveSeriesRows) { series in
                     SeriesCard(series: series)
                 }
             }
 
             SectionCard(title: "Dự án", symbol: "rectangle.stack") {
                 if model.projects.isEmpty {
-                    EmptyState(text: "Chưa tải được project từ backend")
+                    EmptyState(text: model.projectLoadMessage)
                 }
                 ForEach(model.projects) { project in
                     ProjectCard(
@@ -2558,8 +2573,7 @@ struct VideosView: View {
 
                 Button {
                     Task {
-                        await model.refreshSeries()
-                        await model.refreshProjects()
+                        await model.refreshLibraryIfNeeded(force: true)
                         await model.loadWatchProgress()
                     }
                 } label: {
@@ -2592,21 +2606,31 @@ struct VideosView: View {
                     .padding(.horizontal, 16)
 
                     if model.videoLibraryMode == "series" {
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            ForEach(model.effectiveSeriesRows) { series in
-                                ModernSeriesCard(series: series)
-                                    .environmentObject(model)
+                        if model.effectiveSeriesRows.isEmpty {
+                            EmptyState(text: model.seriesLoadMessage)
+                                .padding(.horizontal, 16)
+                        } else {
+                            LazyVGrid(columns: columns, spacing: 16) {
+                                ForEach(model.effectiveSeriesRows) { series in
+                                    ModernSeriesCard(series: series)
+                                        .environmentObject(model)
+                                }
                             }
+                            .padding(.horizontal, 16)
                         }
-                        .padding(.horizontal, 16)
                     } else {
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            ForEach(model.standaloneProjects) { project in
-                                ModernStandaloneCard(project: project)
-                                    .environmentObject(model)
+                        if model.standaloneProjects.isEmpty {
+                            EmptyState(text: model.projectLoadMessage)
+                                .padding(.horizontal, 16)
+                        } else {
+                            LazyVGrid(columns: columns, spacing: 16) {
+                                ForEach(model.standaloneProjects) { project in
+                                    ModernStandaloneCard(project: project)
+                                        .environmentObject(model)
+                                }
                             }
+                            .padding(.horizontal, 16)
                         }
-                        .padding(.horizontal, 16)
                     }
                 }
                 .padding(.bottom, 120)
@@ -2632,7 +2656,7 @@ struct DictionaryView: View {
             SectionCard(title: "Từ điển dịch", symbol: "book.closed.fill") {
                 Picker("Series", selection: $model.selectedGlossaryFolder) {
                     Text("Chọn series").tag("")
-                    ForEach(model.seriesRows) { series in
+                    ForEach(model.effectiveSeriesRows) { series in
                         Text(series.name).tag(series.folder)
                     }
                 }
@@ -2685,7 +2709,7 @@ struct DictionaryView: View {
             }
         }
         .task {
-            if model.seriesRows.isEmpty { await model.refreshSeries() }
+            if model.effectiveSeriesRows.isEmpty { await model.refreshLibraryIfNeeded(force: true) }
         }
     }
 }
@@ -2755,36 +2779,6 @@ struct SettingsView: View {
                     .lineLimit(2)
             }
 
-            SectionCard(title: "Tài khoản xem phim", symbol: "person.crop.circle.fill") {
-                if model.authToken.isEmpty {
-                    TextField("Tên đăng nhập", text: $model.authUsername)
-                        .textInputAutocapitalization(.never)
-                        .inputShell()
-                    SecureField("Mật khẩu", text: $model.authPassword)
-                        .inputShell()
-                    HStack(spacing: 10) {
-                        SmallButton(title: "Đăng nhập", symbol: "person.fill.checkmark") {
-                            Task { await model.login() }
-                        }
-                        SmallButton(title: "Đăng ký", symbol: "person.badge.plus") {
-                            Task { await model.login(register: true) }
-                        }
-                    }
-                } else {
-                    HStack {
-                        StatusPill(text: "Đã đăng nhập", tone: .green)
-                        Spacer()
-                        SmallButton(title: "Đăng xuất", symbol: "rectangle.portrait.and.arrow.right") {
-                            model.logout()
-                        }
-                        .frame(width: 120)
-                    }
-                }
-                Text(model.authMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
             SectionCard(title: "Backend", symbol: "network") {
                 TextField("http://IP-PC:2209", text: $model.backendURL)
                     .textInputAutocapitalization(.never)
