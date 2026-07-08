@@ -2669,16 +2669,6 @@ struct ProjectsView: View {
 
 struct VideosView: View {
     @EnvironmentObject private var model: AppModel
-    private var columns: [GridItem] {
-        let spacing: CGFloat = 12
-        let horizontalPadding: CGFloat = 32
-        let availableWidth = max(0, UIScreen.main.bounds.width - horizontalPadding)
-        let minCardWidth: CGFloat = 156
-        let maxColumns = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 2
-        let count = max(1, min(maxColumns, Int((availableWidth + spacing) / (minCardWidth + spacing))))
-        let cardWidth = max(140, floor((availableWidth - CGFloat(count - 1) * spacing) / CGFloat(count)))
-        return Array(repeating: GridItem(.fixed(cardWidth), spacing: spacing), count: count)
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2769,7 +2759,7 @@ struct VideosView: View {
                             EmptyState(text: model.projectLoadMessage)
                                 .padding(.horizontal, 16)
                         } else {
-                            LazyVGrid(columns: columns, spacing: 16) {
+                            LazyVStack(spacing: 16) {
                                 ForEach(model.standaloneProjects) { project in
                                     ModernStandaloneCard(project: project)
                                         .environmentObject(model)
