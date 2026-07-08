@@ -2755,7 +2755,7 @@ struct VideosView: View {
                             EmptyState(text: model.seriesLoadMessage)
                                 .padding(.horizontal, 16)
                         } else {
-                            LazyVGrid(columns: columns, spacing: 16) {
+                            LazyVStack(spacing: 16) {
                                 ForEach(model.effectiveSeriesRows) { series in
                                     ModernSeriesCard(series: series)
                                         .environmentObject(model)
